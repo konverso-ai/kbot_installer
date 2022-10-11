@@ -112,6 +112,8 @@ def install(version, product):
     # Load all the required products
     _reccure_product_download(nexus_files, product, version)
 
+    response = os.system(f"/home/konverso/dev/installer/kbot/install.sh --top {product} --path /home/konverso/dev/installer")
+
 def _reccure_product_download(nexus_files, product_name, version):
     """
         Recursively retrieve the products, based on the "parent" definition
@@ -132,20 +134,24 @@ def _reccure_product_download(nexus_files, product_name, version):
         for parent_product_name in description.get("parents"):
             _reccure_product_download(nexus_files, parent_product_name, version)
         return
+
     print(f"File '{product_description_path}' not found. Installing it")
 
     # Case of the product not yet installed
     print(f"Product {product_name} is not installed. Retrieving it")
 
     # Get the most recent file from nexus
+    nexus_file = None
     try:
-        nexus_files = nexus_files.Filter(folder_name=f"{version}/{product_name}")
-        nexus_file = nexus_files.latest()
+        nexus_files_tmp = nexus_files.Filter(folder_name=f"{version}/{product_name}")
+        #nexus_files_tmp = nexus_files.Filter(name="{version}/{product_name}/{product_name}.latest.tar.gz")
+        nexus_file = nexus_files_tmp.latest()
+
     except:
-        nexus_file = None
+        pass
 
     if not nexus_file:
-        print(f"Product {product_name} is in Nexus. Attempting GIT")
+        print(f"Product {product_name} is not found in Nexus. Attempting GIT")
         # Not in Nexus, try, to get it from GIT
         import os
         response = os.system(f"git clone https://konverso@bitbucket.org/konversoai/{product_name}.git")
@@ -157,7 +163,7 @@ def _reccure_product_download(nexus_files, product_name, version):
         print(f"Product {product_name} retrieved from GIT")
 
         # Kick of the reccursion on all required products before exiting.
-        parents = get_product_description(f"/home/konverso/dev/installer/{product_name}").get("parents")
+        parents = get_product_description(f"/home/konverso/dev/installer/{product_name}/description.xml").get("parents")
         for parent in parents:
             _reccure_product_download(nexus_files, parent, version)
 
@@ -169,20 +175,15 @@ def _reccure_product_download(nexus_files, product_name, version):
         print("ABORTING")
         return
 
-    print(f"    Downloading {nexus_file.path}")
-    start = time.time()
-    nexus_file.download(f"/tmp/{product_name}.tar.gz")
-    seconds = int(time.time() - start)
-    print(f"         => completed in {seconds} seconds")
+    _nexus_download_and_install(nexus_file, product_name)
 
     # Kick of the reccursion on all required products before exiting.
-    parents = get_product_description(f"/home/konverso/dev/installer/{product_name}").get("parents")
+    parents = get_product_description(f"/home/konverso/dev/installer/{product_name}/description.xml").get("parents")
     for parent in parents:
         _reccure_product_download(nexus_files, parent, version)
 
-
-def _nexus_download_and_install(nexus, nexus_file.path, product_name):
-        print(f"    Downloading {nexus_file.path}")
+def _nexus_download_and_install(nexus_file, product_name):
+        print(f"    Downloading product {product_name}  using Nexus file: {nexus_file}")
         start = time.time()
         nexus_file.download(f"/tmp/{product_name}.tar.gz")
         seconds = int(time.time() - start)
@@ -231,13 +232,10 @@ def _nexus_download_and_install(nexus, nexus_file.path, product_name):
 
         # Write a STAMP file, as a marker of this activity, and to serve
         # the purpose of time marker for differences
-        with open(f"/home/konverso/dev/installer/{product_name}/stamp", "w", encoding="utf-8") as fd:
-            fd.write(f"Source: Nexus: {nexus.host}")
-            fd.write(f"\nRepository: /{KBOT_FILE_NEXUS_REPOSITORY}")
-            fd.write(f"\nJson: {json.dumps(nexus_file.js, indent=4)}")
-            fd.write("\nTimestamp: " + datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
-        print(f"    Saved info in /home/konverso/dev/installer/{p.name}/stamp")
+        with open(f"/home/konverso/dev/installer/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
+            json.dump(nexus_file.js, fd)
 
+        print(f"    Saved info in /home/konverso/dev/installer/{product_name}/nexus.json")
 
 
 def update(version='', backup="none", products=None):
@@ -281,60 +279,8 @@ def update(version='', backup="none", products=None):
             print("ABORTING")
             return
 
-        print(f"    Downloading {nexus_file.path}")
-        start = time.time()
-        nexus_file.download(f"/tmp/{p.name}.tar.gz")
-        seconds = int(time.time() - start)
-        print(f"         => completed in {seconds} seconds")
+        _nexus_download_and_install(nexus_file, product_name)
 
-        # Now we can unzip the file
-        start = time.time()
-        print(f"    Unzipping /tmp/{p.name}.tar.gz")
-        try:
-            with gzip.open(f"/tmp/{p.name}.tar.gz", 'rb') as f_in:
-                with open(f"/tmp/{p.name}.tar", "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        except Exception as e:
-            log.error("Failed to extract file %s due to: %e", f"/tmp/{p.name}.tar.gz", e)
-            print("ABORTING")
-            return
-        else:
-            seconds = int(time.time() - start)
-            print(f"         => completed in {seconds} seconds")
-
-        # Cleanup the downloaded zip file
-        os.unlink(f"/tmp/{p.name}.tar.gz")
-
-        if backup == "none":
-            os.system(f"rm -rf /home/konverso/dev/installer/{p.name}")
-        elif backup == "folder":
-            backup_version = 1
-            while True:
-                backup_folder = f"/home/konverso/dev/installer/{p.name}.backup.{backup_version}"
-                if os.path.exists(backup_folder):
-                    backup_version += 1
-                else:
-                    break
-            os.rename(f"/home/konverso/dev/installer/{p.name}", backup_folder)
-
-        # And untar the content inside the installer
-        start = time.time()
-        print(f"    Untarring /tmp/{p.name}.tar")
-        with tarfile.open(f"/tmp/{p.name}.tar") as tf:
-            tf.extractall(path="/home/konverso/dev/installer/")
-        seconds = int(time.time() - start)
-        print(f"         => completed in {seconds} seconds")
-
-        # Cleanup the archive tar file
-        os.unlink(f"/tmp/{p.name}.tar")
-
-        # Write a STAMP file, as a marker of this activity, and to serve
-        # the purpose of time marker for differences
-        with open(f"/home/konverso/dev/installer/{p.name}/stamp", "w", encoding="utf-8") as fd:
-            fd.write(f"Source: Nexus: {Bot.Bot().GetConfig('nexus_host')}")
-            fd.write(f"\nRepository: /{KBOT_FILE_NEXUS_REPOSITORY}")
-            fd.write(f"\nJson: {json.dumps(nexus_file.js, indent=4)}")
-            fd.write("\nTimestamp: " + datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
         print(f"    Saved info in /home/konverso/dev/installer/{p.name}/stamp")
 
 def usage():
