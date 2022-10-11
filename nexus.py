@@ -34,12 +34,15 @@ class NexusFiles(list):
             else:
                 raise RuntimeError(f"Wrong file type found: {f}")
 
-    def Filter(self, folder_name=None):
+    def Filter(self, folder_name=None, name=None):
 
         files = list(self)
 
         if folder_name:
             files = [x for x in files if x.folder_name == folder_name] # filter(lambda x: x.folder_name == folder_name, files)
+
+        if name:
+            files = [x for x in files if x.name == name]
 
         return NexusFiles(self.nexus, files)
 
@@ -96,6 +99,10 @@ class NexusFile:
 
     def __repr__(self):
         return str(self)
+
+    @property
+    def name(self):
+        return self.js.get("name")
 
     @property
     def folder_name(self):
