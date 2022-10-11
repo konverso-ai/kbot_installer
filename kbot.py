@@ -112,7 +112,15 @@ def install(version, product):
     # Load all the required products
     _reccure_product_download(nexus_files, product, version)
 
-    response = os.system(f"/home/konverso/dev/installer/kbot/install.sh --top {product} --path /home/konverso/dev/installer")
+    cmd = f"/home/konverso/dev/installer/kbot/install.sh "
+    cmd += f"--top {product} " # Indicate the top level product for the installation
+    cmd += f"--path /home/konverso/dev/installer " # Indicate the installation path
+    cmd += "--secret=K0nversOK! " # Secret installation password
+    cmd += "--default yes "
+    cmd += "--work /home/konverso/wo "
+    cmd += "--license a "
+    #cmd += hostname=None
+    response = os.system(cmd)
 
 def _reccure_product_download(nexus_files, product_name, version):
     """
@@ -144,9 +152,7 @@ def _reccure_product_download(nexus_files, product_name, version):
     nexus_file = None
     try:
         nexus_files_tmp = nexus_files.Filter(folder_name=f"{version}/{product_name}")
-        #nexus_files_tmp = nexus_files.Filter(name="{version}/{product_name}/{product_name}.latest.tar.gz")
         nexus_file = nexus_files_tmp.latest()
-
     except:
         pass
 
@@ -169,7 +175,6 @@ def _reccure_product_download(nexus_files, product_name, version):
 
         return
 
-    #print(nexus_file.js)
     if not nexus_file:
         log.error("Failed to find file %s", f"{version}/{product_name}")
         print("ABORTING")
@@ -309,7 +314,8 @@ if __name__ == "__main__":
         parser.add_argument('-p', '--products', help="List of products to update", action="append", dest='products', required=False)
         parser.add_argument('-b', '--backup', help="Backup strategie", dest='backup', required=False)
         parser.add_argument('-n', '--nexus', help="Details of the nexus account in format user:password", dest='nexus', required=False)
-
+        parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/installer", dest='installer', required=False)
+        
         # backup, one of:
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
@@ -320,6 +326,7 @@ if __name__ == "__main__":
         emails = result.emails or []
         products = result.products or []
         backup = result.backup
+        installation_path = result.installer or "/home/konverso/installer"
 
         if action == 'test':
             test()
