@@ -113,11 +113,11 @@ def install(version, product):
     _reccure_product_download(nexus_files, product, version)
 
     cmd = f"/home/konverso/dev/installer/kbot/install.sh "
-    cmd += f"--top {product} " # Indicate the top level product for the installation
+    cmd += f"--product {product} " # Indicate the top level product for the installation
     cmd += f"--path /home/konverso/dev/installer " # Indicate the installation path
     cmd += "--secret=K0nversOK! " # Secret installation password
     cmd += "--default yes "
-    cmd += "--work /home/konverso/wo "
+    cmd += "--workarea /home/konverso/work "
     cmd += "--license a "
     #cmd += hostname=None
     response = os.system(cmd)
