@@ -338,7 +338,7 @@ if __name__ == "__main__":
         # Setting up logger
         # If logger is created with "w" mode
         # it's cleaned after Bot.Init
-        set_logger(log, "a", LOG_FILENAME)
+        #set_logger(log, "a", LOG_FILENAME)
         log.info("Kbot actions '%s' started", action)
 
         # Now get the nexus parameter
