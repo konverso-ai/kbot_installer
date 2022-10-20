@@ -112,14 +112,27 @@ def install(version, product):
     # Load all the required products
     _reccure_product_download(nexus_files, product, version)
 
+    #
+    # Call the installer in non-interactive mode
+    #
     cmd = f"/home/konverso/dev/installer/kbot/install.sh "
     cmd += f"--product {product} " # Indicate the top level product for the installation
     cmd += f"--path /home/konverso/dev/installer " # Indicate the installation path
     cmd += "--secret=K0nversOK! " # Secret installation password
-    cmd += "--default yes "
+    cmd += "--default "
     cmd += "--workarea /home/konverso/work "
-    cmd += "--license a "
-    #cmd += hostname=None
+
+    # If hostname is unset, then the user will be prompted for it
+    if hostname:
+        cmd += f"--hostname {hostname} " # Indicate the best hostname
+
+    if workarea:
+        cmd += f"--workarea {workarea} "
+    else:
+        cmd += "--workarea /home/konverso/dev/work "
+
+    cmd += "--accept-licence "
+
     response = os.system(cmd)
 
 def _reccure_product_download(nexus_files, product_name, version):
@@ -315,6 +328,8 @@ if __name__ == "__main__":
         parser.add_argument('-b', '--backup', help="Backup strategie", dest='backup', required=False)
         parser.add_argument('-n', '--nexus', help="Details of the nexus account in format user:password", dest='nexus', required=False)
         parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/installer", dest='installer', required=False)
+        parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
+        parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
         
         # backup, one of:
         # - none (default)
@@ -326,7 +341,10 @@ if __name__ == "__main__":
         emails = result.emails or []
         products = result.products or []
         backup = result.backup
+        hostname = result.hostname
+        workarea = result.workarea
         installation_path = result.installer or "/home/konverso/installer"
+        
 
         if action == 'test':
             test()
