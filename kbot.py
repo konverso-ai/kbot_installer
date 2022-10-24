@@ -168,7 +168,7 @@ def _reccure_product_download(nexus_files, product_name, version):
     nexus_file = None
     try:
         nexus_files_tmp = nexus_files.Filter(folder_name=f"{version}/{product_name}")
-        nexus_file = nexus_files_tmp.latest()
+        nexus_file = [x for x in nexus_files_tmp if x.path.endswith("_latest.tar.gz")][0]
     except:
         pass
 
