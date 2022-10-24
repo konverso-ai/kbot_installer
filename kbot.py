@@ -98,12 +98,12 @@ def get_nexus():
 
     return nexus
 
-def install(version, product):
+def install(version, product, create_workarea=False):
 
-    if not os.path.exists("/home/konverso/dev/installer"):
-        os.mkdir("/home/konverso/dev/installer")
+    if not os.path.exists(installation_path):
+        os.mkdir(installation_path)
     else:
-        if not os.path.isdir("/home/konverso/dev/installer"):
+        if not os.path.isdir(installation_path):
             raise RuntimeError("Installation path /home/konverso/dev/installer is not a directory !")
 
     nexus = get_nexus()
@@ -112,12 +112,15 @@ def install(version, product):
     # Load all the required products
     _reccure_product_download(nexus_files, product, version)
 
+    if not create_workarea:
+        return
+
     #
     # Call the installer in non-interactive mode
     #
     cmd = f"/home/konverso/dev/installer/kbot/install.sh "
     cmd += f"--product {product} " # Indicate the top level product for the installation
-    cmd += f"--path /home/konverso/dev/installer " # Indicate the installation path
+    cmd += f"--path {installation_path} " # Indicate the installation path
     cmd += "--secret=K0nversOK! " # Secret installation password
     cmd += "--default "
     cmd += "--workarea /home/konverso/work "
@@ -146,7 +149,7 @@ def _reccure_product_download(nexus_files, product_name, version):
     """
 
     # Check if the product is already installed.
-    product_description_path = f"/home/konverso/dev/installer/{product_name}/description.xml"
+    product_description_path = f"{installation_path}/{product_name}/description.xml"
     import os
     if os.path.exists(product_description_path):
         print(f"Product {product_name} is already installed")
@@ -177,12 +180,12 @@ def _reccure_product_download(nexus_files, product_name, version):
         if response:
             raise RuntimeError("Failed clone the git repository")
 
-        os.rename(product_name, f"/home/konverso/dev/installer/{product_name}")
+        os.rename(product_name, f"{installation_path}/{product_name}")
 
         print(f"Product {product_name} retrieved from GIT")
 
         # Kick of the reccursion on all required products before exiting.
-        parents = get_product_description(f"/home/konverso/dev/installer/{product_name}/description.xml").get("parents")
+        parents = get_product_description(f"{installation_path}/{product_name}/description.xml").get("parents")
         for parent in parents:
             _reccure_product_download(nexus_files, parent, version)
 
@@ -196,7 +199,7 @@ def _reccure_product_download(nexus_files, product_name, version):
     _nexus_download_and_install(nexus_file, product_name)
 
     # Kick of the reccursion on all required products before exiting.
-    parents = get_product_description(f"/home/konverso/dev/installer/{product_name}/description.xml").get("parents")
+    parents = get_product_description(f"{installation_path}/{product_name}/description.xml").get("parents")
     for parent in parents:
         _reccure_product_download(nexus_files, parent, version)
 
@@ -226,22 +229,22 @@ def _nexus_download_and_install(nexus_file, product_name):
         os.unlink(f"/tmp/{product_name}.tar.gz")
 
         if backup == "none":
-            os.system(f"rm -rf /home/konverso/dev/installer/{product_name}")
+            os.system(f"rm -rf {installation_path}/{product_name}")
         elif backup == "folder":
             backup_version = 1
             while True:
-                backup_folder = f"/home/konverso/dev/installer/{product_name}.backup.{backup_version}"
+                backup_folder = f"{installation_path}/{product_name}.backup.{backup_version}"
                 if os.path.exists(backup_folder):
                     backup_version += 1
                 else:
                     break
-            os.rename(f"/home/konverso/dev/installer/{product_name}", backup_folder)
+            os.rename(f"{installation_path}/{product_name}", backup_folder)
 
         # And untar the content inside the installer
         start = time.time()
         print(f"    Untarring /tmp/{product_name}.tar")
         with tarfile.open(f"/tmp/{product_name}.tar") as tf:
-            tf.extractall(path="/home/konverso/dev/installer/")
+            tf.extractall(path=installation_path)
         seconds = int(time.time() - start)
         print(f"         => completed in {seconds} seconds")
 
@@ -250,10 +253,10 @@ def _nexus_download_and_install(nexus_file, product_name):
 
         # Write a STAMP file, as a marker of this activity, and to serve
         # the purpose of time marker for differences
-        with open(f"/home/konverso/dev/installer/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
+        with open(f"{installation_path}/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
             json.dump(nexus_file.js, fd)
 
-        print(f"    Saved info in /home/konverso/dev/installer/{product_name}/nexus.json")
+        print(f"    Saved info in {installation_path}/{product_name}/nexus.json")
 
 
 def update(version='', backup="none", products=None):
@@ -299,7 +302,7 @@ def update(version='', backup="none", products=None):
 
         _nexus_download_and_install(nexus_file, product_name)
 
-        print(f"    Saved info in /home/konverso/dev/installer/{p.name}/stamp")
+        print(f"    Saved info in {installation_path}/{p.name}/stamp")
 
 def usage():
     return """
@@ -327,7 +330,7 @@ if __name__ == "__main__":
         parser.add_argument('-p', '--products', help="List of products to update", action="append", dest='products', required=False)
         parser.add_argument('-b', '--backup', help="Backup strategie", dest='backup', required=False)
         parser.add_argument('-n', '--nexus', help="Details of the nexus account in format user:password", dest='nexus', required=False)
-        parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/installer", dest='installer', required=False)
+        parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/dev/installer", dest='installer', required=False)
         parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
         
@@ -343,8 +346,7 @@ if __name__ == "__main__":
         backup = result.backup
         hostname = result.hostname
         workarea = result.workarea
-        installation_path = result.installer or "/home/konverso/installer"
-        
+        installation_path = result.installer or "/home/konverso/dev/installer"
 
         if action == 'test':
             test()
@@ -377,14 +379,29 @@ if __name__ == "__main__":
             update(version=version,
                    backup=backup,
                    products=products)
+
+        # Setup the installer folder and a new work-area
         elif action == "install":
             if len(products) != 1:
                 print(usage())
                 print("Expecting a single product for the case of installation. Found: ", products)
                 sys.exit(1)
             install(version=version,
-                   product=products[0])
+                   product=products[0],
+                   create_workarea=True)
             sys.exit(0)
+
+        # Only setup the installer folder
+        elif action == "installer-only":
+            if len(products) != 1:
+                print(usage())
+                print("Expecting a single product for the case of installation. Found: ", products)
+                sys.exit(1)
+            install(version=version,
+                   product=products[0],
+                   create_workarea=False)
+            sys.exit(0)
+
 
         email_title = "Kbot actions completed"
     except Exception as exp:
