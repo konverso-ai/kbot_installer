@@ -391,6 +391,7 @@ if __name__ == "__main__":
             nexus = NexusRepository(host, user, password)
         elif os.environ.get("NEXUS_HOST") and os.environ.get("NEXUS_USERNAME") and os.environ.get("NEXUS_PASSWORD"):
             host, user, password = os.environ["NEXUS_HOST"], os.environ["NEXUS_USERNAME"], os.environ["NEXUS_PASSWORD"]
+            nexus = NexusRepository(host, user, password)
         else:
             print(usage())
             print("Nexus repository details are required")
