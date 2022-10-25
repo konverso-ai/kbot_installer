@@ -104,7 +104,7 @@ def install(version, product, create_workarea=False):
         os.mkdir(installation_path)
     else:
         if not os.path.isdir(installation_path):
-            raise RuntimeError("Installation path /home/konverso/dev/installer is not a directory !")
+            raise RuntimeError(f"Installation path {installation_path} is not a directory !")
 
     nexus = get_nexus()
     nexus_files = nexus.list_repository("kbot_raw")
@@ -118,7 +118,7 @@ def install(version, product, create_workarea=False):
     #
     # Call the installer in non-interactive mode
     #
-    cmd = f"/home/konverso/dev/installer/kbot/install.sh "
+    cmd = f"{installation_path}/kbot/install.sh "
     cmd += f"--product {product} " # Indicate the top level product for the installation
     cmd += f"--path {installation_path} " # Indicate the installation path
     cmd += "--secret=K0nversOK! " # Secret installation password
@@ -176,9 +176,15 @@ def _reccure_product_download(nexus_files, product_name, version):
         print(f"Product {product_name} is not found in Nexus. Attempting GIT")
         # Not in Nexus, try, to get it from GIT
         import os
-        response = os.system(f"git clone https://konverso@bitbucket.org/konversoai/{product_name}.git")
+        response = os.system(f"git clone https://bitbucket.org/konversoai/{product_name}.git")
         if response:
             raise RuntimeError("Failed clone the git repository")
+
+        # Now set the proper branch
+        if product_name not in ("kkeys",):
+            response = os.system(f"git checkout {version}")
+            if response:
+                print(f"Failed set git repository to branch {version}. Will stay on master branch")
 
         os.rename(product_name, f"{installation_path}/{product_name}")
 
@@ -329,7 +335,8 @@ if __name__ == "__main__":
         parser.add_argument('-e', '--email', help="Email to send results", action="append", dest='emails', required=False)
         parser.add_argument('-p', '--products', help="List of products to update", action="append", dest='products', required=False)
         parser.add_argument('-b', '--backup', help="Backup strategie", dest='backup', required=False)
-        parser.add_argument('-n', '--nexus', help="Details of the nexus account in format user:password", dest='nexus', required=False)
+        parser.add_argument('-n', '--nexus', help="Details of the nexus account in format host:user:password", dest='nexus', required=False)
+        parser.add_argument('-g', '--git', help="Details of the git account in format user:password", dest='git', required=False)
         parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/dev/installer", dest='installer', required=False)
         parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
@@ -352,6 +359,17 @@ if __name__ == "__main__":
             test()
             sys.exit(0)
 
+        #
+        # If defined, set the git user / password for this session
+        #
+        if result.git:
+            print("Git password is in command line. This is unsecure. Prefere setting variables GIT_USERNAME and GIT_PASSWORD")
+            user, password = result.git.split(":", 1)
+            os.environ["GIT_USERNAME"] = user
+            os.environ["GIT_PASSWORD"] = password
+            project_dir = os.path.dirname(os.path.abspath(__file__))
+            os.environ['GIT_ASKPASS'] = os.path.join(project_dir, 'gitpassword.py')
+
         # Clean log file
         if os.path.exists(LOG_FILENAME):
             os.remove(LOG_FILENAME)
@@ -361,13 +379,19 @@ if __name__ == "__main__":
         #set_logger(log, "a", LOG_FILENAME)
         log.info("Kbot actions '%s' started", action)
 
+        #
         # Now get the nexus parameter
+        # (Preferably from variables)
+        #
         nexus = None
         if result.nexus:
+            print("Nexus password is in command line. This is unsecure. Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
             host, user, password = result.nexus.split(":", 3)
             from nexus import NexusRepository
             nexus = NexusRepository(host, user, password)
-
+        elif os.environ.get("NEXUS_HOST") and os.environ.get("NEXUS_USERNAME") and os.environ.get("NEXUS_PASSWORD"):
+            host, user, password = os.environ["NEXUS_HOST"], os.environ["NEXUS_USERNAME"], os.environ["NEXUS_PASSWORD"]
+            nexus = NexusRepository(host, user, password)
         else:
             print(usage())
             print("Nexus repository details are required")
