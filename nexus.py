@@ -38,8 +38,6 @@ class NexusFiles(list):
 
         files = list(self)
 
-        #print("Testing files" + str([x.name for x in files]))
-
         if folder_name:
             files = [x for x in files if x.folder_name == folder_name] # filter(lambda x: x.folder_name == folder_name, files)
 
