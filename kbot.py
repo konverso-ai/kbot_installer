@@ -282,7 +282,8 @@ def update(version='', backup="none", products=None):
         if products and p.name not in products:
             continue
 
-        # Customer and sites are git repositories
+        # IF the product folder contains nexus.json then it means it was installed
+        # through nexus. Otherwise it must be a git repository
         local_nexus_descriptor = os.path.join(Bot.Bot().producthome, p.name, "nexus.json")
         if not os.path.exists(local_nexus_descriptor):
             print(f"Product {p.name} is not from Nexus. Ignored")
@@ -346,7 +347,6 @@ def list(products=None):
     import Bot
     for p in Bot.Bot().products:
 
-        ###
         # Check if file is from Nexus
         nexus_source = False
         product_description_path = os.path.join(f"{Bot.Bot().producthome}", p.name, "description.json")
@@ -376,15 +376,8 @@ def list(products=None):
             product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
             product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
 
-
-            # Get the latest one
-            #product_nexus_files = [x for x in product_nexus_files if x.path.endswith("description.json")]
-
             if product_nexus_files:
-                #print(product_nexus_files.latest().js)
-                # xxxx
                 js = product_nexus_files.latest().js
-                # release-2022.03/gsuite/gsuite_d4ee90638cbffeef00f660e187c2bee8ecaf81b2.tar.gz
                 nexus_commit_id = _get_commit_id_from_nexus_path(js.get("path"))
                 installed_commit_id = _get_commit_id_from_nexus_path(nexus_js.get("build").get("commit"))
                 if nexus_commit_id == installed_commit_id:
