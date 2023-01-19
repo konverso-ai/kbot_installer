@@ -34,9 +34,11 @@ class NexusFiles(list):
             else:
                 raise RuntimeError(f"Wrong file type found: {f}")
 
-    def Filter(self, folder_name=None, name=None):
+    def Filter(self, folder_name=None, name=None, ends_with=None, not_ends_with=None):
 
         files = list(self)
+
+        #print("Testing files" + str([x.name for x in files]))
 
         if folder_name:
             files = [x for x in files if x.folder_name == folder_name] # filter(lambda x: x.folder_name == folder_name, files)
@@ -44,11 +46,17 @@ class NexusFiles(list):
         if name:
             files = [x for x in files if x.name == name]
 
+        if ends_with:
+            files = [x for x in files if x.name.endswith(ends_with)]
+
+        if not_ends_with:
+            files = [x for x in files if not x.name.endswith(not_ends_with)]
+
         return NexusFiles(self.nexus, files)
 
     def latest(self):
         files = list(self)
-        files.sort(key=lambda x: x.js.get("lastModified"))
+        files.sort(key=lambda x: x.js.get("lastModified"), reverse=True)
         if files:
             return files[0]
 
@@ -102,7 +110,7 @@ class NexusFile:
 
     @property
     def name(self):
-        return self.js.get("name")
+        return self.js.get("path").split("/")[-1]
 
     @property
     def folder_name(self):

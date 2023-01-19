@@ -181,8 +181,9 @@ def _reccure_product_download(nexus_files, product_name, version):
             raise RuntimeError("Failed clone the git repository")
 
         # Now set the proper branch
+        # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
         if product_name not in ("kkeys",):
-            response = os.system(f"git checkout {version}")
+            response = os.system(f"cd {installation_path}/{product_name} ; git checkout {version}")
             if response:
                 print(f"Failed set git repository to branch {version}. Will stay on master branch")
 
@@ -274,16 +275,21 @@ def update(version='', backup="none", products=None):
     nexus = get_nexus()
     nexus_files = nexus.list_repository("kbot_raw")
 
+    
+    import Bot
     for p in Bot.Bot().products:
-
-        if p.type in ('customer', 'site'):
-            continue
-
-        if p.name == "kkeys":
-            continue
 
         if products and p.name not in products:
             continue
+
+        # Customer and sites are git repositories
+        local_nexus_descriptor = os.path.join(Bot.Bot().producthome, p.name, "nexus.json")
+        if not os.path.exists(local_nexus_descriptor):
+            print(f"Product {p.name} is not from Nexus. Ignored")
+            continue
+
+        with open(local_nexus_descriptor, encoding="utf-8") as fd:
+            local_nexus_descriptor_js = json.load(fd)
 
         print(f"Checking product: {p.name}")
 
@@ -296,19 +302,100 @@ def update(version='', backup="none", products=None):
         if not version:
             version = f"release-{p.version}"
 
-        # Get the most recent file from nexus
-        nexus_file = nexus_files.Filter(folder_name=f"{version}/{p.name}")
-        nexus_file = nexus_file.latest()
+        # Get the files for this nexus release
+        product_nexus_files = nexus_files.Filter(folder_name=f"{version}/{p.name}",
+                                                 ends_with=".tar.gz",
+                                                 not_ends_with="latest.tar.gz")
+        # Get the latest one
 
-        #print(nexus_file.js)
-        if not nexus_file:
-            log.error("Failed to find file %s", f"{version}/{p.name}")
+        # Handle case of no release file found
+        if not product_nexus_files:
+            log.error("Failed to find latest file %s", f"{version}/{p.name}/*.tar.gz")
             print("ABORTING")
             return
+        nexus_file = product_nexus_files.latest()
 
-        _nexus_download_and_install(nexus_file, product_name)
+        nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.path)
+        install_commit_id = _get_commit_id_from_nexus_path(local_nexus_descriptor_js.get("path"))
+
+        if nexus_commit_id == install_commit_id:
+            print(f"Product {p.name} is already on latest available version {nexus_commit_id}")
+            continue
+
+        _nexus_download_and_install(nexus_file, p.name)
 
         print(f"    Saved info in {installation_path}/{p.name}/stamp")
+
+def _get_commit_id_from_nexus_path(nexus_path):
+    """ Given a nexus file path or name, returns the commit it, extracted from its name
+
+        For example, with input:
+            release-2022.03/gsuite/gsuite_d4ee90638cbffeef00f660e187c2bee8ecaf81b2.tar.gz
+        We would get:
+            d4ee90638cbffeef00f660e187c2bee8ecaf81b2
+    """
+    return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
+
+def list(products=None):
+    products = products or []
+    import time
+
+    nexus = get_nexus()
+    nexus_files = nexus.list_repository("kbot_raw")
+
+    import Bot
+    for p in Bot.Bot().products:
+
+        ###
+        # Check if file is from Nexus
+        nexus_source = False
+        product_description_path = os.path.join(f"{Bot.Bot().producthome}", p.name, "description.json")
+        if os.path.exists(product_description_path):
+            nexus_source = True
+
+        print(f"Checking product: {p.name}")
+
+        if nexus_source:
+
+            with open(product_description_path, encoding="utf-8") as fd:
+                nexus_js = json.load(fd)
+
+            #print("File: " + str(nexus_js))
+
+            # Now build the product version, based on the
+            # - the product version (2022.02)
+            # - and the optional suffix (dev)
+            # to build the release name, such as:
+            # - release-2022.02
+            # - release-2022.02-dev
+            release = f"release-{nexus_js.get('version')}"
+
+            # Get the files for this nexus release
+            product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{p.name}")
+            product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
+            product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
+            product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
+
+
+            # Get the latest one
+            #product_nexus_files = [x for x in product_nexus_files if x.path.endswith("description.json")]
+
+            if product_nexus_files:
+                #print(product_nexus_files.latest().js)
+                # xxxx
+                js = product_nexus_files.latest().js
+                # release-2022.03/gsuite/gsuite_d4ee90638cbffeef00f660e187c2bee8ecaf81b2.tar.gz
+                nexus_commit_id = _get_commit_id_from_nexus_path(js.get("path"))
+                installed_commit_id = _get_commit_id_from_nexus_path(nexus_js.get("build").get("commit"))
+                if nexus_commit_id == installed_commit_id:
+                    print(f"    Nexus on latest available code: {js.get('lastModified')} / {nexus_commit_id}")
+                else:
+                    print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
+                    print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+            else:
+                print(f"    Not Nexus")
+        else:
+            print(f"    Git")
 
 def usage():
     return """
@@ -425,8 +512,11 @@ if __name__ == "__main__":
                    product=products[0],
                    create_workarea=False)
             sys.exit(0)
+        elif action == "list":
+            list(products=products)
+            sys.exit(0)
 
-
+        
         email_title = "Kbot actions completed"
     except Exception as exp:
         log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
