@@ -13,7 +13,6 @@ class HttpError(Exception):
         self.response = response
         self.message = message
 
-
     def __str__(self):
         return "HttpError(%s, %s)" % (self.response.status_code, self.message)
 
@@ -35,6 +34,9 @@ class NexusFiles(list):
                 raise RuntimeError(f"Wrong file type found: {f}")
 
     def Filter(self, folder_name=None, name=None, ends_with=None, not_ends_with=None):
+        """Filter this list of NexusFiles and returns a new NexusFiles list
+           such that it is possible to chain them
+        """
 
         files = list(self)
 
@@ -59,6 +61,13 @@ class NexusFiles(list):
             return files[0]
 
         return None
+
+    def delete(self):
+        """
+            delete all files of this list from the repository
+        """
+        for nexusFile in self:
+            nexusFile.delete()
 
 class NexusFile:
     def __init__(self, nexus, repository_name, js):
@@ -108,7 +117,11 @@ class NexusFile:
 
     @property
     def name(self):
-        return self.js.get("path").split("/")[-1]
+        path = self.js.get("path")
+        if not path:
+            return None
+
+        return path.rsplit("/", 1)[-1]
 
     @property
     def folder_name(self):
@@ -122,9 +135,19 @@ class NexusFile:
     def path(self):
         return self.js.get("path")
 
+    @property
+    def downloadUrl(self):
+        return self.js.get("downloadUrl")
+
     def download(self, target):
         """ Download this file to the target file"""
         self.nexus.get_file(f"/{self.repository_name}/{self.path}", target)
+
+    def delete(self):
+        """
+            delete this file in the repository
+        """
+        self.nexus.delete_file(self.downloadUrl)
 
 class NexusRepository:
 
@@ -176,6 +199,20 @@ class NexusRepository:
         self._list_repository_paging(headers, nexus_files, repository_name, continuationToken="")
 
         return nexus_files
+
+    def delete_file(self, target_file_path):
+        """
+            path: full path to file to be deleted, such as:
+            https://nexus.konverso.ai/.../jira_fe477f079a60bd37c45b17a1b578988d428168d7.tar.gz
+        """
+        headers = self._get_headers()
+        response = requests.delete(target_file_path, headers=headers)
+        if response.status_code == 204:
+            print(f"'{target_file_path}' has been deleted")
+        else:
+            raise HttpError(response, f"Failed to delete file '{target_file_path}'")
+
+        return response
 
     def _list_repository_paging(self, headers, nexus_files, repository_name, continuationToken=""):
 
