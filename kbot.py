@@ -20,6 +20,8 @@ import xml.dom.minidom
 import subprocess
 from subprocess import TimeoutExpired
 
+from nexus import NexusRepository
+
 DEV_DIR = "/home/konverso/dev/"
 WORK_DIR = os.path.join(DEV_DIR, "work")
 BIN_DIR = os.path.join(WORK_DIR, "bin")
@@ -467,7 +469,6 @@ if __name__ == "__main__":
         if result.nexus:
             print("Nexus password is in command line. This is unsecure. Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
             host, user, password = result.nexus.split(":", 3)
-            from nexus import NexusRepository
             nexus = NexusRepository(host, user, password)
         elif os.environ.get("NEXUS_HOST") and os.environ.get("NEXUS_USERNAME") and os.environ.get("NEXUS_PASSWORD"):
             host, user, password = os.environ["NEXUS_HOST"], os.environ["NEXUS_USERNAME"], os.environ["NEXUS_PASSWORD"]
