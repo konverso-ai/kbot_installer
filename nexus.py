@@ -33,7 +33,7 @@ class NexusFiles(list):
             else:
                 raise RuntimeError(f"Wrong file type found: {f}")
 
-    def Filter(self, folder_name=None, name=None, ends_with=None, not_ends_with=None):
+    def Filter(self, folder_name=None, name=None, ends_with=None, not_ends_with=None, folder_starts_with=None):
         """Filter this list of NexusFiles and returns a new NexusFiles list
            such that it is possible to chain them
         """
@@ -41,7 +41,10 @@ class NexusFiles(list):
         files = list(self)
 
         if folder_name:
-            files = [x for x in files if x.folder_name == folder_name] # filter(lambda x: x.folder_name == folder_name, files)
+            files = [x for x in files if x.folder_name == folder_name]
+
+        if folder_starts_with:
+            files = [x for x in files if x.folder_name.startswith(folder_starts_with)]
 
         if name:
             files = [x for x in files if x.name == name]
