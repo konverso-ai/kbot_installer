@@ -112,7 +112,7 @@ def install(version, product, create_workarea=False):
     nexus_files = nexus.list_repository("kbot_raw")
 
     # Load all the required products
-    _reccure_product_download(nexus_files, product, version)
+    reccurse_product_download(nexus_files, product, version)
 
     if not create_workarea:
         return
@@ -140,7 +140,118 @@ def install(version, product, create_workarea=False):
 
     response = os.system(cmd)
 
-def _reccure_product_download(nexus_files, product_name, version):
+def _get_json_product_description(product_name):
+    """Returns a dictionnary containing the product definition, as found in the
+       description.json file
+    """
+    # Check if file is from Nexus
+    json_product_description_path = f"{installation_path}/{product_name}/description.json"
+    nexus_source = False
+    if not os.path.exists(json_product_description_path):
+        return None
+
+    with open(json_product_description_path, encoding="utf-8") as fd:
+        return json.load(fd)
+
+    return None
+
+def _get_xml_product_description(product_name):
+    """Returns a dictionnary containing the product definition, as found in the 
+       description.xml file
+    """
+    product_description_path = f"{installation_path}/{product_name}/description.xml"
+    if not os.path.exists(product_description_path):
+        return False
+
+    return get_product_description(product_description_path)
+
+def _get_latest_available_nexus_file(nexus_files, product_name, version):
+    release = f"release-{version}"
+    product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{product_name}")
+    product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
+    product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
+    product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
+
+    if product_nexus_files:
+         return product_nexus_files.latest().js
+
+    return None
+
+def _xml_products_sorting(xml_product_descriptions):
+    xml_product_descriptions_new = []
+    for t in ("site", "customer", "solution", "framework"):
+        xml_product_descriptions_new.extend([d for d in xml_product_descriptions if d.get("type") == t])
+
+    return xml_product_descriptions_new
+
+
+def _get_tree(xml_descriptions):
+    """Onput if a list of dictionnaries representing the description.xml
+       Returns a dictionnary tree structure of the relation ship:
+  {
+    "name": "snow",
+    ...
+    "parents": [
+        RELATED PARENT JSON DEFINITION 2,
+        RELATED PARENT JSON DEFINITION 1,
+    ],
+    ...
+    "build": {
+        "timestamp": "2023/01/25 06:11:05",
+        "branch": "release-2022.03",
+        "commit": "08f6bc24fe3e181b94c481b4f56a648f4d8d0d01"
+    },
+    "license": "kbot-included",
+    "display": {
+        "name": {
+            "en": "Kbot for ServiceNow",
+            "fr": "Kbot pour ServiceNow"
+        },
+        "description": {
+            "en": "The ServiceNow integration. Combined with the Virtual Agent for IT Service Desk application (available in the ServiceNow Store), the solution provides a complete, ready-to-use virtual agent for ServiceNow.",
+            "fr": "L'int\u00e9gration \u00e0 ServiceNow. Combin\u00e9e avec l'application Virtual Agent for IT Service Desk (disponible dans le ServiceNow Store), cette solution propose un agent virtuel complet et pr\u00eat \u00e0 l'emploi pour ServiceNow."
+        }
+    }
+  }
+    """
+    child_list = []
+    visited_product_names = []
+    for xml_description in _xml_products_sorting(xml_descriptions):
+        if xml_description.get('name') in visited_product_names:
+            continue
+        xml_description = xml_description.copy()
+        _tree_recurse_visite(xml_description, xml_descriptions, result, visited_product_names)
+        child_list.append(xml_description)
+
+    return child_list
+
+def _tree_recurse_visite(xml_description, xml_descriptions, result, visited_product_names):
+    child_list = []
+    for parent_name in xml_description.get("parents", []):
+        try:
+            child_xml_description = [x for x in xml_descriptions if x.get("name") == parent_name][0]
+        except IndexError:
+            print(f"Failed to find referenced product: '{parent_name}' in product '{xml_description.get('name')}'")
+            continue
+
+        child_xml_description = child_xml_description.copy()
+
+        _tree_recurse_visite(child_xml_description, xml_descriptions, result, visited_product_names)
+        child_list.append(child_xml_description)
+    xml_description["parents"]=child_list
+
+def tree_print(elements, level=1, visited=None):
+    visited = visited or []
+    for element in elements:
+
+        if level == 1 and element.get("name") in visited:
+            continue
+        visited.append(element.get("name"))
+
+        print("\t"*level + element.get("name"))
+        tree_print(element.get("parents"), level+1, visited=visited)
+
+def reccurse_product_download(nexus_files, product_name, version):
     """
         Recursively retrieve the products, based on the "parent" definition
         found inside the Product definition. 
@@ -149,38 +260,66 @@ def _reccure_product_download(nexus_files, product_name, version):
             if product is Customer or Solution, then do GIT download
             if product is Solution or Framework, then do NEXUS download
     """
+    # Get the definitions of the latest available version in Nexus
+    nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
+    # Check if the product is already installed through Nexus
+    json_product_description = _get_json_product_description(product_name)
+    # If this is git, then may be we do not have a JSON information, and we should
+    # get the XML description
+    xml_product_description = _get_xml_production_description(product_name)
 
-    # Check if the product is already installed.
-    product_description_path = f"{installation_path}/{product_name}/description.xml"
-    import os
-    if os.path.exists(product_description_path):
-        print(f"Product {product_name} is already installed")
-        description = get_product_description(product_description_path)    
+    #
+    # Attempt to figure out the version if not provided
+    #
+    if not version:
+        if json_product_description:
+            version = json_product_description.get("version")
+        elif xml_product_description:
+            version = xml_product_description.get("version")
+        else:
+            print("Failed to find any version information. Add the -v flag")
+            sys.exit(1)
+    #
+    # Product was installed through Nexus, we see if there is anything to update
+    #
+    if json_product_description:
+        installed_commit_id = json_product_description.get("build").get("commit")
+        nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.get("path"))
+        if nexus_commit_id == installed_commit_id:
+             print(f"   Nexus is on latest available version: {js.get('lastModified')} / {nexus_commit_id}")
+        else:
+            print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
+            print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+            json_product_description = _nexus_download_and_install(nexus_file, product_name)
+            for parent_product_name in json_product_description.get("parents"):
+                 reccurse_product_download(nexus_files, parent_product_name, version)
+            return
 
-        for parent_product_name in description.get("parents"):
-            _reccure_product_download(nexus_files, parent_product_name, version)
+    else:
+        # Should never happen
+        print(f"    Not Nexus !")
         return
 
-    print(f"File '{product_description_path}' not found. Installing it")
 
-    # Case of the product not yet installed
-    print(f"Product {product_name} is not installed. Retrieving it")
+    #
+    # Product was installed through GIT or some other file copy
+    #
+    if xml_product_description:
+        print(f"   Not installed through Nexus (probably git ?).")
+        return
 
-    # Get the most recent file from nexus
-    nexus_file = None
-    try:
-        nexus_files_tmp = nexus_files.Filter(folder_name=f"{version}/{product_name}")
-        nexus_file = [x for x in nexus_files_tmp if x.path.endswith("_latest.tar.gz")][0]
-    except:
-        pass
+    #
+    # Product was NEVER installed. Install it
 
+    # Case of product not existing in Nexus repository
     if not nexus_file:
         print(f"Product {product_name} is not found in Nexus. Attempting GIT")
         # Not in Nexus, try, to get it from GIT
-        import os
         response = os.system(f"git clone https://bitbucket.org/konversoai/{product_name}.git")
         if response:
             raise RuntimeError("Failed clone the git repository")
+
+        os.rename(product_name, f"{installation_path}/{product_name}")
 
         # Now set the proper branch
         # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
@@ -189,145 +328,86 @@ def _reccure_product_download(nexus_files, product_name, version):
             if response:
                 print(f"Failed set git repository to branch {version}. Will stay on master branch")
 
-        os.rename(product_name, f"{installation_path}/{product_name}")
-
         print(f"Product {product_name} retrieved from GIT")
 
         # Kick of the reccursion on all required products before exiting.
         parents = get_product_description(f"{installation_path}/{product_name}/description.xml").get("parents")
         for parent in parents:
-            _reccure_product_download(nexus_files, parent, version)
+            reccurse_product_download(nexus_files, parent, version)
 
         return
 
-    if not nexus_file:
-        log.error("Failed to find file %s", f"{version}/{product_name}")
-        print("ABORTING")
-        return
+    #if not nexus_file:
+    #    log.error("Failed to find file %s", f"{version}/{product_name}")
+    #    print("ABORTING")
+    #    return
 
-    _nexus_download_and_install(nexus_file, product_name)
-
-    # Kick of the reccursion on all required products before exiting.
-    parents = get_product_description(f"{installation_path}/{product_name}/description.xml").get("parents")
-    for parent in parents:
-        _reccure_product_download(nexus_files, parent, version)
+    # We have a good 'latest' nexus file. Use it:
+    json_product_description =_nexus_download_and_install(nexus_file, product_name)
+    for parent in json_product_description.get("parents"):
+        reccurse_product_download(nexus_files, parent, version)
 
 def _nexus_download_and_install(nexus_file, product_name):
-        print(f"    Downloading product {product_name}  using Nexus file: {nexus_file}")
-        start = time.time()
-        nexus_file.download(f"/tmp/{product_name}.tar.gz")
+    """install (replace eventually) the given product using the given Nexus definition file
+
+       Returns the description.json dictionnary of the loaded file
+    """
+
+    print(f"    Downloading product {product_name}  using Nexus file: {nexus_file}")
+    start = time.time()
+    nexus_file.download(f"/tmp/{product_name}.tar.gz")
+    seconds = int(time.time() - start)
+    print(f"         => completed in {seconds} seconds")
+
+    # Now we can unzip the file
+    start = time.time()
+    print(f"    Unzipping /tmp/{product_name}.tar.gz")
+    try:
+        with gzip.open(f"/tmp/{product_name}.tar.gz", 'rb') as f_in:
+            with open(f"/tmp/{product_name}.tar", "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+    except Exception as e:
+        log.error("Failed to extract file %s due to: %e", f"/tmp/{product_name}.tar.gz", e)
+        print("ABORTING")
+        return
+    else:
         seconds = int(time.time() - start)
         print(f"         => completed in {seconds} seconds")
 
-        # Now we can unzip the file
-        start = time.time()
-        print(f"    Unzipping /tmp/{product_name}.tar.gz")
-        try:
-            with gzip.open(f"/tmp/{product_name}.tar.gz", 'rb') as f_in:
-                with open(f"/tmp/{product_name}.tar", "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        except Exception as e:
-            log.error("Failed to extract file %s due to: %e", f"/tmp/{product_name}.tar.gz", e)
-            print("ABORTING")
-            return
-        else:
-            seconds = int(time.time() - start)
-            print(f"         => completed in {seconds} seconds")
+    # Cleanup the downloaded zip file
+    os.unlink(f"/tmp/{product_name}.tar.gz")
 
-        # Cleanup the downloaded zip file
-        os.unlink(f"/tmp/{product_name}.tar.gz")
+    if backup == "none":
+        os.system(f"rm -rf {installation_path}/{product_name}")
+    elif backup == "folder":
+        backup_version = 1
+        while True:
+            backup_folder = f"{installation_path}/{product_name}.backup.{backup_version}"
+            if os.path.exists(backup_folder):
+                backup_version += 1
+            else:
+                break
+        os.rename(f"{installation_path}/{product_name}", backup_folder)
 
-        if backup == "none":
-            os.system(f"rm -rf {installation_path}/{product_name}")
-        elif backup == "folder":
-            backup_version = 1
-            while True:
-                backup_folder = f"{installation_path}/{product_name}.backup.{backup_version}"
-                if os.path.exists(backup_folder):
-                    backup_version += 1
-                else:
-                    break
-            os.rename(f"{installation_path}/{product_name}", backup_folder)
+    # And untar the content inside the installer
+    start = time.time()
+    print(f"    Untarring /tmp/{product_name}.tar")
+    with tarfile.open(f"/tmp/{product_name}.tar") as tf:
+        tf.extractall(path=installation_path)
+    seconds = int(time.time() - start)
+    print(f"         => completed in {seconds} seconds")
 
-        # And untar the content inside the installer
-        start = time.time()
-        print(f"    Untarring /tmp/{product_name}.tar")
-        with tarfile.open(f"/tmp/{product_name}.tar") as tf:
-            tf.extractall(path=installation_path)
-        seconds = int(time.time() - start)
-        print(f"         => completed in {seconds} seconds")
+    # Cleanup the archive tar file
+    os.unlink(f"/tmp/{product_name}.tar")
 
-        # Cleanup the archive tar file
-        os.unlink(f"/tmp/{product_name}.tar")
+    # Write a STAMP file, as a marker of this activity, and to serve
+    # the purpose of time marker for differences
+    with open(f"{installation_path}/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
+        json.dump(nexus_file.js, fd)
 
-        # Write a STAMP file, as a marker of this activity, and to serve
-        # the purpose of time marker for differences
-        with open(f"{installation_path}/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
-            json.dump(nexus_file.js, fd)
+    print(f"    Saved info in {installation_path}/{product_name}/nexus.json")
 
-        print(f"    Saved info in {installation_path}/{product_name}/nexus.json")
-
-
-def update(version='', backup="none", products=None):
-    print("Updating")
-
-    products = products or []
-    import time
-
-    nexus = get_nexus()
-    nexus_files = nexus.list_repository("kbot_raw")
-
-    
-    import Bot
-    for p in Bot.Bot().products:
-
-        if products and p.name not in products:
-            continue
-
-        # IF the product folder contains nexus.json then it means it was installed
-        # through nexus. Otherwise it must be a git repository
-        local_nexus_descriptor = os.path.join(Bot.Bot().producthome, p.name, "nexus.json")
-        if not os.path.exists(local_nexus_descriptor):
-            print(f"Product {p.name} is not from Nexus. Ignored")
-            continue
-
-        with open(local_nexus_descriptor, encoding="utf-8") as fd:
-            local_nexus_descriptor_js = json.load(fd)
-
-        print(f"Checking product: {p.name}")
-
-        # Now build the product version, based on the
-        # - the product version (2022.02)
-        # - and the optional suffix (dev)
-        # to build the release name, such as:
-        # - release-2022.02
-        # - release-2022.02-dev
-        if not version:
-            version = f"release-{p.version}"
-
-        # Get the files for this nexus release
-        product_nexus_files = nexus_files.Filter(folder_name=f"{version}/{p.name}",
-                                                 ends_with=".tar.gz",
-                                                 not_ends_with="latest.tar.gz")
-        # Get the latest one
-
-        # Handle case of no release file found
-        if not product_nexus_files:
-            log.error("Failed to find latest file %s", f"{version}/{p.name}/*.tar.gz")
-            print("ABORTING")
-            return
-        nexus_file = product_nexus_files.latest()
-
-        nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.path)
-        install_commit_id = _get_commit_id_from_nexus_path(local_nexus_descriptor_js.get("path"))
-
-        if nexus_commit_id == install_commit_id:
-            print(f"Product {p.name} is already on latest available version {nexus_commit_id}")
-            continue
-
-        _nexus_download_and_install(nexus_file, p.name)
-
-        print(f"    Saved info in {installation_path}/{p.name}/stamp")
+    return _get_json_product_description(product_name)
 
 def _get_commit_id_from_nexus_path(nexus_path):
     """ Given a nexus file path or name, returns the commit it, extracted from its name
@@ -339,58 +419,78 @@ def _get_commit_id_from_nexus_path(nexus_path):
     """
     return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
 
-def list(products=None):
+def _list_or_update(products=None, update=False, backup=None, target_version=None):
     products = products or []
-    import time
 
     nexus = get_nexus()
     nexus_files = nexus.list_repository("kbot_raw")
 
-    import Bot
-    for p in Bot.Bot().products:
+    # First retrieve all the products, and order them
+    xml_product_descriptions = []
+    for product_name in os.listdir(installation_path):
+        xml_product_description = _get_xml_product_description(product_name)
+        if not xml_product_description:
+            print(f"Error: {product_name} is not a valid solution. Missing description.xml")
+            continue
+        xml_product_descriptions.append(xml_product_description)
 
-        # Check if file is from Nexus
-        nexus_source = False
-        product_description_path = os.path.join(f"{Bot.Bot().producthome}", p.name, "description.json")
-        if os.path.exists(product_description_path):
-            nexus_source = True
+    xml_product_descriptions = _xml_products_sorting(xml_product_descriptions)
 
-        print(f"Checking product: {p.name}")
+    # We only print the tree in the List mode
+    if not update:
+        print("Tree of currently installed products")
+        print("====================================")
+        top_tree_items = _get_tree(xml_product_descriptions)
+        tree_print(top_tree_items)
 
-        if nexus_source:
+    print("Versions of installed products")
+    print("==============================")
+    # Now check each of the product, to see their version
+    for xml_product_description in xml_product_descriptions:
+        product_name = xml_product_description.get("name")
+        print(f"Checking {xml_product_description.get('type')}: {product_name}")
+        # Check if the product is already installed through Nexus
+        json_product_description = _get_json_product_description(product_name)
+        # If this is git, then may be we do not have a JSON information, and we should
 
-            with open(product_description_path, encoding="utf-8") as fd:
-                nexus_js = json.load(fd)
-
-            #print("File: " + str(nexus_js))
-
-            # Now build the product version, based on the
-            # - the product version (2022.02)
-            # - and the optional suffix (dev)
-            # to build the release name, such as:
-            # - release-2022.02
-            # - release-2022.02-dev
-            release = f"release-{nexus_js.get('version')}"
-
-            # Get the files for this nexus release
-            product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{p.name}")
-            product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
-            product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
-            product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
-
-            if product_nexus_files:
-                js = product_nexus_files.latest().js
-                nexus_commit_id = _get_commit_id_from_nexus_path(js.get("path"))
-                installed_commit_id = _get_commit_id_from_nexus_path(nexus_js.get("build").get("commit"))
-                if nexus_commit_id == installed_commit_id:
-                    print(f"    Nexus on latest available code: {js.get('lastModified')} / {nexus_commit_id}")
-                else:
-                    print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
-                    print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
-            else:
-                print(f"    Not Nexus")
+        #
+        # Attempt to figure out the version if not provided
+        #
+        if json_product_description:
+            version = json_product_description.get("version")
+        elif xml_product_description:
+            version = xml_product_description.get("version")
+            print(f"    Git file on version {xml_product_description.get('version')}")
+            continue
         else:
-            print(f"    Git")
+            print("    Failed to find any version information")
+            continue
+
+        target_version = target_version or version
+
+        if update and target_version and target_version != version:
+            print(f"    Version is to be updated from {version} to {target_version}")
+
+        # Get the definitions of the latest available version in Nexus
+        if update:
+            latest_nexus_definition = _get_latest_available_nexus_file(nexus_files, product_name, target_version)
+        else:
+            latest_nexus_definition = _get_latest_available_nexus_file(nexus_files, product_name, version)
+
+        if latest_nexus_definition:
+            nexus_commit_id = _get_commit_id_from_nexus_path(latest_nexus_definition.get("path"))
+            installed_commit_id = _get_commit_id_from_nexus_path(json_product_description.get("build").get("commit"))
+            if nexus_commit_id == installed_commit_id:
+                print(f"    Nexus on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
+            else:
+                print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
+                if update:
+                    _json_product_description = nexus_download_and_install(nexus_file, p.name)
+                else:
+                    print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+
+        else:
+            print(f"    Not Nexus")
 
 def usage():
     return """
@@ -481,9 +581,10 @@ if __name__ == "__main__":
         # Firstly remove existing cron job for actions
         #remove_cron_job("actions_job")
         if action == "update":
-            update(version=version,
-                   backup=backup,
-                   products=products)
+            _list_or_update(backup=backup,
+                            products=products,
+                            update=True,
+                            target_version=version)
 
         # Setup the installer folder and a new work-area
         elif action == "install":
@@ -507,7 +608,8 @@ if __name__ == "__main__":
                    create_workarea=False)
             sys.exit(0)
         elif action == "list":
-            list(products=products)
+            _list_or_update(products=products,
+                            update=False)
             sys.exit(0)
 
         
