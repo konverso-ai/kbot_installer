@@ -46,50 +46,6 @@ def set_logger(logger, mode, log_filename):
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-def get_product_description(product_path):
-    """
-        Give a product path, returns a dictionnary containing the Product definition
-    """
-    result = {}
-    dom = xml.dom.minidom.parse(product_path)
-    for product in dom.getElementsByTagName('product'):
-
-        for attr in ('name', 'version', 'build', 'date', 'type', 'doc'):
-            if product.hasAttribute(attr):
-                result[attr] = product.getAttribute(attr)
-
-        result["parents"] = []
-        for parents in product.getElementsByTagName('parents'):
-            for parent in parents.getElementsByTagName('parent'):
-                result["parents"].append(parent.getAttribute('name'))
-
-    return result
-
-def test():
-
-    print("TEST")
-
-    from utils import Decrypt
-
-    import Bot
-    Bot.Bot().Init()
-
-    from domain.nexus import NexusRepository
-    nexus = NexusRepository(Bot.Bot().GetConfig("nexus_host"),
-                            Bot.Bot().GetConfig("nexus_user"),
-                            Decrypt(Bot.Bot().GetConfig("nexus_password")))
-
-    print("Asking for files from", Bot.Bot().GetConfig("nexus_host"))
-    #response = nexus.get_latest_file(f"/{KBOT_FILE_NEXUS_REPOSITORY}/release-2022.03-dev/snow", "/tmp.t")
-    nexus_files = nexus.list_repository("kbot_raw")
-    print("KBOT files: ", nexus_files)
-
-    print(nexus_files[0].js)
-
-    kbot_file = nexus_files.Filter(folder_name="release-2022.03-dev/jira").latest()
-    print("Last kbot file:", kbot_file)
-
-
 def get_nexus():
     """
         Returns a new instance of the Nexus repository
@@ -101,6 +57,11 @@ def get_nexus():
     return nexus
 
 def install(version, product, create_workarea=False):
+    """Recursive installation of the product and all its related parents, 
+       for the given version. 
+
+       If create_workarea is True, then all runs install.sh
+    """
 
     if not os.path.exists(installation_path):
         os.mkdir(installation_path)
@@ -163,9 +124,25 @@ def _get_xml_product_description(product_name):
     if not os.path.exists(product_description_path):
         return False
 
-    return get_product_description(product_description_path)
+    result = {}
+    dom = xml.dom.minidom.parse(product_description_path)
+    for product in dom.getElementsByTagName('product'):
+
+        for attr in ('name', 'version', 'build', 'date', 'type', 'doc'):
+            if product.hasAttribute(attr):
+                result[attr] = product.getAttribute(attr)
+
+        result["parents"] = []
+        for parents in product.getElementsByTagName('parents'):
+            for parent in parents.getElementsByTagName('parent'):
+                result["parents"].append(parent.getAttribute('name'))
+
+    return result
 
 def _get_latest_available_nexus_file(nexus_files, product_name, version):
+    """Given a list of NexusFile objects, returns the most recent version of
+       the available binaries, onyl considering the "real" files (not returning the latest.tar.gz
+    """
     release = f"release-{version}"
     product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{product_name}")
     product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
@@ -178,16 +155,24 @@ def _get_latest_available_nexus_file(nexus_files, product_name, version):
     return None
 
 def _xml_products_sorting(xml_product_descriptions):
+    """Given a list of xm product definitions (in dict format), 
+       Sort them on their type, in the following order: 
+            site, customer, solution, framework
+    """
     xml_product_descriptions_new = []
     for t in ("site", "customer", "solution", "framework"):
         xml_product_descriptions_new.extend([d for d in xml_product_descriptions if d.get("type") == t])
 
     return xml_product_descriptions_new
 
-
 def _get_tree(xml_descriptions):
-    """Onput if a list of dictionnaries representing the description.xml
-       Returns a dictionnary tree structure of the relation ship:
+    """Ouput if a list of dictionnaries representing the description.xml
+
+       It is basically a FULL version of the description tree, when the parent names 
+       are replaced by the related description object
+
+       For example:
+
   {
     "name": "snow",
     ...
@@ -226,6 +211,7 @@ def _get_tree(xml_descriptions):
     return child_list
 
 def _tree_recurse_visite(xml_description, xml_descriptions, result, visited_product_names):
+    """Reccursivity helper function of _get_tree""" 
     child_list = []
     for parent_name in xml_description.get("parents", []):
         try:
@@ -241,6 +227,8 @@ def _tree_recurse_visite(xml_description, xml_descriptions, result, visited_prod
     xml_description["parents"]=child_list
 
 def tree_print(elements, level=1, visited=None):
+    """Print the given list of products, excluding duplication on root level
+    """
     visited = visited or []
     for element in elements:
 
@@ -289,7 +277,7 @@ def reccurse_product_download(nexus_files, product_name, version):
              print(f"   Nexus is on latest available version: {js.get('lastModified')} / {nexus_commit_id}")
         else:
             print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
-            print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+            print(f"        Attempting to upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
             json_product_description = _nexus_download_and_install(nexus_file, product_name)
             for parent_product_name in json_product_description.get("parents"):
                  reccurse_product_download(nexus_files, parent_product_name, version)
@@ -336,11 +324,6 @@ def reccurse_product_download(nexus_files, product_name, version):
             reccurse_product_download(nexus_files, parent, version)
 
         return
-
-    #if not nexus_file:
-    #    log.error("Failed to find file %s", f"{version}/{product_name}")
-    #    print("ABORTING")
-    #    return
 
     # We have a good 'latest' nexus file. Use it:
     json_product_description =_nexus_download_and_install(nexus_file, product_name)
@@ -481,9 +464,12 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             nexus_commit_id = _get_commit_id_from_nexus_path(latest_nexus_definition.get("path"))
             installed_commit_id = _get_commit_id_from_nexus_path(json_product_description.get("build").get("commit"))
             if nexus_commit_id == installed_commit_id:
-                print(f"    Nexus on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
+                if update:
+                    print(f"    Nexus is already on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
+                else:
+                    print(f"    Nexus on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
             else:
-                print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
+                print(f"    Nexus is on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
                 if update:
                     _json_product_description = nexus_download_and_install(nexus_file, p.name)
                 else:
@@ -498,9 +484,11 @@ def usage():
         In format 'domain:user:password'
 
     Action (-a or --action). One of:
-        upgrade
-        install
-        update
+      - upgrade: Update the given installation to a new version
+      - install: Create a new /installer and /work area, a new bot !
+      - update: Update the given installation to the latest available code base for this version
+      - installer-only: Create a new /installer area, without creating a work area
+      - list: List the installed products.
     """
 
 if __name__ == "__main__":
@@ -578,16 +566,8 @@ if __name__ == "__main__":
             print("Nexus repository details are required")
             sys.exit(1)
 
-        # Firstly remove existing cron job for actions
-        #remove_cron_job("actions_job")
-        if action == "update":
-            _list_or_update(backup=backup,
-                            products=products,
-                            update=True,
-                            target_version=version)
-
         # Setup the installer folder and a new work-area
-        elif action == "install":
+        if action == "install":
             if len(products) != 1:
                 print(usage())
                 print("Expecting a single product for the case of installation. Found: ", products)
@@ -596,6 +576,19 @@ if __name__ == "__main__":
                    product=products[0],
                    create_workarea=True)
             sys.exit(0)
+
+        # Update existing version to the latest code base
+        elif action == "update":
+            _list_or_update(backup=backup,
+                            products=products,
+                            update=True)
+
+        # Move to a new version
+        elif action == "upgrade":
+            _list_or_update(backup=backup,
+                            products=products,
+                            update=True,
+                            target_version=version)
 
         # Only setup the installer folder
         elif action == "installer-only":
@@ -607,6 +600,8 @@ if __name__ == "__main__":
                    product=products[0],
                    create_workarea=False)
             sys.exit(0)
+
+        # List the currently installed products
         elif action == "list":
             _list_or_update(products=products,
                             update=False)
@@ -614,6 +609,7 @@ if __name__ == "__main__":
 
         
         email_title = "Kbot actions completed"
+
     except Exception as exp:
         log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
         email_title = "Kbot actions failed"
