@@ -150,7 +150,7 @@ def _get_latest_available_nexus_file(nexus_files, product_name, version):
     product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
 
     if product_nexus_files:
-         return product_nexus_files.latest().js
+         return product_nexus_files.latest()
 
     return None
 
@@ -254,7 +254,7 @@ def reccurse_product_download(nexus_files, product_name, version):
     json_product_description = _get_json_product_description(product_name)
     # If this is git, then may be we do not have a JSON information, and we should
     # get the XML description
-    xml_product_description = _get_xml_production_description(product_name)
+    xml_product_description = _get_xml_product_description(product_name)
 
     #
     # Attempt to figure out the version if not provided
@@ -272,9 +272,9 @@ def reccurse_product_download(nexus_files, product_name, version):
     #
     if json_product_description:
         installed_commit_id = json_product_description.get("build").get("commit")
-        nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.get("path"))
+        nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.js.get("path"))
         if nexus_commit_id == installed_commit_id:
-             print(f"   Nexus is on latest available version: {js.get('lastModified')} / {nexus_commit_id}")
+             print(f"   Nexus is on latest available version: {nexus_file.js.get('lastModified')} / {nexus_commit_id}")
         else:
             print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
             print(f"        Attempting to upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
@@ -285,8 +285,7 @@ def reccurse_product_download(nexus_files, product_name, version):
 
     else:
         # Should never happen
-        print(f"    Not Nexus !")
-        return
+        print(f"    Product {product_name} is not available in Nexus ")
 
 
     #
@@ -294,6 +293,9 @@ def reccurse_product_download(nexus_files, product_name, version):
     #
     if xml_product_description:
         print(f"   Not installed through Nexus (probably git ?).")
+        parents = _get_xml_product_description(product_name).get("parents")
+        for parent in parents:
+            reccurse_product_download(nexus_files, parent, version)
         return
 
     #
@@ -312,19 +314,20 @@ def reccurse_product_download(nexus_files, product_name, version):
         # Now set the proper branch
         # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
         if product_name not in ("kkeys",):
-            response = os.system(f"cd {installation_path}/{product_name} ; git checkout {version}")
+            response = os.system(f"cd {installation_path}/{product_name} ; git checkout release-{version}")
             if response:
                 print(f"Failed set git repository to branch {version}. Will stay on master branch")
 
         print(f"Product {product_name} retrieved from GIT")
 
         # Kick of the reccursion on all required products before exiting.
-        parents = get_product_description(f"{installation_path}/{product_name}/description.xml").get("parents")
+        parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
             reccurse_product_download(nexus_files, parent, version)
 
         return
 
+    print(nexus_file)
     # We have a good 'latest' nexus file. Use it:
     json_product_description =_nexus_download_and_install(nexus_file, product_name)
     for parent in json_product_description.get("parents"):
@@ -461,13 +464,13 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             latest_nexus_definition = _get_latest_available_nexus_file(nexus_files, product_name, version)
 
         if latest_nexus_definition:
-            nexus_commit_id = _get_commit_id_from_nexus_path(latest_nexus_definition.get("path"))
+            nexus_commit_id = _get_commit_id_from_nexus_path(latest_nexus_definition.js.get("path"))
             installed_commit_id = _get_commit_id_from_nexus_path(json_product_description.get("build").get("commit"))
             if nexus_commit_id == installed_commit_id:
                 if update:
                     print(f"    Nexus is already on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
                 else:
-                    print(f"    Nexus on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
+                    print(f"    Nexus on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}")
             else:
                 print(f"    Nexus is on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
                 if update:
