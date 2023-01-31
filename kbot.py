@@ -143,7 +143,11 @@ def _get_latest_available_nexus_file(nexus_files, product_name, version):
     """Given a list of NexusFile objects, returns the most recent version of
        the available binaries, onyl considering the "real" files (not returning the latest.tar.gz
     """
-    release = f"release-{version}"
+    if version in ("dev", "master"):
+        release = version
+    else:
+        release = f"release-{version}"
+
     product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{product_name}")
     product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
     product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
@@ -414,6 +418,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
     # First retrieve all the products, and order them
     xml_product_descriptions = []
     for product_name in os.listdir(installation_path):
+        print(f"Checking {product_name}")
         xml_product_description = _get_xml_product_description(product_name)
         if not xml_product_description:
             print(f"Error: {product_name} is not a valid solution. Missing description.xml")
@@ -468,18 +473,18 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             installed_commit_id = _get_commit_id_from_nexus_path(json_product_description.get("build").get("commit"))
             if nexus_commit_id == installed_commit_id:
                 if update:
-                    print(f"    Nexus is already on latest available code: {latest_nexus_definition.get('lastModified')} / {nexus_commit_id}")
+                    print(f"    Nexus is already on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}")
                 else:
                     print(f"    Nexus on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}")
             else:
-                print(f"    Nexus is on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
+                print(f"    Nexus is on OLD VERSION: {json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}")
                 if update:
-                    _json_product_description = nexus_download_and_install(nexus_file, p.name)
+                    _json_product_description = _nexus_download_and_install(latest_nexus_definition, product_name)
                 else:
-                    print(f"        Could upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+                    print(f"        Could upgrade to: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}")
 
         else:
-            print(f"    Not Nexus")
+            print(f"    Version file not found in Nexus")
 
 def usage():
     return """
@@ -519,14 +524,17 @@ if __name__ == "__main__":
         # - folder: Old folder is saved into .backup.(iterative number)
 
         result = parser.parse_args()
-        action = result.action
-        version = result.version
+        action = result.action.strip()
+        version = (result.version or "").strip()
         emails = result.emails or []
         products = result.products or []
         backup = result.backup
         hostname = result.hostname
         workarea = result.workarea
         installation_path = result.installer or "/home/konverso/dev/installer"
+
+        print(f"Version: {version}")
+        print(f"Nexus: {result.nexus}")
 
         if action == 'test':
             test()
@@ -560,7 +568,7 @@ if __name__ == "__main__":
         if result.nexus:
             print("Nexus password is in command line. This is unsecure. Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
             host, user, password = result.nexus.split(":", 3)
-            nexus = NexusRepository(host, user, password)
+            nexus = NexusRepository(host.strip(), user.strip(), password.strip())
         elif os.environ.get("NEXUS_HOST") and os.environ.get("NEXUS_USERNAME") and os.environ.get("NEXUS_PASSWORD"):
             host, user, password = os.environ["NEXUS_HOST"], os.environ["NEXUS_USERNAME"], os.environ["NEXUS_PASSWORD"]
             nexus = NexusRepository(host, user, password)
@@ -609,12 +617,12 @@ if __name__ == "__main__":
             _list_or_update(products=products,
                             update=False)
             sys.exit(0)
-
         
         email_title = "Kbot actions completed"
 
     except Exception as exp:
         log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
         email_title = "Kbot actions failed"
+        print("Failed: {exp}")
     #finally:
     #    create_finalize_job(LOG_FILENAME, emails, email_title, nostart)
