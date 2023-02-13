@@ -367,7 +367,7 @@ def _nexus_download_and_install(nexus_file, product_name):
     # Cleanup the downloaded zip file
     os.unlink(f"/tmp/{product_name}.tar.gz")
 
-    if backup == "none":
+    if not backup or backup == "none":
         os.system(f"rm -rf {installation_path}/{product_name}")
     elif backup == "folder":
         backup_version = 1
@@ -418,9 +418,10 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
     # First retrieve all the products, and order them
     xml_product_descriptions = []
     for product_name in os.listdir(installation_path):
-        print(f"Checking {product_name}")
+        #print(f"Checking {product_name}")
         xml_product_description = _get_xml_product_description(product_name)
         if not xml_product_description:
+
             print(f"Error: {product_name} is not a valid solution. Missing description.xml")
             continue
         xml_product_descriptions.append(xml_product_description)
@@ -450,8 +451,20 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         if json_product_description:
             version = json_product_description.get("version")
         elif xml_product_description:
+            
+            # Attempt to find the related GIT branch
+            cmd = f"cd {installation_path}/{product_name} ; git status"
+            try:
+                cmd_response_text = os.popen(cmd).read()
+                branch = cmd_response_text.split("\n")[0].strip().rsplit(" ", 1)[-1]
+            except Exception as e:
+                branch = f"Failed to get GIT version due to {e}"
+
             version = xml_product_description.get("version")
-            print(f"    Git file on version {xml_product_description.get('version')}")
+            if version:
+                print(f"    Git repository, version {version}, branch: {branch}")
+            else:
+                print(f"    Git repository, no version, branch: {branch}")
             continue
         else:
             print("    Failed to find any version information")
@@ -532,9 +545,6 @@ if __name__ == "__main__":
         hostname = result.hostname
         workarea = result.workarea
         installation_path = result.installer or "/home/konverso/dev/installer"
-
-        print(f"Version: {version}")
-        print(f"Nexus: {result.nexus}")
 
         if action == 'test':
             test()
