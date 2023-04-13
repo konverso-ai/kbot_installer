@@ -15,7 +15,7 @@ import tarfile
 import shutil
 import json
 import logging
-from defusedxml.minidom import parse as xml_parse
+import xml.dom.minidom
 
 import subprocess
 from subprocess import TimeoutExpired
@@ -125,7 +125,7 @@ def _get_xml_product_description(product_name):
         return False
 
     result = {}
-    dom = xml_parse(product_description_path)
+    dom = xml.dom.minidom.parse(product_description_path)
     for product in dom.getElementsByTagName('product'):
 
         for attr in ('name', 'version', 'build', 'date', 'type', 'doc'):
