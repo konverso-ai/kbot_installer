@@ -4,21 +4,15 @@
 # pylint: disable=unspecified-encoding
 import os
 import os.path
-import re
 import sys
 import gzip
 import time
-
-from datetime import datetime
 
 import tarfile
 import shutil
 import json
 import logging
 import xml.dom.minidom
-
-import subprocess
-from subprocess import TimeoutExpired
 
 from nexus import NexusRepository
 
@@ -57,8 +51,8 @@ def get_nexus():
     return nexus
 
 def install(version, product, create_workarea=False):
-    """Recursive installation of the product and all its related parents, 
-       for the given version. 
+    """Recursive installation of the product and all its related parents,
+       for the given version.
 
        If create_workarea is True, then all runs install.sh
     """
@@ -69,8 +63,8 @@ def install(version, product, create_workarea=False):
         if not os.path.isdir(installation_path):
             raise RuntimeError(f"Installation path {installation_path} is not a directory !")
 
-    nexus = get_nexus()
-    nexus_files = nexus.list_repository("kbot_raw")
+    nexus_repo = get_nexus()
+    nexus_files = nexus_repo.list_repository("kbot_raw")
 
     # Load all the required products
     reccurse_product_download(nexus_files, product, version)
@@ -81,7 +75,8 @@ def install(version, product, create_workarea=False):
     #
     # Call the installer in non-interactive mode
     #
-    cmd = f"{installation_path}/kbot/install.sh "
+    current_folder = os.path.dirname(__file__)
+    cmd = f"{current_folder}/setup_workarea.sh "
     cmd += f"--product {product} " # Indicate the top level product for the installation
     cmd += f"--path {installation_path} " # Indicate the installation path
     cmd += "--secret=K0nversOK! " # Secret installation password
@@ -99,7 +94,9 @@ def install(version, product, create_workarea=False):
 
     cmd += "--accept-licence "
 
-    response = os.system(cmd)
+    cmd += installation_path
+
+    os.system(cmd)
 
 def _get_json_product_description(product_name):
     """Returns a dictionnary containing the product definition, as found in the
@@ -107,7 +104,6 @@ def _get_json_product_description(product_name):
     """
     # Check if file is from Nexus
     json_product_description_path = f"{installation_path}/{product_name}/description.json"
-    nexus_source = False
     if not os.path.exists(json_product_description_path):
         return None
 
@@ -117,7 +113,7 @@ def _get_json_product_description(product_name):
     return None
 
 def _get_xml_product_description(product_name):
-    """Returns a dictionnary containing the product definition, as found in the 
+    """Returns a dictionnary containing the product definition, as found in the
        description.xml file
     """
     product_description_path = f"{installation_path}/{product_name}/description.xml"
@@ -154,13 +150,13 @@ def _get_latest_available_nexus_file(nexus_files, product_name, version):
     product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
 
     if product_nexus_files:
-         return product_nexus_files.latest()
+        return product_nexus_files.latest()
 
     return None
 
 def _xml_products_sorting(xml_product_descriptions):
-    """Given a list of xm product definitions (in dict format), 
-       Sort them on their type, in the following order: 
+    """Given a list of xm product definitions (in dict format),
+       Sort them on their type, in the following order:
             site, customer, solution, framework
     """
     xml_product_descriptions_new = []
@@ -172,7 +168,7 @@ def _xml_products_sorting(xml_product_descriptions):
 def _get_tree(xml_descriptions):
     """Ouput if a list of dictionnaries representing the description.xml
 
-       It is basically a FULL version of the description tree, when the parent names 
+       It is basically a FULL version of the description tree, when the parent names
        are replaced by the related description object
 
        For example:
@@ -197,8 +193,8 @@ def _get_tree(xml_descriptions):
             "fr": "Kbot pour ServiceNow"
         },
         "description": {
-            "en": "The ServiceNow integration. Combined with the Virtual Agent for IT Service Desk application (available in the ServiceNow Store), the solution provides a complete, ready-to-use virtual agent for ServiceNow.",
-            "fr": "L'int\u00e9gration \u00e0 ServiceNow. Combin\u00e9e avec l'application Virtual Agent for IT Service Desk (disponible dans le ServiceNow Store), cette solution propose un agent virtuel complet et pr\u00eat \u00e0 l'emploi pour ServiceNow."
+            "en": "The ServiceNow integration....eady-to-use virtual agent for ServiceNow.",
+            "fr": "L'int\u00e9gration \u00e0 ServiceNow. ...emploi pour ServiceNow."
         }
     }
   }
@@ -215,7 +211,7 @@ def _get_tree(xml_descriptions):
     return child_list
 
 def _tree_recurse_visite(xml_description, xml_descriptions, result, visited_product_names):
-    """Reccursivity helper function of _get_tree""" 
+    """Reccursivity helper function of _get_tree"""
     child_list = []
     for parent_name in xml_description.get("parents", []):
         try:
@@ -246,7 +242,7 @@ def tree_print(elements, level=1, visited=None):
 def reccurse_product_download(nexus_files, product_name, version):
     """
         Recursively retrieve the products, based on the "parent" definition
-        found inside the Product definition. 
+        found inside the Product definition.
 
         Note that:
             if product is Customer or Solution, then do GIT download
@@ -278,13 +274,13 @@ def reccurse_product_download(nexus_files, product_name, version):
         installed_commit_id = json_product_description.get("build").get("commit")
         nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.js.get("path"))
         if nexus_commit_id == installed_commit_id:
-             print(f"   Nexus is on latest available version: {nexus_file.js.get('lastModified')} / {nexus_commit_id}")
+            print(f"   Nexus is on latest available version: {nexus_file.js.get('lastModified')} / {nexus_commit_id}")
         else:
-            print(f"    Nexus on OLD VERSION: {nexus_js.get('build').get('timestamp')}/{nexus_js.get('build').get('commit')}")
-            print(f"        Attempting to upgrade to: {js.get('lastModified')} / {nexus_commit_id}")
+            print(f"    Nexus on OLD VERSION: {json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}")
+            print(f"        Attempting to upgrade to: {nexus_file.js.get('lastModified')} / {nexus_commit_id}")
             json_product_description = _nexus_download_and_install(nexus_file, product_name)
             for parent_product_name in json_product_description.get("parents"):
-                 reccurse_product_download(nexus_files, parent_product_name, version)
+                reccurse_product_download(nexus_files, parent_product_name, version)
             return
 
     else:
@@ -296,7 +292,7 @@ def reccurse_product_download(nexus_files, product_name, version):
     # Product was installed through GIT or some other file copy
     #
     if xml_product_description:
-        print(f"   Not installed through Nexus (probably git ?).")
+        print("   Not installed through Nexus (probably git ?).")
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
             reccurse_product_download(nexus_files, parent, version)
@@ -359,7 +355,7 @@ def _nexus_download_and_install(nexus_file, product_name):
     except Exception as e:
         log.error("Failed to extract file %s due to: %e", f"/tmp/{product_name}.tar.gz", e)
         print("ABORTING")
-        return
+        return None
     else:
         seconds = int(time.time() - start)
         print(f"         => completed in {seconds} seconds")
@@ -451,7 +447,6 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         if json_product_description:
             version = json_product_description.get("version")
         elif xml_product_description:
-            
             # Attempt to find the related GIT branch
             cmd = f"cd {installation_path}/{product_name} ; git status"
             try:
@@ -497,19 +492,24 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                     print(f"        Could upgrade to: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}")
 
         else:
-            print(f"    Version file not found in Nexus")
+            print("    Version file not found in Nexus")
 
 def usage():
     return """
     Nexus user (-n or --nexus)
         In format 'domain:user:password'
-
     Action (-a or --action). One of:
-      - upgrade: Update the given installation to a new version
+      - upgrade: Update the given installation to a new version. Add variables:
+           -v: The target version
       - install: Create a new /installer and /work area, a new bot !
+          -w: Define your work area target directory
       - update: Update the given installation to the latest available code base for this version
+          No param required, will simply used the existing product definitions and versions
       - installer-only: Create a new /installer area, without creating a work area
+          -v: Version in format
+          -p: top product name
       - list: List the installed products.
+          No parameters required
     """
 
 if __name__ == "__main__":
@@ -531,24 +531,20 @@ if __name__ == "__main__":
         parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/dev/installer", dest='installer', required=False)
         parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
-        
+
         # backup, one of:
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
 
         result = parser.parse_args()
         action = result.action.strip()
-        version = (result.version or "").strip()
+        product_version = (result.version or "").strip()
         emails = result.emails or []
         products = result.products or []
         backup = result.backup
         hostname = result.hostname
         workarea = result.workarea
         installation_path = result.installer or "/home/konverso/dev/installer"
-
-        if action == 'test':
-            test()
-            sys.exit(0)
 
         #
         # If defined, set the git user / password for this session
@@ -593,7 +589,7 @@ if __name__ == "__main__":
                 print(usage())
                 print("Expecting a single product for the case of installation. Found: ", products)
                 sys.exit(1)
-            install(version=version,
+            install(version=product_version,
                    product=products[0],
                    create_workarea=True)
             sys.exit(0)
@@ -609,7 +605,7 @@ if __name__ == "__main__":
             _list_or_update(backup=backup,
                             products=products,
                             update=True,
-                            target_version=version)
+                            target_version=product_version)
 
         # Only setup the installer folder
         elif action == "installer-only":
@@ -617,7 +613,7 @@ if __name__ == "__main__":
                 print(usage())
                 print("Expecting a single product for the case of installation. Found: ", products)
                 sys.exit(1)
-            install(version=version,
+            install(version=product_version,
                    product=products[0],
                    create_workarea=False)
             sys.exit(0)
@@ -627,7 +623,7 @@ if __name__ == "__main__":
             _list_or_update(products=products,
                             update=False)
             sys.exit(0)
-        
+
         email_title = "Kbot actions completed"
 
     except Exception as exp:
