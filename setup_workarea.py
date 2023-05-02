@@ -162,16 +162,7 @@ class Installer:
 <meta name="description" content="Main Bot module." />
 <html>
 <body>
-<p> It appears that you have not yet generated your python docs.
-Please ask your administrator to do: </p>
-<p>Install first the pdoc package with the following command:</p>
-<pre>bin/pip3.sh install pdoc3</pre>
-
-<p>Then invoke:</p>
-<pre>bin/python.sh core/python/tools/GeneratePythonDocs.py</pre>
-
-<p>Then refresh this page, it will show you the list of the defined Kbot python modules</p>
-
+<p> Python Docs are only available with the "python-dev" solution installed.
 </body>
 
 </html>
@@ -664,6 +655,7 @@ Please ask your administrator to do: </p>
                         sys.stdout.flush()
                         os.system(os.path.join(self.target, 'bin', 'gencertificate.sh'))
                         break
+
     def _CopyRedisCertificates(self):
         # if Redis tls is enabled then generate self-signed certificate
         if self.redis_tls_port:
