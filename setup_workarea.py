@@ -162,7 +162,7 @@ class Installer:
 <meta name="description" content="Main Bot module." />
 <html>
 <body>
-<p> Python Docs are only available with the "python-dev" solution installed.
+<p> Python Docs are only available with the "python-dev" solution installed.</p>
 </body>
 
 </html>
