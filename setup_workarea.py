@@ -34,7 +34,6 @@ class Installer:
             license: Optional boolean. If true, then considere the license as accepted
             hostname: Optional hostname, typicaly in format site.konverso.ai
         """
-
         self.path = path or os.path.realpath(os.path.join(os.environ["KBOT_HOME"], ".."))
         self.product = product
         self.secret = secret
@@ -120,6 +119,7 @@ class Installer:
         self._ValidateHttpPorts()
         self._ValidateHostname()
         self._SetupVariables()
+        self._UpdatePythonPackages()
         if self.db_internal:
             self._SetupDatabase()
         else:
@@ -145,11 +145,11 @@ class Installer:
         self._SetupRest()
         self._SetupUI()
         self._SetupTests()
-
         self._CopyCertificates()
         self._CopyRedisCertificates()
-
         self._SetupPythonDoc()
+        self._UpdatePythonPackages
+
 
     def _SetupPythonDoc(self):
         pythondocfolder = os.path.join(self.products.kbot().dirname, 'doc', 'python')
@@ -252,6 +252,17 @@ class Installer:
             for p in self.products:
                 self._LinkAbs(p.dirname, os.path.join(products, p.name))
                 p.dirname = os.path.join(self.target, 'products', p.name)
+
+    def _UpdatePythonPackages(self):
+        """ Upate products  python packages using requirements.txt file"""
+        for p in self.products:
+            if p.type not in ("solution", "customer"):
+                continue
+            req_path = os.path.join(p.dirname, "requirements.txt")
+            if os.path.exists(req_path):
+                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
+                print(f"{pip_path} {req_path}")
+                os.system(f"{pip_path} install -r {req_path}")
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')
@@ -912,7 +923,6 @@ class Installer:
     def _GetProducts(self):
         basedir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
         names = [x for x in os.listdir(basedir) if self._GetProduct(os.path.join(basedir, x), x)]
-
         if not self.product:
             product = input("Which product to install (Choose one: %s): "%(', '.join(names))).strip()
         else:
