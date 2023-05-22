@@ -281,7 +281,7 @@ def reccurse_product_download(nexus_files, product_name, version):
             json_product_description = _nexus_download_and_install(nexus_file, product_name)
             for parent_product_name in json_product_description.get("parents"):
                 reccurse_product_download(nexus_files, parent_product_name, version)
-            return
+        return
 
     else:
         # Should never happen
