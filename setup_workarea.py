@@ -148,7 +148,7 @@ class Installer:
         self._CopyCertificates()
         self._CopyRedisCertificates()
         self._SetupPythonDoc()
-        self._UpdatePythonPackages
+        self._UpdatePythonPackages()
 
 
     def _SetupPythonDoc(self):
@@ -261,7 +261,6 @@ class Installer:
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
                 pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
-                print(f"{pip_path} {req_path}")
                 os.system(f"{pip_path} install -r {req_path}")
 
     def _SetupUI(self):
