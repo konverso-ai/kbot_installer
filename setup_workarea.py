@@ -260,8 +260,8 @@ class Installer:
                 continue
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
-                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh --quiet --disable-pip-version-check")
-                os.system(f"{pip_path} install -r {req_path}")
+                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
+                os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')
