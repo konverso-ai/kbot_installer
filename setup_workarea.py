@@ -23,7 +23,7 @@ from utils.License import License
 class Installer:
     """Installer"""
 
-    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None, hostname=None):
+    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None, hostname=None, no_learn=False):
         """
             product: Optional top level product name. If present, do not ask for the choice of the top level product
             path: Optional path to lookup the products. If defined, do not prompt for the product paths
@@ -77,6 +77,8 @@ class Installer:
 
         self.cs_ports_offset = None
         self.admin_password = None
+
+        self.no_learn = no_learn
 
     def Run(self):
         """Run installer"""
@@ -877,10 +879,12 @@ class Installer:
                     print("Error: can't setup admin password! Aborting...")
                     sys.exit(1)
 
-        if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
-            print("Error during learning! Aborting...")
-            os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
-            sys.exit(1)
+        if not self.no_learn:
+            print("Learning models...")
+            if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
+                print("Error during learning! Aborting...")
+                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                sys.exit(1)
 
     def _StartInstallation(self):
         print("You are about to install Konverso Kbot")
@@ -1213,6 +1217,8 @@ if __name__ == '__main__':
         parser.add_argument('--accept-licence', help="Accept the license agreement", dest='license', action="store_true", required=False, default=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
         parser.add_argument('-d', '--default', help="Use the default answer to reduce or avoid any interaction", action="store_true", dest='default', required=False, default=False)
+        parser.add_argument('--no-learn', help="Do not learn following the setup", dest='no_learn', action="store_true", required=False, default=False)
+
 
         #
         # Optional Postgres arguments
@@ -1240,7 +1246,8 @@ if __name__ == '__main__':
         if _result.product:
 
             installer = Installer(product=_result.product, path=_result.path, secret=_result.secret, workarea=_result.workarea,
-                                  license=_result.license, hostname=_result.hostname, default=_result.default)
+                                  license=_result.license, hostname=_result.hostname, default=_result.default,
+                                  no_learn=_result.no_learn)
 
             # Update the installer values based on some argument parameters
             for param in ('db_host', 'db_port', 'db_user', 'db_password', 'db_name'):
