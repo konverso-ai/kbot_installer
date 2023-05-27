@@ -183,6 +183,10 @@ class NexusRepository:
 
         return response
 
+
+    def list_assets(self, repository_name=""):
+        return self.list_repository(repository_name)
+
     def list_repository(self, repository_name):
         """
              Runs a Nexus query such as:
@@ -217,9 +221,12 @@ class NexusRepository:
 
         return response
 
-    def _list_repository_paging(self, headers, nexus_files, repository_name, continuationToken=""):
+    def _list_repository_paging(self, headers, nexus_files, repository_name="", continuationToken=""):
 
-        url = self._url + f"/service/rest/v1/assets?repository={repository_name}"
+        if repository_name:
+            url = self._url + f"/service/rest/v1/assets?repository={repository_name}"
+        else:
+            url = self._url + f"/service/rest/v1/assets"
 
         if continuationToken:
             url += f"&continuationToken={continuationToken}"
@@ -227,6 +234,7 @@ class NexusRepository:
         response = requests.get(url, headers=headers)
 
         if not response.status_code == 200:
+            print(f"Failed accessing URL: {url}")
             raise HttpError(response)
 
         js = response.json()
