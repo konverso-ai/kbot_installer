@@ -50,7 +50,7 @@ def get_nexus():
 
     return nexus
 
-def install(version, product, create_workarea=False):
+def install(version, product, create_workarea=False, no_learn=False):
     """Recursive installation of the product and all its related parents,
        for the given version.
 
@@ -82,6 +82,9 @@ def install(version, product, create_workarea=False):
     cmd += "--secret=K0nversOK! " # Secret installation password
     cmd += "--default "
     cmd += "--workarea /home/konverso/work "
+
+    if no_learn:
+        cmd += "--no-learn "
 
     # If hostname is unset, then the user will be prompted for it
     if hostname:
@@ -531,6 +534,7 @@ if __name__ == "__main__":
         parser.add_argument('-i', '--installation', help="Installation path, defauls to /home/konverso/dev/installer", dest='installer', required=False)
         parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
+        parser.add_argument('--no-learn', help="Do not learn following the setup", dest='no_learn', action="store_true", required=False, default=False)
 
         # backup, one of:
         # - none (default)
@@ -591,7 +595,8 @@ if __name__ == "__main__":
                 sys.exit(1)
             install(version=product_version,
                    product=products[0],
-                   create_workarea=True)
+                   create_workarea=True,
+                   no_learn=result.no_learn)
             sys.exit(0)
 
         # Update existing version to the latest code base
