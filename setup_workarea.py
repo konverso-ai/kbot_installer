@@ -105,6 +105,7 @@ class Installer:
         self._SetupLogs()
         self._SetupUI()
         self._SetupVar()
+        self._SetupCache()
         self._SetupTests()
 
         self._Link(os.path.join(self.products.kbot().dirname, 'uninstall.sh'), os.path.join(self.target, 'uninstall.sh'))
@@ -282,6 +283,10 @@ class Installer:
         self._Makedirs(os.path.join(vardir, 'test_results'))
         self._CopyProductFilesToDir('var', vardir)
 
+    def _SetupCache(self):
+        self.cachedir = os.path.join(self.target, 'var', 'cache')
+        self._Makedirs(self.cachedir)
+
     def _SetupTests(self):
         dirname = os.path.join(self.target, 'tests')
         if os.path.exists(os.path.join(self.products.kbot().dirname, 'tests')):
@@ -404,14 +409,17 @@ class Installer:
 
     def _ValidateRedisParameters(self):
         """Ask and validate redis parameters"""
-
-        if not self.basic_installation:
+        if self.basic_installation:
+            self._Makedirs(os.path.join(self.cachedir, 'redis'))
+        else:
             # Advanced installation
             redis_internal_str = "yes" if self.redis_internal else "no"
             self.redis_internal = self._AskYN("Install own Kbot Redis engine? [%s]: " %redis_internal_str,
                                            redis_internal_str)
+            if self.redis_internal:
+                self._Makedirs(os.path.join(self.cachedir, 'redis'))
             # hostname for external database
-            if not self.redis_internal:
+            else:
                 self.redis_host = input("Enter a hostname where external Redis is located [%s]: "%self.redis_host).strip() or self.redis_host
                 # Redis database number
                 self.redis_db_number = input(
