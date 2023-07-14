@@ -5,7 +5,6 @@
 import os
 import os.path
 import sys
-import gzip
 import time
 
 import tarfile
@@ -348,24 +347,7 @@ def _nexus_download_and_install(nexus_file, product_name):
     seconds = int(time.time() - start)
     print(f"         => completed in {seconds} seconds")
 
-    # Now we can unzip the file
-    start = time.time()
-    print(f"    Unzipping /tmp/{product_name}.tar.gz")
-    try:
-        with gzip.open(f"/tmp/{product_name}.tar.gz", 'rb') as f_in:
-            with open(f"/tmp/{product_name}.tar", "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-    except Exception as e:
-        log.error("Failed to extract file %s due to: %e", f"/tmp/{product_name}.tar.gz", e)
-        print("ABORTING")
-        return None
-    else:
-        seconds = int(time.time() - start)
-        print(f"         => completed in {seconds} seconds")
-
-    # Cleanup the downloaded zip file
-    os.unlink(f"/tmp/{product_name}.tar.gz")
-
+    # Untar / Unzip the file
     if not backup or backup == "none":
         os.system(f"rm -rf {installation_path}/{product_name}")
     elif backup == "folder":
@@ -380,14 +362,14 @@ def _nexus_download_and_install(nexus_file, product_name):
 
     # And untar the content inside the installer
     start = time.time()
-    print(f"    Untarring /tmp/{product_name}.tar")
-    with tarfile.open(f"/tmp/{product_name}.tar") as tf:
+    print(f"    Untarring /tmp/{product_name}.tar.gz")
+    with tarfile.open(f"/tmp/{product_name}.tar.gz", mode='r:*') as tf:
         tf.extractall(path=installation_path)
     seconds = int(time.time() - start)
     print(f"         => completed in {seconds} seconds")
 
     # Cleanup the archive tar file
-    os.unlink(f"/tmp/{product_name}.tar")
+    os.unlink(f"/tmp/{product_name}.tar.gz")
 
     # Write a STAMP file, as a marker of this activity, and to serve
     # the purpose of time marker for differences
