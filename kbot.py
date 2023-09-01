@@ -250,8 +250,15 @@ def reccurse_product_download(nexus_files, product_name, version):
             if product is Customer or Solution, then do GIT download
             if product is Solution or Framework, then do NEXUS download
     """
+    if not version:
+        print("Missing version info. Please add the -v flag")
+
     # Get the definitions of the latest available version in Nexus
     nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
+
+    if not nexus_file:
+        print("Failed to find nexus_file for ", nexus_files, product_name, version)
+
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
     # If this is git, then may be we do not have a JSON information, and we should
@@ -288,7 +295,6 @@ def reccurse_product_download(nexus_files, product_name, version):
     else:
         # Should never happen
         print(f"    Product {product_name} is not available in Nexus ")
-
 
     #
     # Product was installed through GIT or some other file copy
