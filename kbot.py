@@ -257,7 +257,8 @@ def reccurse_product_download(nexus_files, product_name, version):
     nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
 
     if not nexus_file:
-        print("Failed to find nexus_file for ", nexus_files, product_name, version)
+        product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
+        print("Error: Failed to find Nexus in product %s for version release-%s. Available versions are: %s" % (product_name, version, product_nexus_files))
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -281,6 +282,9 @@ def reccurse_product_download(nexus_files, product_name, version):
     #
     if json_product_description:
         installed_commit_id = json_product_description.get("build").get("commit")
+        if not nexus_file:
+            print("Error: Failed to find Nexus in product %s for version %s" % (product_name, version))
+
         nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.js.get("path"))
         if nexus_commit_id == installed_commit_id:
             print(f"   Nexus is on latest available version: {nexus_file.js.get('lastModified')} / {nexus_commit_id}")
