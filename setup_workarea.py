@@ -1076,9 +1076,13 @@ class Installer:
         for dstdir in dstdirs:
             if not dstdir.startswith('__') and dstdir not in ignoredirs: # Don't remove '__pycache__' directories
                 realdir = os.path.join(relpath, dstdir)
-                if self.silent or self._AskYN("Not used directory '%s'. Remove it? [yes]" % realdir):
-                    shutil.rmtree(os.path.join(dst, dstdir))
-
+                if os.path.islink(realdir):
+                    print(f"Warning: Found plain folder in core/python/{dstdir}. This is potentially unsafe. Should you save this code ?")
+                elif os.path.isdir(realdir):
+                    if self.silent or self._AskYN("Not used directory '%s'. Remove it? [yes]" % realdir):
+                        shutil.rmtree(os.path.join(dst, dstdir))
+                else:
+                    print(f"Error: Unsupported folder type. Review 'core/python/{dstdir}'")
 
     def _CopyProductFilesToDir(self, relpath, dst):
 
