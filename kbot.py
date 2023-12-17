@@ -297,8 +297,8 @@ def reccurse_product_download(nexus_files, product_name, version):
         return
 
     else:
-        # Should never happen
-        print(f"    Product {product_name} is not available in Nexus ")
+        # This is a new path... not yet available
+        pass
 
     #
     # Product was installed through GIT or some other file copy
