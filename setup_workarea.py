@@ -1,4 +1,7 @@
 """Kbot installer"""
+
+# pylint: disable=too-many-lines
+
 import sys
 import os
 import shutil
@@ -79,6 +82,8 @@ class Installer:
         self.admin_password = None
 
         self.no_learn = no_learn
+
+        self.cachedir = None
 
     def Run(self):
         """Run installer"""
@@ -445,12 +450,18 @@ class Installer:
                         if self._AskYN("Genetrate redis SSL files? [%s]: " %redis_tls_files, redis_tls_files):
                             self._CopyRedisCertificates()
                         else:
-                            self.redis_tls_cert_file = input(
-                                "Enter full path to redis certificate file [%s]: " %self.redis_tls_cert_file).strip() or self.redis_tls_cert_file
-                            self.redis_tls_key_file = input(
-                                "Enter full path to redis key file [%s]: " %self.redis_tls_key_file).strip() or self.redis_tls_key_file
-                            self.redis_tls_ca_cert_file = input(
-                                "Enter full path to redis Certificate Authority file [%s]: " %self.redis_tls_ca_cert_file).strip() or self.redis_tls_ca_cert_file
+
+                            question = "Enter full path to redis certificate file [%s]: "
+                            question = (question % self.redis_tls_cert_file).strip()
+                            self.redis_tls_cert_file = input(question) or self.redis_tls_cert_file
+
+                            question = "Enter full path to redis key file [%s]: "
+                            question = (question % self.redis_tls_key_file).strip()
+                            self.redis_tls_key_file = input(question) or self.redis_tls_key_file
+
+                            question = "Enter full path to redis Certificate Authority file [%s]: "
+                            question = (question % self.redis_tls_ca_cert_file).strip()
+                            self.redis_tls_ca_cert_file = input(question) or self.redis_tls_ca_cert_file
 
 
     def _ValidateParameterInKbotConf(self, param, param_name):
@@ -1228,7 +1239,8 @@ if __name__ == '__main__':
         parser.add_argument('-w', '--workarea', help="Default work-area path", dest='workarea', required=False)
         parser.add_argument('--accept-licence', help="Accept the license agreement", dest='license', action="store_true", required=False, default=False)
         parser.add_argument('--hostname', help="Default hostname", dest='hostname', required=False)
-        parser.add_argument('-d', '--default', help="Use the default answer to reduce or avoid any interaction", action="store_true", dest='default', required=False, default=False)
+        parser.add_argument('-d', '--default', help="Use the default answer to reduce or avoid any interaction",
+                            action="store_true", dest='default', required=False, default=False)
         parser.add_argument('--no-learn', help="Do not learn following the setup", dest='no_learn', action="store_true", required=False, default=False)
 
 
@@ -1262,9 +1274,9 @@ if __name__ == '__main__':
                                   no_learn=_result.no_learn)
 
             # Update the installer values based on some argument parameters
-            for param in ('db_host', 'db_port', 'db_user', 'db_password', 'db_name'):
-                if getattr(_result, param):
-                    setattr(installer, param, getattr(_result, param))
+            for _param in ('db_host', 'db_port', 'db_user', 'db_password', 'db_name'):
+                if getattr(_result, _param):
+                    setattr(installer, _param, getattr(_result, _param))
 
             if installer.db_host:
                 installer.db_internal = False
@@ -1277,7 +1289,6 @@ if __name__ == '__main__':
             sys.exit(1)
 
     except Exception as _e:
-        raise
         print("Failed due to: ", _e)
         usage()
         sys.exit(1)
