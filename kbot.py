@@ -621,6 +621,9 @@ if __name__ == "__main__":
                             update=False)
             sys.exit(0)
 
+        else:
+            print("Invalid action. Should be one of: update, upgrade, install, installer-only")
+
         email_title = "Kbot actions completed"
 
     except Exception as exp:
