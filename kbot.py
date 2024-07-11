@@ -317,7 +317,7 @@ def reccurse_product_download(nexus_files, product_name, version):
     if not nexus_file:
         print(f"Product {product_name} is not found in Nexus. Attempting GIT")
         # Not in Nexus, try, to get it from GIT
-        response = os.system(f"git clone https://bitbucket.org/konversoai/{product_name}.git")
+        response = os.system(f"git clone git@bitbucket.org:konversoai/{product_name}.git")
         if response:
             raise RuntimeError("Failed clone the git repository")
 
@@ -385,6 +385,19 @@ def _nexus_download_and_install(nexus_file, product_name):
     # the purpose of time marker for differences
     with open(f"{installation_path}/{product_name}/nexus.json", "w", encoding="utf-8") as fd:
         json.dump(nexus_file.js, fd)
+
+    # KB-16459 and KB-14332: Workaround for file magic
+    if product_name == "3rdparty":
+        fpath = f"{installation_path}/{product_name}/versions.env"
+
+        with open(fpath, "r", encoding="utf-8") as fd:
+            content = fd.read()
+
+        content = content.replace("FILE_DIR=${THIRDPARTY_PATH}/file-${FILE_VERSION}",
+                                  "FILE_DIR=/usr/lib/x86_64-linux-gnu")
+
+        with open(fpath, "w", encoding="utf-8") as fd:
+            content = fd.write(content)
 
     print(f"    Saved info in {installation_path}/{product_name}/nexus.json")
 
