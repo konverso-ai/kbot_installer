@@ -317,7 +317,7 @@ def reccurse_product_download(nexus_files, product_name, version):
     if not nexus_file:
         print(f"Product {product_name} is not found in Nexus. Attempting GIT")
         # Not in Nexus, try, to get it from GIT
-        response = os.system(f"git clone git@bitbucket.org:konversoai/{product_name}.git")
+        response = os.system(f"git clone https://bitbucket.org/konversoai/{product_name}.git")
         if response:
             raise RuntimeError("Failed clone the git repository")
 
