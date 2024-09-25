@@ -522,8 +522,8 @@ def usage():
 
 if __name__ == "__main__":
     import argparse
-    emails = []
-    email_title = "Kbot actions result"
+    # emails = []
+    # email_title = "Kbot actions result"
     # Don't invoke start_kbot() in finalize job
     # (to not spend time)
     nostart = True
@@ -641,7 +641,7 @@ if __name__ == "__main__":
 
     except Exception as exp:
         log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
-        email_title = "Kbot actions failed"
-        print("Failed: {exp}")
+        # email_title = "Kbot actions failed"
+        raise SystemExit(99) from exp
     #finally:
     #    create_finalize_job(LOG_FILENAME, emails, email_title, nostart)
