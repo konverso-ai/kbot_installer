@@ -27,8 +27,10 @@ LOG_FILENAME = os.path.join(DEV_DIR, LOG_FILE)
 
 
 def set_logger(logger, mode, log_filename):
-    fmt = "%(asctime)s %(levelname)s: %(message)s", datefmt="%Y-%m-%d - %H:%M:%S"
-    formatter = logging.Formatter(fmt)
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d - %H:%M:%S"
+    )
     fh = logging.FileHandler(log_filename, mode)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
@@ -44,7 +46,7 @@ def get_nexus():
     Returns a new instance of the Nexus repository
     """
     if not nexus:
-        msg = "RuntimeError: Nexus details are unknown. review your parameters"
+        msg = "Nexus details are unknown. review your parameters"
         raise RuntimeError(msg)
     return nexus
 
@@ -756,6 +758,7 @@ if __name__ == "__main__":
         # Update existing version to the latest code base
         elif action == "update":
             _list_or_update(backup=backup, products=products, update=True)
+            sys.exit(0)
 
         # Move to a new version
         elif action == "upgrade":
@@ -765,6 +768,7 @@ if __name__ == "__main__":
                 update=True,
                 target_version=product_version,
             )
+            sys.exit(0)
 
         # Only setup the installer folder
         elif action == "installer-only":
@@ -784,9 +788,9 @@ if __name__ == "__main__":
             sys.exit(0)
 
         else:
-            print(
-                "Invalid action. Should be one of: update, upgrade, install, installer-only"
-            )
+            msg = "Invalid action. Should be one of: update, upgrade, install, installer-only"
+            print(msg)
+            sys.exit(1)
 
     except Exception as exp:
         log.error(
