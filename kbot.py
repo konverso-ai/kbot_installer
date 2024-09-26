@@ -2,14 +2,13 @@
 # pylint: disable=import-outside-toplevel
 # pylint: disable=consider-using-with
 # pylint: disable=unspecified-encoding
-import os.path
-import sys
-import time
-
-import tarfile
-import shutil
 import json
 import logging
+import os.path
+import shutil
+import sys
+import tarfile
+import time
 import xml.dom.minidom
 
 from nexus import NexusRepository
