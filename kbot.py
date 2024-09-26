@@ -2,7 +2,6 @@
 # pylint: disable=import-outside-toplevel
 # pylint: disable=consider-using-with
 # pylint: disable=unspecified-encoding
-import os
 import os.path
 import sys
 import time
@@ -522,8 +521,6 @@ def usage():
 
 if __name__ == "__main__":
     import argparse
-    emails = []
-    email_title = "Kbot actions result"
     # Don't invoke start_kbot() in finalize job
     # (to not spend time)
     nostart = True
@@ -637,11 +634,7 @@ if __name__ == "__main__":
         else:
             print("Invalid action. Should be one of: update, upgrade, install, installer-only")
 
-        email_title = "Kbot actions completed"
-
     except Exception as exp:
         log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
-        email_title = "Kbot actions failed"
-        print("Failed: {exp}")
-    #finally:
-    #    create_finalize_job(LOG_FILENAME, emails, email_title, nostart)
+        print(f"Failed: {exp}")
+        raise
