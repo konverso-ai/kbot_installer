@@ -1,14 +1,16 @@
 #!/usr/bin/python3
+import sys
 from sys import argv
 from os import environ
 
+
 if 'username' in argv[1].lower():
     print(environ['GIT_USERNAME'])
-    exit()
+    sys.exit(0)
 
 if 'password' in argv[1].lower():
     print(environ['GIT_PASSWORD'])
-    exit()
+    sys.exit(0)
 
-exit(1)
+sys.exit(1)
 
