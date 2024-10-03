@@ -793,8 +793,5 @@ if __name__ == "__main__":
             sys.exit(1)
 
     except Exception as exp:
-        log.error(
-            "Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True
-        )
-        print(f"Failed: {exp}")
-        raise
+        log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
+        raise SystemExit(99) from exp
