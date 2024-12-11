@@ -158,7 +158,7 @@ def _get_latest_available_nexus_file(nexus_files, product_name, version):
     # else:
     #     release = f"release-{version}"
 
-    product_nexus_files = nexus_files.Filter(folder_name=f"{release}/{product_name}")
+    product_nexus_files = nexus_files.Filter(folder_name=f"/{release}/{product_name}")
     product_nexus_files = product_nexus_files.Filter(ends_with=".tar.gz")
     product_nexus_files = product_nexus_files.Filter(not_ends_with="latest.tar.gz")
     product_nexus_files = product_nexus_files.Filter(not_ends_with="description.json")
