@@ -367,14 +367,13 @@ def reccurse_product_download(nexus_files, product_name, version):
 
         # Now set the proper branch
         # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
-        if product_name not in ("kkeys",):
-            response = os.system(
-                f"cd {installation_path}/{product_name} ; git checkout release-{version}"
+        response = os.system(
+            f"cd {installation_path}/{product_name} ; git checkout release-{version}"
+        )
+        if response and product_name not in ("kkeys",):
+            print(
+                f"Failed set git repository to branch {version}. Will stay on master branch"
             )
-            if response:
-                print(
-                    f"Failed set git repository to branch {version}. Will stay on master branch"
-                )
 
         print(f"Product {product_name} retrieved from GIT")
 
