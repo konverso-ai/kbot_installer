@@ -752,12 +752,10 @@ if __name__ == "__main__":
                 create_workarea=True,
                 no_learn=result.no_learn,
             )
-            sys.exit(0)
 
         # Update existing version to the latest code base
         elif action == "update":
             _list_or_update(backup=backup, products=products, update=True)
-            sys.exit(0)
 
         # Move to a new version
         elif action == "upgrade":
@@ -767,7 +765,6 @@ if __name__ == "__main__":
                 update=True,
                 target_version=product_version,
             )
-            sys.exit(0)
 
         # Only setup the installer folder
         elif action == "installer-only":
@@ -779,12 +776,10 @@ if __name__ == "__main__":
                 )
                 sys.exit(1)
             install(version=product_version, product=products[0], create_workarea=False)
-            sys.exit(0)
 
         # List the currently installed products
         elif action == "list":
             _list_or_update(products=products, update=False)
-            sys.exit(0)
 
         else:
             msg = "Invalid action. Should be one of: update, upgrade, install, installer-only"
