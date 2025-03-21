@@ -6,7 +6,7 @@
 import json
 import logging
 import os.path
-import shutil
+import uuid
 import sys
 import tarfile
 import time
@@ -74,6 +74,7 @@ def install(version, product, create_workarea=False, no_learn=False):
     if not create_workarea:
         return
 
+    admin_password = str(uuid.uuid4())
     #
     # Call the installer in non-interactive mode
     #
@@ -82,7 +83,7 @@ def install(version, product, create_workarea=False, no_learn=False):
     # Indicate the top level product for the installation
     cmd += f"--product {product} "
     cmd += f"--path {installation_path} "  # Indicate the installation path
-    cmd += "--secret=K0nversOK! "  # Secret installation password
+    cmd += f"--secret={admin_password}"  # Secret installation password
     cmd += "--default "
     cmd += "--workarea /home/konverso/work "
 
@@ -335,10 +336,6 @@ def reccurse_product_download(nexus_files, product_name, version):
             for parent_product_name in json_product_description.get("parents"):
                 reccurse_product_download(nexus_files, parent_product_name, version)
         return
-
-    else:
-        # This is a new path... not yet available
-        pass
 
     #
     # Product was installed through GIT or some other file copy
