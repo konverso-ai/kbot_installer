@@ -989,7 +989,7 @@ class Installer:
                         product = Product()
                         product.Parse(description)
                         if str(product.name) != str(name):
-                            print("Invalid product name")
+                            print("Invalid product name (%s vs %s)" % (product.name, name))
                         else:
                             product.filename = description
                             product.dirname = os.path.dirname(description)
