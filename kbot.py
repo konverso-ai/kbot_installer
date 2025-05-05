@@ -505,7 +505,11 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         # Attempt to figure out the version if not provided
         #
         if json_product_description:
-            version = json_product_description.get("version")
+            # The version (2024.02-dev) is the branch minute the "release-"
+            version = json_product_description.get("build").get("branch")[len("release-"):]
+            if version:
+                print(f"    On product branch '{version}'")
+
         elif xml_product_description:
             # Attempt to find the related GIT branch
             cmd = f"cd {installation_path}/{product_name} ; git status"
@@ -515,11 +519,12 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             except Exception as e:
                 branch = f"Failed to get GIT version due to {e}"
 
+            print(f"    On GIT branch '{branch}'")
             version = xml_product_description.get("version")
             if version:
-                print(f"    Git repository, version {version}, branch: {branch}")
+                print(f"    Version {version}")
             else:
-                print(f"    Git repository, no version, branch: {branch}")
+                print("   (No product version)")
             continue
         else:
             print("    Failed to find any version information")
@@ -527,7 +532,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
         target_version = target_version or version
 
-        if update and target_version and target_version != version:
+        if update and version and target_version and target_version != version:
             print(f"    Version is to be updated from {version} to {target_version}")
 
         # Get the definitions of the latest available version in Nexus
@@ -547,6 +552,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             installed_commit_id = _get_commit_id_from_nexus_path(
                 json_product_description.get("build").get("commit")
             )
+
             if nexus_commit_id == installed_commit_id:
                 if update:
                     print(
