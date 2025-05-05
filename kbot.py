@@ -553,7 +553,6 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                 json_product_description.get("build").get("commit")
             )
 
-            branch = json_product_description.get("build").get("branch")
             if nexus_commit_id == installed_commit_id:
                 if update:
                     print(
