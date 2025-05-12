@@ -218,7 +218,9 @@ class Installer:
                 fd.write("# Kbot configuration file.")
                 fd.write("\n#If possible, prefere saving in Site or Customer level configuration file")
 
-        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json', 'automations', 'push_campaigns', 'devops-tasks'): # 'modsecurity'
+        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json',
+                     'automations', 'push_campaigns', 'devops-tasks',
+                     'tools', 'tool_groups', 'agents', 'assistants', 'connections'): # 'modsecurity'
             self._LinkProductFilesToDir(os.path.join('conf', name), os.path.join(dirname, name))
 
         for name in ('categorization_tests.conf', 'tests.conf', 'editable_files*.json', 'km_*.conf',
