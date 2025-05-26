@@ -224,7 +224,8 @@ class Installer:
             self._LinkProductFilesToDir(os.path.join('conf', name), os.path.join(dirname, name))
 
         for name in ('categorization_tests.conf', 'tests.conf', 'editable_files*.json', 'km_*.conf',
-                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json'):
+                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json',
+                     'application_assistant.conf'):
             for fullname in self.products.get_files('conf', name):
                 self._Link(fullname, os.path.join(dirname, os.path.basename(fullname)))
 
