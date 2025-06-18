@@ -300,7 +300,6 @@ def reccurse_product_download(nexus_files, product_name, version):
                 "Error: Failed to find product %s with version release-%s in Nexus. Available versions are: %s"
                 % (product_name, version, ", ".join(product_nexts_versions))
             )
-            print(product_nexus_files[0].folder_name)
         else:
             print("Error: Product '%s' is not available in Nexus" % product_name)
 
