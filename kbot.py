@@ -46,8 +46,8 @@ def get_nexus():
     Returns a new instance of the Nexus repository
     """
     if not nexus:
-        msg = "Nexus details are unknown. review your parameters"
-        raise RuntimeError(msg)
+        _msg = "Nexus details are unknown. review your parameters"
+        raise RuntimeError(_msg)
     return nexus
 
 
@@ -285,10 +285,23 @@ def reccurse_product_download(nexus_files, product_name, version):
 
     if not nexus_file:
         product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
-        print(
-            "Error: Failed to find Nexus in product %s for version release-%s. Available versions are: %s"
-            % (product_name, version, product_nexus_files)
-        )
+
+        #product_path is such as /VERSION/PRODUCT/FILE
+        def get_version(nexus_file):
+            return nexus_file.folder_name.split("/",2)[1]
+
+        if product_nexus_files:
+            product_nexts_versions = set(
+                nexus_file.folder_name.split("/",2)[1]
+                for nexus_file in product_nexus_files)
+            product_nexts_versions = sorted(list(product_nexts_versions))
+
+            print(
+                "Error: Failed to find product %s with version release-%s in Nexus. Available versions are: %s"
+                % (product_name, version, ", ".join(product_nexts_versions))
+            )
+        else:
+            print("Error: Product '%s' is not available in Nexus" % product_name)
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -310,13 +323,8 @@ def reccurse_product_download(nexus_files, product_name, version):
     #
     # Product was installed through Nexus, we see if there is anything to update
     #
-    if json_product_description:
+    if nexus_file and json_product_description:
         installed_commit_id = json_product_description.get("build").get("commit")
-        if not nexus_file:
-            print(
-                "Error: Failed to find Nexus in product %s for version %s"
-                % (product_name, version)
-            )
 
         nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.js.get("path"))
         if nexus_commit_id == installed_commit_id:
@@ -358,7 +366,8 @@ def reccurse_product_download(nexus_files, product_name, version):
             f"git clone https://bitbucket.org/konversoai/{product_name}.git"
         )
         if response:
-            raise RuntimeError("Failed clone the git repository")
+            print("ERROR: Cannot clone the git repository '%s'. Error code: %s" % (product_name, response))
+            return
 
         os.rename(product_name, f"{installation_path}/{product_name}")
 
@@ -556,15 +565,18 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             if nexus_commit_id == installed_commit_id:
                 if update:
                     print(
-                        f"    Nexus is already on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
+                        "    Nexus is already on latest available code: "
+                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
                 else:
                     print(
-                        f"    Nexus on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
+                        "    Nexus on latest available code: "
+                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
             else:
                 print(
-                    f"    Nexus is on OLD VERSION: {json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
+                    "    Nexus is on OLD VERSION: "
+                    f"{json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
                 )
                 if update:
                     _json_product_description = _nexus_download_and_install(
@@ -679,25 +691,25 @@ if __name__ == "__main__":
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
 
-        result = parser.parse_args()
-        action = result.action.strip()
-        product_version = (result.version or "").strip()
-        emails = result.emails or []
-        products = result.products or []
-        backup = result.backup
-        hostname = result.hostname
-        workarea = result.workarea
-        installation_path = result.installer or "/home/konverso/dev/installer"
+        _result = parser.parse_args()
+        action = _result.action.strip()
+        product_version = (_result.version or "").strip()
+        emails = _result.emails or []
+        products = _result.products or []
+        backup = _result.backup
+        hostname = _result.hostname
+        workarea = _result.workarea
+        installation_path = _result.installer or "/home/konverso/dev/installer"
 
         #
         # If defined, set the git user / password for this session
         #
-        if result.git:
+        if _result.git:
             print(
                 ("Git password is in command line. This is unsecure. "
                  "Prefere setting variables GIT_USERNAME and GIT_PASSWORD")
             )
-            user, password = result.git.split(":", 1)
+            user, password = _result.git.split(":", 1)
             os.environ["GIT_USERNAME"] = user
             os.environ["GIT_PASSWORD"] = password
             project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -717,12 +729,12 @@ if __name__ == "__main__":
         # (Preferably from variables)
         #
         nexus = None
-        if result.nexus:
+        if _result.nexus:
             print(
                 ("Nexus password is in command line. This is unsecure. "
                  "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
             )
-            host, user, password = result.nexus.split(":", 3)
+            host, user, password = _result.nexus.split(":", 3)
             nexus = NexusRepository(host.strip(), user.strip(), password.strip())
         elif (
             os.environ.get("NEXUS_HOST")
@@ -753,7 +765,7 @@ if __name__ == "__main__":
                 version=product_version,
                 product=products[0],
                 create_workarea=True,
-                no_learn=result.no_learn,
+                no_learn=_result.no_learn,
             )
 
         # Update existing version to the latest code base
