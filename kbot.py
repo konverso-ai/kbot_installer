@@ -783,6 +783,10 @@ if __name__ == "__main__":
 
         # Only setup the installer folder
         elif action == "installer-only":
+            if not product_version:
+                print(usage())
+                print("A version (-v flag) is mandatory for the action 'installer-only'")
+                sys.exit(1)
             if len(products) != 1:
                 print(usage())
                 print(
