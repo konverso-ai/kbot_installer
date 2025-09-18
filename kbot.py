@@ -653,8 +653,8 @@ def usage():
         In format 'domain:user:password'
     Git credentials (-g or --git)
         In format 'user:password' (used for Bitbucket fallback)
-    GitHub credentials (--github)
-        In format 'user:password' (used for GitHub primary)
+    GitHub credentials (-gh or --github)
+        In format 'user:pat' (used for GitHub primary)
     Action (-a or --action). One of:
       - upgrade: Update the given installation to a new version. Add variables:
            -v: The target version
@@ -721,9 +721,11 @@ if __name__ == "__main__":
             dest="git",
             required=False,
         )
+        
         parser.add_argument(
+            "-gh",
             "--github",
-            help="Details of the GitHub account in format user:password",
+            help="Details of the GitHub account in format user:pat",
             dest="github",
             required=False,
         )
