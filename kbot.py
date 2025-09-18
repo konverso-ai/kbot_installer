@@ -43,11 +43,8 @@ def set_logger(logger, mode, log_filename):
 
 def get_nexus():
     """
-    Returns a new instance of the Nexus repository
+    Returns a new instance of the Nexus repository, or None if not configured
     """
-    if not nexus:
-        _msg = "Nexus details are unknown. review your parameters"
-        raise RuntimeError(_msg)
     return nexus
 
 
@@ -66,7 +63,15 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
             raise RuntimeError(msg)
 
     nexus_repo = get_nexus()
-    nexus_files = nexus_repo.list_repository("kbot_raw")
+    nexus_files = None
+    if nexus_repo:
+        try:
+            nexus_files = nexus_repo.list_repository("kbot_raw")
+            print("Successfully connected to Nexus repository")
+        except Exception as e:
+            print(f"Failed to connect to Nexus repository: {e}")
+            print("Falling back to GitHub/Bitbucket...")
+            nexus_files = None
 
     # Load all the required products
     recurse_product_download(nexus_files, product, version, recurse=recurse)
@@ -288,28 +293,32 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     if not version:
         print("Missing version info. Please add the -v flag")
 
-    # Get the definitions of the latest available version in Nexus
-    nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
+    # Try Nexus first if available
+    nexus_file = None
+    if nexus_files:
+        nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
+        
+        if not nexus_file:
+            product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
 
-    if not nexus_file:
-        product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
+            #product_path is such as /VERSION/PRODUCT/FILE
+            def get_version(nexus_file):
+                return nexus_file.folder_name.split("/",2)[1]
 
-        #product_path is such as /VERSION/PRODUCT/FILE
-        def get_version(nexus_file):
-            return nexus_file.folder_name.split("/",2)[1]
+            if product_nexus_files:
+                product_nexts_versions = set(
+                    nexus_file.folder_name.split("/",2)[1]
+                    for nexus_file in product_nexus_files)
+                product_nexts_versions = sorted(list(product_nexts_versions))
 
-        if product_nexus_files:
-            product_nexts_versions = set(
-                nexus_file.folder_name.split("/",2)[1]
-                for nexus_file in product_nexus_files)
-            product_nexts_versions = sorted(list(product_nexts_versions))
-
-            print(
-                "Error: Failed to find product %s with version release-%s in Nexus. Available versions are: %s"
-                % (product_name, version, ", ".join(product_nexts_versions))
-            )
-        else:
-            print("Error: Product '%s' is not available in Nexus" % product_name)
+                print(
+                    "Product %s with version release-%s not found in Nexus. Available versions are: %s. Trying GitHub..."
+                    % (product_name, version, ", ".join(product_nexts_versions))
+                )
+            else:
+                print("Product '%s' is not available in Nexus. Trying GitHub..." % product_name)
+    else:
+        print("Nexus not configured. Trying GitHub...")
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -370,63 +379,77 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     #
     # Product was NEVER installed. Install it
 
-    # Case of product not existing in Nexus repository
+    # Case of product not existing in Nexus repository - try GitHub then Bitbucket
     if not nexus_file:
-        print(f"Product {product_name} is not found in Nexus. Attempting GIT")
-        # Not in Nexus, try GitHub first, then fallback to Bitbucket
+        print(f"Product {product_name} not found in Nexus. Trying GitHub...")
         
+        # Try GitHub first
         gh_username = os.environ.get("GH_USERNAME")
         gh_password = os.environ.get("GH_PASSWORD")
 
-        github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
-        print(f"Cloning: https://github.com/konverso-ai/{product_name}.git")
-        
-        response = os.system(f"git clone {github_url}")
-        if response:
-            print(f"GitHub clone failed (error code: {response}). Trying Bitbucket fallback...")
+        if gh_username and gh_password:
+            github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
+            print(f"Cloning from GitHub: https://github.com/konverso-ai/{product_name}.git")
             
+            response = os.system(f"git clone {github_url}")
+            if response == 0:
+                print(f"Successfully cloned from GitHub")
+                success = True
+            else:
+                print(f"GitHub clone failed (error code: {response}). Trying Bitbucket...")
+                success = False
+        else:
+            print("GitHub credentials not provided. Trying Bitbucket...")
+            success = False
+        
+        # Try Bitbucket if GitHub failed or no credentials
+        if not success:
             git_username = os.environ.get("GIT_USERNAME")
             git_password = os.environ.get("GIT_PASSWORD")
             
             if git_username and git_password:
                 bitbucket_url = f"https://{git_username}:{git_password}@bitbucket.org/konversoai/{product_name}.git"
-                print(f"Trying Bitbucket (authenticated with GIT_*): https://bitbucket.org/konversoai/{product_name}.git")
+                print(f"Trying Bitbucket (authenticated): https://bitbucket.org/konversoai/{product_name}.git")
             else:
                 bitbucket_url = f"https://bitbucket.org/konversoai/{product_name}.git"
                 print(f"Trying Bitbucket (public): https://bitbucket.org/konversoai/{product_name}.git")
             
             response = os.system(f"git clone {bitbucket_url}")
-            if response:
-                print("ERROR: Cannot clone the git repository '%s' from either GitHub or Bitbucket. Error code: %s" % (product_name, response))
-                return
+            if response == 0:
+                print(f"Successfully cloned from Bitbucket")
+                success = True
             else:
-                print(f"Successfully cloned from Bitbucket fallback")
-        else:
-            print(f"Successfully cloned from GitHub")
+                print(f"ERROR: Cannot clone the repository '{product_name}' from either GitHub or Bitbucket. Error code: {response}")
+                print(f"Please check:")
+                print(f"  - GitHub: Set GH_USERNAME and GH_PASSWORD environment variables")
+                print(f"  - Bitbucket: Set GIT_USERNAME and GIT_PASSWORD environment variables")
+                return
+        
+        # If we successfully cloned from either GitHub or Bitbucket
+        if success:
+            os.rename(product_name, f"{installation_path}/{product_name}")
 
-        os.rename(product_name, f"{installation_path}/{product_name}")
-
-        # Now set the proper branch
-        # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
-        response = os.system(
-            f"cd {installation_path}/{product_name} ; git checkout release-{version}"
-        )
-        if response and product_name not in ("kkeys",):
-            print(
-                f"Failed set git repository to branch {version}. Will stay on master branch"
+            # Now set the proper branch
+            # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
+            response = os.system(
+                f"cd {installation_path}/{product_name} ; git checkout release-{version}"
             )
+            if response and product_name not in ("kkeys",):
+                print(
+                    f"Failed set git repository to branch {version}. Will stay on master branch"
+                )
 
-        print(f"Product {product_name} retrieved from GIT")
+            print(f"Product {product_name} retrieved from GIT")
 
-        if not recurse:
+            if not recurse:
+                return
+
+            # Kick of the recursion on all required products before exiting.
+            parents = _get_xml_product_description(product_name).get("parents")
+            for parent in parents:
+                recurse_product_download(nexus_files, parent, version)
+
             return
-
-        # Kick of the recursion on all required products before exiting.
-        parents = _get_xml_product_description(product_name).get("parents")
-        for parent in parents:
-            recurse_product_download(nexus_files, parent, version)
-
-        return
 
     print(nexus_file)
 
@@ -526,7 +549,15 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
     products = products or []
 
     nexus = get_nexus()
-    nexus_files = nexus.list_repository("kbot_raw")
+    nexus_files = None
+    if nexus:
+        try:
+            nexus_files = nexus.list_repository("kbot_raw")
+            print("Successfully connected to Nexus repository")
+        except Exception as e:
+            print(f"Failed to connect to Nexus repository: {e}")
+            print("Falling back to GitHub/Bitbucket...")
+            nexus_files = None
 
     # First retrieve all the products, and order them
     #
@@ -649,12 +680,19 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
 def usage():
     return """
+    Credentials (at least one required):
     Nexus user (-n or --nexus)
-        In format 'domain:user:password'
-    Git credentials (-g or --git)
-        In format 'user:password' (used for Bitbucket fallback)
+        In format 'domain:user:password' (uses Nexus only, no fallback)
     GitHub credentials (-gh or --github)
-        In format 'user:pat' (used for GitHub primary)
+        In format 'user:pat' (used when Nexus not provided)
+    Git credentials (-g or --git)
+        In format 'user:password' (used for Bitbucket when GitHub fails)
+    
+    Logic:
+    - Try Nexus first (if credentials provided)
+    - If not found in Nexus: Try GitHub → Bitbucket → Error
+    - If no credentials at all: Error
+    
     Action (-a or --action). One of:
       - upgrade: Update the given installation to a new version. Add variables:
            -v: The target version
@@ -838,9 +876,22 @@ if __name__ == "__main__":
             )
             nexus = NexusRepository(host, user, password)
         else:
-            print(usage())
-            print("Nexus repository details are required")
-            sys.exit(1)
+            print("Nexus repository details not provided. Will try GitHub/Bitbucket fallback.")
+            
+            # Check if at least one credential source is provided
+            gh_username = os.environ.get("GH_USERNAME")
+            gh_password = os.environ.get("GH_PASSWORD")
+            git_username = os.environ.get("GIT_USERNAME")
+            git_password = os.environ.get("GIT_PASSWORD")
+            
+            if not (gh_username and gh_password) and not (git_username and git_password):
+                print("ERROR: No credentials provided!")
+                print("Please provide one of the following:")
+                print("  - Nexus: Set NEXUS_HOST, NEXUS_USERNAME, and NEXUS_PASSWORD")
+                print("  - GitHub: Set GH_USERNAME and GH_PASSWORD")
+                print("  - Bitbucket: Set GIT_USERNAME and GIT_PASSWORD")
+                print("  - Or use command line arguments: -n, -gh, or -g")
+                sys.exit(1)
 
         # Setup the installer folder and a new work-area
         if action == "install":
