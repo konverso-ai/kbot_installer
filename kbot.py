@@ -373,13 +373,36 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     # Case of product not existing in Nexus repository
     if not nexus_file:
         print(f"Product {product_name} is not found in Nexus. Attempting GIT")
-        # Not in Nexus, try, to get it from GIT
-        response = os.system(
-            f"git clone https://bitbucket.org/konversoai/{product_name}.git"
-        )
+        # Not in Nexus, try GitHub first, then fallback to Bitbucket
+        
+        gh_username = os.environ.get("GH_USERNAME")
+        gh_password = os.environ.get("GH_PASSWORD")
+
+        github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
+        print(f"Cloning: https://github.com/konverso-ai/{product_name}.git")
+        
+        response = os.system(f"git clone {github_url}")
         if response:
-            print("ERROR: Cannot clone the git repository '%s'. Error code: %s" % (product_name, response))
-            return
+            print(f"GitHub clone failed (error code: {response}). Trying Bitbucket fallback...")
+            
+            git_username = os.environ.get("GIT_USERNAME")
+            git_password = os.environ.get("GIT_PASSWORD")
+            
+            if git_username and git_password:
+                bitbucket_url = f"https://{git_username}:{git_password}@bitbucket.org/konversoai/{product_name}.git"
+                print(f"Trying Bitbucket (authenticated with GIT_*): https://bitbucket.org/konversoai/{product_name}.git")
+            else:
+                bitbucket_url = f"https://bitbucket.org/konversoai/{product_name}.git"
+                print(f"Trying Bitbucket (public): https://bitbucket.org/konversoai/{product_name}.git")
+            
+            response = os.system(f"git clone {bitbucket_url}")
+            if response:
+                print("ERROR: Cannot clone the git repository '%s' from either GitHub or Bitbucket. Error code: %s" % (product_name, response))
+                return
+            else:
+                print(f"Successfully cloned from Bitbucket fallback")
+        else:
+            print(f"Successfully cloned from GitHub")
 
         os.rename(product_name, f"{installation_path}/{product_name}")
 
@@ -628,6 +651,10 @@ def usage():
     return """
     Nexus user (-n or --nexus)
         In format 'domain:user:password'
+    Git credentials (-g or --git)
+        In format 'user:password' (used for Bitbucket fallback)
+    GitHub credentials (--github)
+        In format 'user:password' (used for GitHub primary)
     Action (-a or --action). One of:
       - upgrade: Update the given installation to a new version. Add variables:
            -v: The target version
@@ -695,6 +722,12 @@ if __name__ == "__main__":
             required=False,
         )
         parser.add_argument(
+            "--github",
+            help="Details of the GitHub account in format user:password",
+            dest="github",
+            required=False,
+        )
+        parser.add_argument(
             "-i",
             "--installation",
             help="Installation path, defauls to /home/konverso/dev/installer",
@@ -753,6 +786,20 @@ if __name__ == "__main__":
             user, password = _result.git.split(":", 1)
             os.environ["GIT_USERNAME"] = user
             os.environ["GIT_PASSWORD"] = password
+            project_dir = os.path.dirname(os.path.abspath(__file__))
+            os.environ["GIT_ASKPASS"] = os.path.join(project_dir, "gitpassword.py")
+
+        #
+        # If defined, set the GitHub user / password for this session
+        #
+        if _result.github:
+            print(
+                ("GitHub password is in command line. This is unsecure. "
+                 "Prefere setting variables GH_USERNAME and GH_PASSWORD")
+            )
+            user, password = _result.github.split(":", 1)
+            os.environ["GH_USERNAME"] = user
+            os.environ["GH_PASSWORD"] = password
             project_dir = os.path.dirname(os.path.abspath(__file__))
             os.environ["GIT_ASKPASS"] = os.path.join(project_dir, "gitpassword.py")
 
