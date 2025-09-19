@@ -599,7 +599,14 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                         "    Nexus is already on latest available code: "
                         f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
-                else:
+                else: # Print
+                    branch = latest_nexus_definition.js.get('downloadUrl').split("/")[5]
+                    # 'https://nexus.konverso.ai/repository/kbot_raw/release-2025.02/kbot/kbot_399b792296e65da681895427e9c65e69950cbf7a.tar.gz'
+                    #  0       2                 3          4        5               6
+                    print(
+                        f"    Nexus on branch: {branch}"
+                    )
+
                     print(
                         "    Nexus on latest available code: "
                         f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
