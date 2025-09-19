@@ -218,11 +218,14 @@ class Installer:
                 fd.write("# Kbot configuration file.")
                 fd.write("\n#If possible, prefere saving in Site or Customer level configuration file")
 
-        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json', 'automations', 'push_campaigns', 'devops-tasks'): # 'modsecurity'
+        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json',
+                     'automations', 'push_campaigns', 'devops-tasks',
+                     'tools', 'tool_groups', 'agents', 'assistants', 'connections'): # 'modsecurity'
             self._LinkProductFilesToDir(os.path.join('conf', name), os.path.join(dirname, name))
 
         for name in ('categorization_tests.conf', 'tests.conf', 'editable_files*.json', 'km_*.conf',
-                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json'):
+                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json',
+                     'application_assistant.conf'):
             for fullname in self.products.get_files('conf', name):
                 self._Link(fullname, os.path.join(dirname, os.path.basename(fullname)))
 
@@ -989,7 +992,7 @@ class Installer:
                         product = Product()
                         product.Parse(description)
                         if str(product.name) != str(name):
-                            print("Invalid product name")
+                            print("Invalid product name (%s vs %s)" % (product.name, name))
                         else:
                             product.filename = description
                             product.dirname = os.path.dirname(description)

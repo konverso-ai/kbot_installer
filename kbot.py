@@ -6,7 +6,7 @@
 import json
 import logging
 import os.path
-import shutil
+import uuid
 import sys
 import tarfile
 import time
@@ -46,12 +46,12 @@ def get_nexus():
     Returns a new instance of the Nexus repository
     """
     if not nexus:
-        msg = "Nexus details are unknown. review your parameters"
-        raise RuntimeError(msg)
+        _msg = "Nexus details are unknown. review your parameters"
+        raise RuntimeError(_msg)
     return nexus
 
 
-def install(version, product, create_workarea=False, no_learn=False):
+def install(version, product, create_workarea=False, no_learn=False, recurse=True):
     """Recursive installation of the product and all its related parents,
     for the given version.
 
@@ -69,11 +69,12 @@ def install(version, product, create_workarea=False, no_learn=False):
     nexus_files = nexus_repo.list_repository("kbot_raw")
 
     # Load all the required products
-    reccurse_product_download(nexus_files, product, version)
+    recurse_product_download(nexus_files, product, version, recurse=recurse)
 
     if not create_workarea:
         return
 
+    admin_password = str(uuid.uuid4())
     #
     # Call the installer in non-interactive mode
     #
@@ -82,7 +83,7 @@ def install(version, product, create_workarea=False, no_learn=False):
     # Indicate the top level product for the installation
     cmd += f"--product {product} "
     cmd += f"--path {installation_path} "  # Indicate the installation path
-    cmd += "--secret=K0nversOK! "  # Secret installation password
+    cmd += f"--secret={admin_password}"  # Secret installation password
     cmd += "--default "
     cmd += "--workarea /home/konverso/work "
 
@@ -181,7 +182,7 @@ def _xml_products_sorting(xml_product_descriptions):
     return xml_product_descriptions_new
 
 
-def _get_tree(xml_descriptions):
+def _get_tree(xml_descriptions, recurse=True):
     """Ouput if a list of dictionnaries representing the description.xml
 
          It is basically a FULL version of the description tree, when the parent names
@@ -221,16 +222,22 @@ def _get_tree(xml_descriptions):
         if xml_description.get("name") in visited_product_names:
             continue
         xml_description = xml_description.copy()
-        _tree_recurse_visite(
-            xml_description, xml_descriptions, result, visited_product_names
-        )
+
+        if recurse:
+            _tree_recurse_visite(
+                xml_description, xml_descriptions, visited_product_names
+            )
         child_list.append(xml_description)
+
+
+        if not recurse:
+            break
 
     return child_list
 
 
 def _tree_recurse_visite(
-    xml_description, xml_descriptions, result, visited_product_names
+    xml_description, xml_descriptions, visited_product_names
 ):
     """Reccursivity helper function of _get_tree"""
     child_list = []
@@ -249,25 +256,27 @@ def _tree_recurse_visite(
         child_xml_description = child_xml_description.copy()
 
         _tree_recurse_visite(
-            child_xml_description, xml_descriptions, result, visited_product_names
+            child_xml_description, xml_descriptions, visited_product_names
         )
         child_list.append(child_xml_description)
     xml_description["parents"] = child_list
 
 
-def tree_print(elements, level=1, visited=None):
+def tree_print(elements, level=1, visited=None, recurse=True):
     """Print the given list of products, excluding duplication on root level"""
+
     visited = visited or []
     for element in elements:
         if level == 1 and element.get("name") in visited:
             continue
         visited.append(element.get("name"))
 
-        print("\t" * level + element.get("name"))
-        tree_print(element.get("parents"), level + 1, visited=visited)
+        if recurse:
+            print("\t" * level + element.get("name"))
+            tree_print(element.get("parents"), level + 1, visited=visited)
 
 
-def reccurse_product_download(nexus_files, product_name, version):
+def recurse_product_download(nexus_files, product_name, version, recurse=True):
     """
     Recursively retrieve the products, based on the "parent" definition
     found inside the Product definition.
@@ -284,10 +293,23 @@ def reccurse_product_download(nexus_files, product_name, version):
 
     if not nexus_file:
         product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
-        print(
-            "Error: Failed to find Nexus in product %s for version release-%s. Available versions are: %s"
-            % (product_name, version, product_nexus_files)
-        )
+
+        #product_path is such as /VERSION/PRODUCT/FILE
+        def get_version(nexus_file):
+            return nexus_file.folder_name.split("/",2)[1]
+
+        if product_nexus_files:
+            product_nexts_versions = set(
+                nexus_file.folder_name.split("/",2)[1]
+                for nexus_file in product_nexus_files)
+            product_nexts_versions = sorted(list(product_nexts_versions))
+
+            print(
+                "Error: Failed to find product %s with version release-%s in Nexus. Available versions are: %s"
+                % (product_name, version, ", ".join(product_nexts_versions))
+            )
+        else:
+            print("Error: Product '%s' is not available in Nexus" % product_name)
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -309,13 +331,8 @@ def reccurse_product_download(nexus_files, product_name, version):
     #
     # Product was installed through Nexus, we see if there is anything to update
     #
-    if json_product_description:
+    if nexus_file and json_product_description:
         installed_commit_id = json_product_description.get("build").get("commit")
-        if not nexus_file:
-            print(
-                "Error: Failed to find Nexus in product %s for version %s"
-                % (product_name, version)
-            )
 
         nexus_commit_id = _get_commit_id_from_nexus_path(nexus_file.js.get("path"))
         if nexus_commit_id == installed_commit_id:
@@ -332,22 +349,22 @@ def reccurse_product_download(nexus_files, product_name, version):
             json_product_description = _nexus_download_and_install(
                 nexus_file, product_name
             )
-            for parent_product_name in json_product_description.get("parents"):
-                reccurse_product_download(nexus_files, parent_product_name, version)
+            if recurse:
+                for parent_product_name in json_product_description.get("parents"):
+                    recurse_product_download(nexus_files, parent_product_name, version)
         return
-
-    else:
-        # This is a new path... not yet available
-        pass
 
     #
     # Product was installed through GIT or some other file copy
     #
     if xml_product_description:
         print("   Not installed through Nexus (probably git ?).")
+        if not recurse:
+            return
+
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
-            reccurse_product_download(nexus_files, parent, version)
+            recurse_product_download(nexus_files, parent, version)
         return
 
     #
@@ -361,35 +378,42 @@ def reccurse_product_download(nexus_files, product_name, version):
             f"git clone https://bitbucket.org/konversoai/{product_name}.git"
         )
         if response:
-            raise RuntimeError("Failed clone the git repository")
+            print("ERROR: Cannot clone the git repository '%s'. Error code: %s" % (product_name, response))
+            return
 
         os.rename(product_name, f"{installation_path}/{product_name}")
 
         # Now set the proper branch
         # REVIEW: Should also check if we are in a Site. If so, we skip the checkout
-        if product_name not in ("kkeys",):
-            response = os.system(
-                f"cd {installation_path}/{product_name} ; git checkout release-{version}"
+        response = os.system(
+            f"cd {installation_path}/{product_name} ; git checkout release-{version}"
+        )
+        if response and product_name not in ("kkeys",):
+            print(
+                f"Failed set git repository to branch {version}. Will stay on master branch"
             )
-            if response:
-                print(
-                    f"Failed set git repository to branch {version}. Will stay on master branch"
-                )
 
         print(f"Product {product_name} retrieved from GIT")
 
-        # Kick of the reccursion on all required products before exiting.
+        if not recurse:
+            return
+
+        # Kick of the recursion on all required products before exiting.
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
-            reccurse_product_download(nexus_files, parent, version)
+            recurse_product_download(nexus_files, parent, version)
 
         return
 
     print(nexus_file)
+
+    if not recurse:
+        return
+
     # We have a good 'latest' nexus file. Use it:
     json_product_description = _nexus_download_and_install(nexus_file, product_name)
     for parent in json_product_description.get("parents"):
-        reccurse_product_download(nexus_files, parent, version)
+        recurse_product_download(nexus_files, parent, version)
 
 
 def _nexus_download_and_install(nexus_file, product_name):
@@ -468,15 +492,27 @@ def _get_commit_id_from_nexus_path(nexus_path):
     return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
 
 
-def _list_or_update(products=None, update=False, backup=None, target_version=None):
+def _list_or_update(products=None, update=False, backup=None, target_version=None, recurse=True):
+    """List or Update the given products.
+    Arguments:
+        - products: a List of product names
+        - update: a Boolean. If True then attempts to update the products
+        - backup: a Boolean. If True will save the product in a .save path before installing new one.
+         - recurse: a Boolean. If True, will recurse in the list or updates
+    """
     products = products or []
 
     nexus = get_nexus()
     nexus_files = nexus.list_repository("kbot_raw")
 
     # First retrieve all the products, and order them
+    #
     xml_product_descriptions = []
     for product_name in os.listdir(installation_path):
+
+        if products and not recurse and product_name not in products:
+            continue
+            
         # print(f"Checking {product_name}")
         xml_product_description = _get_xml_product_description(product_name)
         if not xml_product_description:
@@ -492,8 +528,8 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
     if not update:
         print("Tree of currently installed products")
         print("====================================")
-        top_tree_items = _get_tree(xml_product_descriptions)
-        tree_print(top_tree_items)
+        top_tree_items = _get_tree(xml_product_descriptions, recurse=recurse)
+        tree_print(top_tree_items, recurse=recurse)
 
     print("Versions of installed products")
     print("==============================")
@@ -509,7 +545,11 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         # Attempt to figure out the version if not provided
         #
         if json_product_description:
-            version = json_product_description.get("version")
+            # The version (2024.02-dev) is the branch minute the "release-"
+            version = json_product_description.get("build").get("branch")[len("release-"):]
+            if version:
+                print(f"    On product branch '{version}'")
+
         elif xml_product_description:
             # Attempt to find the related GIT branch
             cmd = f"cd {installation_path}/{product_name} ; git status"
@@ -519,11 +559,12 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             except Exception as e:
                 branch = f"Failed to get GIT version due to {e}"
 
+            print(f"    On GIT branch '{branch}'")
             version = xml_product_description.get("version")
             if version:
-                print(f"    Git repository, version {version}, branch: {branch}")
+                print(f"    Version {version}")
             else:
-                print(f"    Git repository, no version, branch: {branch}")
+                print("   (No product version)")
             continue
         else:
             print("    Failed to find any version information")
@@ -531,7 +572,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
         target_version = target_version or version
 
-        if update and target_version and target_version != version:
+        if update and version and target_version and target_version != version:
             print(f"    Version is to be updated from {version} to {target_version}")
 
         # Get the definitions of the latest available version in Nexus
@@ -551,10 +592,12 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
             installed_commit_id = _get_commit_id_from_nexus_path(
                 json_product_description.get("build").get("commit")
             )
+
             if nexus_commit_id == installed_commit_id:
                 if update:
                     print(
-                        f"    Nexus is already on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
+                        "    Nexus is already on latest available code: "
+                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
                 else: # Print
                     branch = latest_nexus_definition.js.get('downloadUrl').split("/")[5]
@@ -565,11 +608,13 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                     )
 
                     print(
-                        f"    Nexus on latest available code: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
+                        "    Nexus on latest available code: "
+                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
             else:
                 print(
-                    f"    Nexus is on OLD VERSION: {json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
+                    "    Nexus is on OLD VERSION: "
+                    f"{json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
                 )
                 if update:
                     _json_product_description = _nexus_download_and_install(
@@ -582,6 +627,8 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
         else:
             print("    Version file not found in Nexus")
+
+        
 
 
 def usage():
@@ -679,30 +726,38 @@ if __name__ == "__main__":
             required=False,
             default=False,
         )
-
+        parser.add_argument(
+            "--no-rec",
+            help="Do not recurse into product dependencies",
+            dest="no_rec",
+            action="store_true",
+            required=False,
+            default=False,
+        )
         # backup, one of:
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
 
-        result = parser.parse_args()
-        action = result.action.strip()
-        product_version = (result.version or "").strip()
-        emails = result.emails or []
-        products = result.products or []
-        backup = result.backup
-        hostname = result.hostname
-        workarea = result.workarea
-        installation_path = result.installer or "/home/konverso/dev/installer"
+        _result = parser.parse_args()
+        action = _result.action.strip()
+        product_version = (_result.version or "").strip()
+        emails = _result.emails or []
+        products = _result.products or []
+        backup = _result.backup
+        hostname = _result.hostname
+        workarea = _result.workarea
+        installation_path = _result.installer or "/home/konverso/dev/installer"
+        recurse = not _result.no_rec
 
         #
         # If defined, set the git user / password for this session
         #
-        if result.git:
+        if _result.git:
             print(
                 ("Git password is in command line. This is unsecure. "
                  "Prefere setting variables GIT_USERNAME and GIT_PASSWORD")
             )
-            user, password = result.git.split(":", 1)
+            user, password = _result.git.split(":", 1)
             os.environ["GIT_USERNAME"] = user
             os.environ["GIT_PASSWORD"] = password
             project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -722,12 +777,12 @@ if __name__ == "__main__":
         # (Preferably from variables)
         #
         nexus = None
-        if result.nexus:
+        if _result.nexus:
             print(
                 ("Nexus password is in command line. This is unsecure. "
                  "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
             )
-            host, user, password = result.nexus.split(":", 3)
+            host, user, password = _result.nexus.split(":", 3)
             nexus = NexusRepository(host.strip(), user.strip(), password.strip())
         elif (
             os.environ.get("NEXUS_HOST")
@@ -758,14 +813,12 @@ if __name__ == "__main__":
                 version=product_version,
                 product=products[0],
                 create_workarea=True,
-                no_learn=result.no_learn,
+                no_learn=_result.no_learn,
             )
-            sys.exit(0)
 
         # Update existing version to the latest code base
         elif action == "update":
-            _list_or_update(backup=backup, products=products, update=True)
-            sys.exit(0)
+            _list_or_update(backup=backup, products=products, update=True, recurse=recurse)
 
         # Move to a new version
         elif action == "upgrade":
@@ -774,11 +827,15 @@ if __name__ == "__main__":
                 products=products,
                 update=True,
                 target_version=product_version,
+                recurse=recurse
             )
-            sys.exit(0)
 
         # Only setup the installer folder
         elif action == "installer-only":
+            if not product_version:
+                print(usage())
+                print("A version (-v flag) is mandatory for the action 'installer-only'")
+                sys.exit(1)
             if len(products) != 1:
                 print(usage())
                 print(
@@ -786,13 +843,11 @@ if __name__ == "__main__":
                     products,
                 )
                 sys.exit(1)
-            install(version=product_version, product=products[0], create_workarea=False)
-            sys.exit(0)
+            install(version=product_version, product=products[0], create_workarea=False, recurse=recurse)
 
         # List the currently installed products
         elif action == "list":
-            _list_or_update(products=products, update=False)
-            sys.exit(0)
+            _list_or_update(products=products, update=False, recurse=recurse)
 
         else:
             msg = "Invalid action. Should be one of: update, upgrade, install, installer-only"
