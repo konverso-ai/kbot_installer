@@ -281,8 +281,9 @@ class Installer:
         self._LinkProductFilesToDir('ui', dirname,
                                     ['client', 'locales', 'widget', 'msteams_app', 'msteams_tab', 'in_tab_auth', 'jira_ext', 'chrome_ext'],
                                     ignoredirs=['static'])
-        self._LinkAbs(os.path.join(os.getenv('PYTHON_DIR'), f'lib/python{os.getenv("PYTHON_MAJOR_VERSION")}/site-packages/drf_yasg/static'),
-                      os.path.join(dirname, 'web', 'static'))
+        if os.getenv('PYTHON_DIR') and os.getenv("PYTHON_MAJOR_VERSION"):
+            self._LinkAbs(os.path.join(os.getenv('PYTHON_DIR'), f'lib/python{os.getenv("PYTHON_MAJOR_VERSION")}/site-packages/drf_yasg/static'),
+                          os.path.join(dirname, 'web', 'static'))
 
     def _SetupVar(self):
         vardir = os.path.join(self.target, 'var')
