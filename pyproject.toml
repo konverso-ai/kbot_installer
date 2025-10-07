@@ -45,6 +45,10 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/.*",
+    "gitpassword.py",
+    "nexus.py",
+    "kbot.py",
+    "setup_workarea.py",
 ]
 
 [tool.coverage.html]

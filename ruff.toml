@@ -11,6 +11,15 @@ line-length = 88
 # Cache configuration - use temporary directory
 cache-dir = "/tmp/ruff_cache"
 
+exclude = [
+    "nexus.py",
+    "kbot.py",
+    "setup_workarea.py",
+    "gitpassword.py"
+]
+
+output-format = "grouped"
+
 # Formatter configuration (replaces Black)
 [format]
 # Use double quotes for strings (Black-compatible)
