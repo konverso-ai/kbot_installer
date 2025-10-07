@@ -48,7 +48,7 @@ def get_nexus():
     return nexus
 
 
-def install(version, product, create_workarea=False, no_learn=False, recurse=True):
+def install(version, product, create_workarea=False, no_learn=False, recurse=True, uses=None):
     """Recursive installation of the product and all its related parents,
     for the given version.
 
@@ -62,19 +62,22 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
             msg = f"Installation path {installation_path} is not a directory !"
             raise RuntimeError(msg)
 
-    nexus_repo = get_nexus()
-    nexus_files = None
-    if nexus_repo:
-        try:
-            nexus_files = nexus_repo.list_repository("kbot_raw")
-            print("Successfully connected to Nexus repository")
-        except Exception as e:
-            print(f"Failed to connect to Nexus repository: {e}")
-            print("Falling back to GitHub/Bitbucket...")
-            nexus_files = None
+    if "nexus" in uses:
+        nexus_repo = get_nexus()
+        nexus_files = None
+        if nexus_repo:
+            try:
+                nexus_files = nexus_repo.list_repository("kbot_raw")
+                print("Successfully connected to Nexus repository")
+            except Exception as e:
+                print(f"Failed to connect to Nexus repository: {e}")
+                print("Falling back to GitHub/Bitbucket...")
+                nexus_files = None
+    else:
+        nexus_files = []
 
     # Load all the required products
-    recurse_product_download(nexus_files, product, version, recurse=recurse)
+    recurse_product_download(nexus_files, product, version, recurse=recurse, uses=uses)
 
     if not create_workarea:
         return
@@ -281,7 +284,7 @@ def tree_print(elements, level=1, visited=None, recurse=True):
             tree_print(element.get("parents"), level + 1, visited=visited)
 
 
-def recurse_product_download(nexus_files, product_name, version, recurse=True):
+def recurse_product_download(nexus_files, product_name, version, recurse=True, uses=None):
     """
     Recursively retrieve the products, based on the "parent" definition
     found inside the Product definition.
@@ -295,7 +298,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
 
     # Try Nexus first if available
     nexus_file = None
-    if nexus_files:
+    if "nexus" in uses and nexus_files:
         nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
         
         if not nexus_file:
@@ -318,7 +321,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
             else:
                 print("Product '%s' is not available in Nexus. Trying GitHub..." % product_name)
     else:
-        print("Nexus not configured. Trying GitHub...")
+        pass #print("Nexus not configured. Trying GitHub...")
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -367,13 +370,13 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     # Product was installed through GIT or some other file copy
     #
     if xml_product_description:
-        print("   Not installed through Nexus (probably git ?).")
+        #print("   Not installed through Nexus (probably git ?).")
         if not recurse:
             return
 
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
-            recurse_product_download(nexus_files, parent, version)
+            recurse_product_download(nexus_files, parent, version, uses=uses)
         return
 
     #
@@ -383,27 +386,29 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     if not nexus_file:
         print(f"Product {product_name} not found in Nexus. Trying GitHub...")
         
-        # Try GitHub first
-        gh_username = os.environ.get("GH_USERNAME")
-        gh_password = os.environ.get("GH_PASSWORD")
+        success = False
+        if "github" in uses:
+            # Try GitHub first
+            gh_username = os.environ.get("GH_USERNAME")
+            gh_password = os.environ.get("GH_PASSWORD")
 
-        if gh_username and gh_password:
-            github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
-            print(f"Cloning from GitHub: https://github.com/konverso-ai/{product_name}.git")
+            if gh_username and gh_password:
+                github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
+                print(f"Cloning from GitHub: https://github.com/konverso-ai/{product_name}.git")
             
-            response = os.system(f"git clone {github_url}")
-            if response == 0:
-                print(f"Successfully cloned from GitHub")
-                success = True
+                response = os.system(f"git clone {github_url}")
+                if response == 0:
+                    print(f"Successfully cloned from GitHub")
+                    success = True
+                else:
+                    print(f"GitHub clone failed (error code: {response}). Trying Bitbucket...")
+                    success = False
             else:
-                print(f"GitHub clone failed (error code: {response}). Trying Bitbucket...")
+                print("GitHub credentials not provided. Trying Bitbucket...")
                 success = False
-        else:
-            print("GitHub credentials not provided. Trying Bitbucket...")
-            success = False
         
         # Try Bitbucket if GitHub failed or no credentials
-        if not success:
+        if "bitbucket" in uses and not success:
             git_username = os.environ.get("GIT_USERNAME")
             git_password = os.environ.get("GIT_PASSWORD")
             
@@ -447,7 +452,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
             # Kick of the recursion on all required products before exiting.
             parents = _get_xml_product_description(product_name).get("parents")
             for parent in parents:
-                recurse_product_download(nexus_files, parent, version)
+                recurse_product_download(nexus_files, parent, version, uses=uses)
 
             return
 
@@ -456,10 +461,11 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True):
     if not recurse:
         return
 
-    # We have a good 'latest' nexus file. Use it:
-    json_product_description = _nexus_download_and_install(nexus_file, product_name)
-    for parent in json_product_description.get("parents"):
-        recurse_product_download(nexus_files, parent, version)
+    if "nexus" in uses:
+        # We have a good 'latest' nexus file. Use it:
+        json_product_description = _nexus_download_and_install(nexus_file, product_name)
+        for parent in json_product_description.get("parents"):
+            recurse_product_download(nexus_files, parent, version, uses=uses)
 
 
 def _nexus_download_and_install(nexus_file, product_name):
@@ -538,7 +544,7 @@ def _get_commit_id_from_nexus_path(nexus_path):
     return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
 
 
-def _list_or_update(products=None, update=False, backup=None, target_version=None, recurse=True):
+def _list_or_update(products=None, update=False, backup=None, target_version=None, recurse=True, uses=None):
     """List or Update the given products.
     Arguments:
         - products: a List of product names
@@ -800,6 +806,15 @@ if __name__ == "__main__":
             required=False,
             default=False,
         )
+        parser.add_argument(
+            "--uses",
+            help="Comma seaparator list of sources to use. Defaults to 'nexus,bitbucket,github' Do not learn following the setup",
+            dest="uses",
+            action="store",
+            required=False,
+            default="nexus,bitbucket,github",
+        )
+
         # backup, one of:
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
@@ -814,11 +829,12 @@ if __name__ == "__main__":
         workarea = _result.workarea
         installation_path = _result.installer or "/home/konverso/dev/installer"
         recurse = not _result.no_rec
+        uses = _result.uses.split(",")
 
         #
         # If defined, set the git user / password for this session
         #
-        if _result.git:
+        if _result.git and "bitbucket" in uses:
             print(
                 ("Git password is in command line. This is unsecure. "
                  "Prefere setting variables GIT_USERNAME and GIT_PASSWORD")
@@ -832,7 +848,7 @@ if __name__ == "__main__":
         #
         # If defined, set the GitHub user / password for this session
         #
-        if _result.github:
+        if _result.github and "github" in uses:
             print(
                 ("GitHub password is in command line. This is unsecure. "
                  "Prefere setting variables GH_USERNAME and GH_PASSWORD")
@@ -857,7 +873,7 @@ if __name__ == "__main__":
         # (Preferably from variables)
         #
         nexus = None
-        if _result.nexus:
+        if _result.nexus and "nexus" in uses:
             print(
                 ("Nexus password is in command line. This is unsecure. "
                  "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
@@ -907,11 +923,12 @@ if __name__ == "__main__":
                 product=products[0],
                 create_workarea=True,
                 no_learn=_result.no_learn,
+                uses=uses,
             )
 
         # Update existing version to the latest code base
         elif action == "update":
-            _list_or_update(backup=backup, products=products, update=True, recurse=recurse)
+            _list_or_update(backup=backup, products=products, update=True, recurse=recurse, uses=uses)
 
         # Move to a new version
         elif action == "upgrade":
@@ -920,7 +937,8 @@ if __name__ == "__main__":
                 products=products,
                 update=True,
                 target_version=product_version,
-                recurse=recurse
+                recurse=recurse,
+                uses=uses,
             )
 
         # Only setup the installer folder
@@ -936,11 +954,11 @@ if __name__ == "__main__":
                     products,
                 )
                 sys.exit(1)
-            install(version=product_version, product=products[0], create_workarea=False, recurse=recurse)
+            install(version=product_version, product=products[0], create_workarea=False, recurse=recurse, uses=uses)
 
         # List the currently installed products
         elif action == "list":
-            _list_or_update(products=products, update=False, recurse=recurse)
+            _list_or_update(products=products, update=False, recurse=recurse, uses=uses)
 
         else:
             msg = "Invalid action. Should be one of: update, upgrade, install, installer-only"
