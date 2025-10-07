@@ -14,12 +14,13 @@ import pygit2
 from kbot_installer.core.auth.pygit_authentication.pygit_authentication_base import (
     PyGitAuthenticationBase,
 )
-from kbot_installer.core.versioner.versioner_base import VersionerBase, VersionerError
+from kbot_installer.core.versioner.str_repr_mixin import StrReprMixin
+from kbot_installer.core.versioner.versioner_base import VersionerError
 
 logger = logging.getLogger(__name__)
 
 
-class PygitVersioner(VersionerBase):
+class PygitVersioner(StrReprMixin):
     """Versioner for git repository operations using pygit2.
 
     This versioner handles full git operations on any git repository using pygit2
@@ -106,12 +107,12 @@ class PygitVersioner(VersionerBase):
             error_msg = f"Failed to add files to repository: {e}"
             raise VersionerError(error_msg) from e
 
-    async def pull(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository using pygit2.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the pull operation fails.
@@ -208,12 +209,12 @@ class PygitVersioner(VersionerBase):
             error_msg = f"Failed to commit changes: {e}"
             raise VersionerError(error_msg) from e
 
-    async def push(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository using pygit2.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to push to. Defaults to "main".
+            branch: Branch to push to.
 
         Raises:
             VersionerError: If the push operation fails.
@@ -544,14 +545,16 @@ class PygitVersioner(VersionerBase):
 
             # Create the stash
             repo.stash(author, stash_message)
-            return True  # noqa: TRY300
 
         except pygit2.GitError as e:
             error_msg = f"Failed to stash changes: {e}"
             raise VersionerError(error_msg) from e
 
+        # Return True after successful stash operation
+        return True
+
     async def safe_pull(
-        self, repository_path: str | Path, branch: str = "main"
+        self, repository_path: str | Path, branch: str
     ) -> None:
         """Safely pull latest changes, stashing any local changes first using pygit2.
 
@@ -562,7 +565,7 @@ class PygitVersioner(VersionerBase):
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the safe pull operation fails.
@@ -641,23 +644,4 @@ class PygitVersioner(VersionerBase):
             logger.exception("Failed to check if remote repository exists")
             return False
 
-    def __str__(self) -> str:
-        """Return string representation of the versioner.
-
-        Returns:
-            String representation of the versioner.
-
-        """
-        return f"{self.name}Versioner({self.base_url})"
-
-    def __repr__(self) -> str:
-        """Return detailed string representation of the versioner.
-
-        Returns:
-            Detailed string representation of the versioner.
-
-        """
-        return (
-            f"{self.__class__.__name__}(name='{self.name}', base_url='{self.base_url}')"
-        )
 

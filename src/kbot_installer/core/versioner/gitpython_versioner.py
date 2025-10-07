@@ -16,12 +16,13 @@ from git.exc import GitCommandError, InvalidGitRepositoryError
 from kbot_installer.core.auth.pygit_authentication.pygit_authentication_base import (
     PyGitAuthenticationBase,
 )
-from kbot_installer.core.versioner.versioner_base import VersionerBase, VersionerError
+from kbot_installer.core.versioner.str_repr_mixin import StrReprMixin
+from kbot_installer.core.versioner.versioner_base import VersionerError
 
 logger = logging.getLogger(__name__)
 
 
-class GitPythonVersioner(VersionerBase):
+class GitPythonVersioner(StrReprMixin):
     """GitPython implementation of the versioner.
 
     This class provides a concrete implementation of VersionerBase using GitPython
@@ -277,12 +278,12 @@ class GitPythonVersioner(VersionerBase):
             error_msg = f"Unexpected error during add: {e}"
             raise VersionerError(error_msg) from e
 
-    async def pull(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the pull operation fails.
@@ -356,12 +357,12 @@ class GitPythonVersioner(VersionerBase):
             error_msg = f"Unexpected error during commit: {e}"
             raise VersionerError(error_msg) from e
 
-    async def push(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to push to. Defaults to "main".
+            branch: Branch to push to.
 
         Raises:
             VersionerError: If the push operation fails.
@@ -443,7 +444,7 @@ class GitPythonVersioner(VersionerBase):
             raise VersionerError(error_msg) from e
 
     async def safe_pull(
-        self, repository_path: str | Path, branch: str = "main"
+        self, repository_path: str | Path, branch: str
     ) -> None:
         """Safely pull latest changes, stashing any local changes first using GitPython.
 
@@ -454,7 +455,7 @@ class GitPythonVersioner(VersionerBase):
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the safe pull operation fails.
@@ -541,23 +542,3 @@ class GitPythonVersioner(VersionerBase):
             return False
         else:
             return True
-
-    def __str__(self) -> str:
-        """Return string representation of the versioner.
-
-        Returns:
-            String representation of the versioner.
-
-        """
-        return f"{self.name}Versioner({self.base_url})"
-
-    def __repr__(self) -> str:
-        """Return detailed string representation of the versioner.
-
-        Returns:
-            Detailed string representation of the versioner.
-
-        """
-        return (
-            f"{self.__class__.__name__}(name='{self.name}', base_url='{self.base_url}')"
-        )

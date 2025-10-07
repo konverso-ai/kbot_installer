@@ -205,7 +205,7 @@ class TestNexusVersioner:
             repo_path = Path(temp_dir) / "logged_repo"
 
             # Mock the clone method to avoid actual download
-            with patch.object(versioner, "clone") as mock_clone:
+            with patch.object(versioner, "clone"):
                 with patch(
                     "kbot_installer.core.versioner.nexus_versioner.logger"
                 ) as mock_logger:

@@ -4,6 +4,7 @@ This module implements the NexusVersioner class that handles repository
 operations using the Nexus API for downloading repositories as tar.gz archives.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -12,7 +13,8 @@ import httpx
 from kbot_installer.core.auth.http_auth.http_auth_base import HttpAuthBase
 from kbot_installer.core.provider.utils import FileInfo
 from kbot_installer.core.utils import optimized_download_and_extract
-from kbot_installer.core.versioner.versioner_base import VersionerBase, VersionerError
+from kbot_installer.core.versioner.str_repr_mixin import StrReprMixin
+from kbot_installer.core.versioner.versioner_base import VersionerError
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 HTTP_OK = 200
 
 
-class NexusVersioner(VersionerBase):
+class NexusVersioner(StrReprMixin):
     """Versioner for Nexus repository operations.
 
     This versioner handles operations on Nexus repositories using the Nexus API.
@@ -268,11 +270,13 @@ class NexusVersioner(VersionerBase):
             auth = self._get_auth()
             auth_obj = auth.get_auth() if auth else None
 
-            # Run optimized download and extract
-            optimized_download_and_extract(
-                url=file_info.url,
-                target_dir=target_path.parent,
-                auth_obj=auth_obj,
+            # Run optimized download and extract in a thread to avoid blocking the event loop
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                optimized_download_and_extract,
+                file_info.url,
+                target_path.parent,
+                auth_obj,
             )
 
         except Exception as e:

@@ -484,7 +484,7 @@ class TestPygitVersioner:
         with (
             patch.object(versioner, "_get_auth", return_value=None),
             patch("pygit2.clone_repository", side_effect=pygit2.GitError("Git error")),
-            patch("pathlib.Path.mkdir") as mock_mkdir,
+            patch("pathlib.Path.mkdir"),
         ):
             with pytest.raises(VersionerError, match="Failed to clone repository"):
                 await versioner.clone("https://github.com/test/repo.git", "/test/path")
@@ -598,7 +598,7 @@ class TestPygitVersioner:
 
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rmtree,
@@ -835,10 +835,10 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch with authentication."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
-            patch("shutil.rmtree") as mock_rmtree,
+            patch("shutil.rmtree"),
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
@@ -856,7 +856,7 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch with repository failure."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rmtree,
@@ -880,7 +880,7 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch handles unexpected exceptions."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rmtree,
@@ -904,7 +904,7 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch cleans up on error."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rmtree,
@@ -928,7 +928,7 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch cleanup in finally block."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("pathlib.Path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rmtree,
@@ -1261,7 +1261,7 @@ class TestPygitVersioner:
         with (
             patch(
                 "kbot_installer.core.versioner.pygit_versioner.pygit2.clone_repository"
-            ) as mock_clone,
+            ),
             patch("pathlib.Path.exists") as mock_exists,
             patch("shutil.rmtree") as mock_rmtree,
             patch("pathlib.Path.mkdir"),
@@ -1279,7 +1279,7 @@ class TestPygitVersioner:
         with (
             patch(
                 "kbot_installer.core.versioner.pygit_versioner.pygit2.clone_repository"
-            ) as mock_clone,
+            ),
             patch("pathlib.Path.exists") as mock_exists,
             patch("shutil.rmtree") as mock_rmtree,
             patch("pathlib.Path.mkdir"),
@@ -1468,7 +1468,7 @@ class TestPygitVersioner:
         """Test _check_remote_repository_exists_with_fetch with cleanup error."""
         with (
             patch("tempfile.mkdtemp") as mock_mkdtemp,
-            patch("pygit2.init_repository") as mock_init,
+            patch("pygit2.init_repository"),
             patch("pygit2.Repository") as mock_repo_class,
             patch("shutil.rmtree") as mock_rmtree,
             patch("pathlib.Path.exists", return_value=True),
