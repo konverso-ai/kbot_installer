@@ -553,9 +553,7 @@ class PygitVersioner(StrReprMixin):
         # Return True after successful stash operation
         return True
 
-    async def safe_pull(
-        self, repository_path: str | Path, branch: str
-    ) -> None:
+    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first using pygit2.
 
         This method performs a safe pull by:
@@ -643,5 +641,3 @@ class PygitVersioner(StrReprMixin):
         except Exception:
             logger.exception("Failed to check if remote repository exists")
             return False
-
-

@@ -13,7 +13,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from kbot_installer.core.auth.pygit_authentication.factory import create_pygit_authentication
+from kbot_installer.core.auth.pygit_authentication.factory import (
+    create_pygit_authentication,
+)
 from kbot_installer.core.versioner.factory import create_versioner
 
 # Charger les variables d'environnement depuis le fichier .env

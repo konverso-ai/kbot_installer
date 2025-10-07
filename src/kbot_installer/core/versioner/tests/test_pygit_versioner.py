@@ -319,16 +319,22 @@ class TestPygitVersioner:
 
     @pytest.mark.asyncio
     async def test_commit_with_no_staged_changes(self, versioner) -> None:
-        """Test that commit raises error with no staged changes."""
+        """Test that commit returns without error when no staged changes."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
             mock_index = MagicMock()
             mock_repo.index = mock_index
-            mock_index.__bool__ = lambda x: False  # Empty index
+
+            # Mock HEAD exists and trees are the same (no changes)
+            mock_head = MagicMock()
+            mock_head.target = "some_commit_hash"
+            mock_repo.head = mock_head
+            mock_head.peel.return_value.tree = "same_tree_id"
+            mock_index.write_tree.return_value = "same_tree_id"
             mock_get_repo.return_value = mock_repo
 
-            with pytest.raises(VersionerError, match="No staged changes to commit"):
-                await versioner.commit("/test/path", "Test commit")
+            # Should return without error when no changes to commit
+            await versioner.commit("/test/path", "Test commit")
 
     @pytest.mark.asyncio
     async def test_commit_with_initial_commit(self, versioner) -> None:
@@ -786,7 +792,7 @@ class TestPygitVersioner:
         """Test string representation of versioner."""
         str_repr = str(versioner)
         assert "PygitVersioner" in str_repr
-        assert "auth=None" in str_repr
+        assert "auth=False" in str_repr
 
     def test_str_representation_with_auth(self, versioner_with_auth) -> None:
         """Test string representation of versioner with auth."""

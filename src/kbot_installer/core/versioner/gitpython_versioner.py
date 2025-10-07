@@ -443,9 +443,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during stash: {e}"
             raise VersionerError(error_msg) from e
 
-    async def safe_pull(
-        self, repository_path: str | Path, branch: str
-    ) -> None:
+    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first using GitPython.
 
         This method performs a safe pull by:
