@@ -186,8 +186,8 @@ class PygitVersioner(StrReprMixin):
 
                 # If we have a HEAD and the trees are the same, no changes to commit
                 if head_tree and current_tree == head_tree:
-                    error_msg = "No staged changes to commit"
-                    raise VersionerError(error_msg)
+                    # No staged changes to commit, return without error
+                    return
             except pygit2.GitError:
                 # No HEAD exists, this will be an initial commit - allow it
                 pass

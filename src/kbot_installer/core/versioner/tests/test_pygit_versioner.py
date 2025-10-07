@@ -1112,8 +1112,8 @@ class TestPygitVersioner:
             mock_head.peel.return_value.tree = "same_tree_id"
             mock_index.write_tree.return_value = "same_tree_id"
 
-            with pytest.raises(VersionerError, match="No staged changes to commit"):
-                await versioner.commit("/path/to/repo", "Test commit")
+            # Should return without error when no changes to commit
+            await versioner.commit("/path/to/repo", "Test commit")
 
     @pytest.mark.asyncio
     async def test_commit_initial_commit(self, versioner) -> None:
