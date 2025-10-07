@@ -321,28 +321,26 @@ class NexusVersioner(StrReprMixin):
         Returns:
             bool: Always returns False as stash is not supported.
 
-        Raises:
-            VersionerError: Always raises as stash is not supported.
-
         """
-        error_msg = "Stash operation is not supported for Nexus versioner"
-        raise VersionerError(error_msg)
+        # Stash is not supported for Nexus repositories (static archives)
+        return False
 
     async def safe_pull(
-        self, _repository_path: str | Path, _branch: str
+        self, repository_path: str | Path, _branch: str
     ) -> None:
-        """Safe pull is not supported for Nexus versioner.
+        """Safe pull for Nexus versioner - performs a regular pull.
+
+        For Nexus repositories, safe_pull is equivalent to a regular pull
+        since there are no local changes to stash (repositories are static archives).
 
         Args:
             repository_path: Path to the local repository.
             _branch: Branch to pull from (ignored for Nexus repositories).
 
-        Raises:
-            VersionerError: Always raises as safe pull is not supported.
-
         """
-        error_msg = "Safe pull operation is not supported for Nexus versioner"
-        raise VersionerError(error_msg)
+        # For Nexus repositories, safe_pull is equivalent to regular pull
+        # since there are no local changes to manage
+        await self.pull(repository_path, _branch)
 
     def __str__(self) -> str:
         """Return string representation of the versioner.
