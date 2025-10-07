@@ -72,8 +72,5 @@ ignore = [
     "W293",      # No newline at end of file (test files)
 ]
 
-[lint.isort]
-known-first-party = ["http_client"]
-
 [lint.mccabe]
 max-complexity = 10
