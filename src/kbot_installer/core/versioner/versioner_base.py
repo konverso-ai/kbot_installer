@@ -107,12 +107,12 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def pull(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the pull operation fails.
@@ -133,12 +133,12 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def push(self, repository_path: str | Path, branch: str = "main") -> None:
+    async def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to push to. Defaults to "main".
+            branch: Branch to push to.
 
         Raises:
             VersionerError: If the push operation fails.
@@ -165,7 +165,7 @@ class VersionerBase(ABC):
 
     @abstractmethod
     async def safe_pull(
-        self, repository_path: str | Path, branch: str = "main"
+        self, repository_path: str | Path, branch: str
     ) -> None:
         """Safely pull latest changes, stashing any local changes first.
 
@@ -176,7 +176,7 @@ class VersionerBase(ABC):
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from. Defaults to "main".
+            branch: Branch to pull from.
 
         Raises:
             VersionerError: If the safe pull operation fails.

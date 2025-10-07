@@ -150,7 +150,7 @@ class NexusVersioner(VersionerBase):
         )
         raise VersionerError(error_msg)
 
-    async def pull(self, repository_path: str | Path, branch: str = "master") -> None:  # noqa: ARG002
+    async def pull(self, repository_path: str | Path, _branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         For Nexus repositories, this is equivalent to cloning the latest version
@@ -158,7 +158,7 @@ class NexusVersioner(VersionerBase):
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from (ignored for Nexus repositories).
+            _branch: Branch to pull from (ignored for Nexus repositories).
 
         Raises:
             VersionerError: If the pull operation fails.
@@ -200,7 +200,7 @@ class NexusVersioner(VersionerBase):
         )
         raise VersionerError(error_msg)
 
-    async def push(self, _repository_path: str | Path, _branch: str = "master") -> None:
+    async def push(self, _repository_path: str | Path, _branch: str) -> None:
         """Push commits to the remote repository.
 
         Note: Git operations are not supported for Nexus repositories as they are
@@ -208,7 +208,7 @@ class NexusVersioner(VersionerBase):
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to push to. Defaults to "master".
+            _branch: Branch to push to (ignored for Nexus repositories).
 
         Raises:
             VersionerError: Always raised as git operations are not supported.
@@ -325,13 +325,13 @@ class NexusVersioner(VersionerBase):
         raise VersionerError(error_msg)
 
     async def safe_pull(
-        self, _repository_path: str | Path, _branch: str = "main"
+        self, _repository_path: str | Path, _branch: str
     ) -> None:
         """Safe pull is not supported for Nexus versioner.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to pull from.
+            _branch: Branch to pull from (ignored for Nexus repositories).
 
         Raises:
             VersionerError: Always raises as safe pull is not supported.

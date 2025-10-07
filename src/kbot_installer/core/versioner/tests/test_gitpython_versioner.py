@@ -316,7 +316,7 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during pull"):
-                await versioner_without_auth.pull("/tmp/test")
+                await versioner_without_auth.pull("/tmp/test", "main")
 
     @pytest.mark.asyncio
     async def test_commit_with_staged_changes(self, versioner_without_auth) -> None:
@@ -413,7 +413,7 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during push"):
-                await versioner_without_auth.push("/tmp/test")
+                await versioner_without_auth.push("/tmp/test", "main")
 
     @pytest.mark.asyncio
     async def test_check_remote_repository_exists_success(
