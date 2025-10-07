@@ -325,9 +325,7 @@ class NexusVersioner(StrReprMixin):
         # Stash is not supported for Nexus repositories (static archives)
         return False
 
-    async def safe_pull(
-        self, repository_path: str | Path, _branch: str
-    ) -> None:
+    async def safe_pull(self, repository_path: str | Path, _branch: str) -> None:
         """Safe pull for Nexus versioner - performs a regular pull.
 
         For Nexus repositories, safe_pull is equivalent to a regular pull

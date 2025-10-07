@@ -164,9 +164,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def safe_pull(
-        self, repository_path: str | Path, branch: str
-    ) -> None:
+    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first.
 
         This method performs a safe pull by:

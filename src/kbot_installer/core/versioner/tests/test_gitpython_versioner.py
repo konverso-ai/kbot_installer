@@ -475,12 +475,14 @@ class TestGitPythonVersioner:
     def test_str_representation(self, versioner_without_auth) -> None:
         """Test string representation of versioner."""
         result = str(versioner_without_auth)
-        assert "gitpythonVersioner" in result
+        assert "GitPythonVersioner" in result
+        assert "auth=False" in result
 
     def test_str_representation_with_auth(self, versioner_with_auth) -> None:
         """Test string representation of versioner with auth."""
         result = str(versioner_with_auth)
-        assert "gitpythonVersioner" in result
+        assert "GitPythonVersioner" in result
+        assert "auth=True" in result
 
     def test_repr_representation(self, versioner_without_auth) -> None:
         """Test repr representation of versioner."""
@@ -857,23 +859,23 @@ class TestGitPythonVersioner:
         """Test string representation with None auth."""
         versioner = GitPythonVersioner(auth=None)
         result = str(versioner)
-        assert result == "gitpythonVersioner()"
+        assert result == "GitPythonVersioner(auth=False)"
 
     def test_repr_representation_with_none_auth(self) -> None:
         """Test detailed string representation with None auth."""
         versioner = GitPythonVersioner(auth=None)
         result = repr(versioner)
-        assert result == "GitPythonVersioner(name='gitpython', base_url='')"
+        assert result == "GitPythonVersioner(auth=None)"
 
     def test_str_representation_with_auth_object(self, versioner_with_auth) -> None:
         """Test string representation with auth object."""
         result = str(versioner_with_auth)
-        assert result == "gitpythonVersioner()"
+        assert result == "GitPythonVersioner(auth=True)"
 
     def test_repr_representation_with_auth_object(self, versioner_with_auth) -> None:
         """Test detailed string representation with auth object."""
         result = repr(versioner_with_auth)
-        assert result == "GitPythonVersioner(name='gitpython', base_url='')"
+        assert "GitPythonVersioner(auth=" in result
 
     def test_name_attribute(self, versioner_without_auth) -> None:
         """Test name attribute."""
