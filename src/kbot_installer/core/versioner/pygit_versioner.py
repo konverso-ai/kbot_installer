@@ -177,6 +177,20 @@ class PygitVersioner(VersionerBase):
             repo = self._get_repository(repository_path)
             index = repo.index
 
+            # Check if there are any staged changes
+            # Compare the current index with the HEAD tree
+            try:
+                head_tree = repo.head.peel().tree if repo.head.target else None
+                current_tree = index.write_tree()
+
+                # If we have a HEAD and the trees are the same, no changes to commit
+                if head_tree and current_tree == head_tree:
+                    error_msg = "No staged changes to commit"
+                    raise VersionerError(error_msg)
+            except pygit2.GitError:
+                # No HEAD exists, this will be an initial commit - allow it
+                pass
+
             # Create the commit
             tree = index.write_tree()
             author = pygit2.Signature("Git Versioner", "versioner@example.com")
@@ -634,7 +648,7 @@ class PygitVersioner(VersionerBase):
             String representation of the versioner.
 
         """
-        return self.__repr__()
+        return f"{self.name}Versioner({self.base_url})"
 
     def __repr__(self) -> str:
         """Return detailed string representation of the versioner.
@@ -643,4 +657,7 @@ class PygitVersioner(VersionerBase):
             Detailed string representation of the versioner.
 
         """
-        return f"PygitVersioner(auth={self._auth})"
+        return (
+            f"{self.__class__.__name__}(name='{self.name}', base_url='{self.base_url}')"
+        )
+

@@ -1104,7 +1104,13 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
             mock_index = MagicMock()
             mock_repo.index = mock_index
-            mock_index.__bool__ = MagicMock(return_value=False)  # No staged changes
+
+            # Mock HEAD exists and trees are the same (no changes)
+            mock_head = MagicMock()
+            mock_head.target = "some_commit_hash"
+            mock_repo.head = mock_head
+            mock_head.peel.return_value.tree = "same_tree_id"
+            mock_index.write_tree.return_value = "same_tree_id"
 
             with pytest.raises(VersionerError, match="No staged changes to commit"):
                 await versioner.commit("/path/to/repo", "Test commit")

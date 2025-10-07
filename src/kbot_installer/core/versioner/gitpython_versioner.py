@@ -541,3 +541,23 @@ class GitPythonVersioner(VersionerBase):
             return False
         else:
             return True
+
+    def __str__(self) -> str:
+        """Return string representation of the versioner.
+
+        Returns:
+            String representation of the versioner.
+
+        """
+        return f"{self.name}Versioner({self.base_url})"
+
+    def __repr__(self) -> str:
+        """Return detailed string representation of the versioner.
+
+        Returns:
+            Detailed string representation of the versioner.
+
+        """
+        return (
+            f"{self.__class__.__name__}(name='{self.name}', base_url='{self.base_url}')"
+        )
