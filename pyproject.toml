@@ -1,0 +1,51 @@
+[project]
+name = "kbot-installer"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx",
+    "python-dotenv",
+    "tqdm",
+    "colorama",
+    "pygit2",
+    "aiofiles",
+    "furl",
+    "requests>=2.32.5",
+    "psutil>=7.1.0",
+    "click>=8.3.0",
+    "defusedxml>=0.7.1",
+    "rich>=14.1.0",
+    "gitpython>=3.1.45",
+]
+
+[project.scripts]
+kbot-installer = "kbot_installer.__main__:cli"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["kbot_installer*"]
+
+[dependency-groups]
+lint = ["ruff"]
+test = ["pytest", "pytest-cov", "pytest-asyncio"]
+
+[tool.setuptools.package-data]
+"*" = ["*.py", "*.pyi", "*.txt", "*.md"]
+
+[tool.coverage.run]
+data_file = "/tmp/.coverage"
+omit = [
+    "*/*example*",
+    "*/*examples*",
+    "*/test_*",
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.*",
+]
+
+[tool.coverage.html]
+directory = "/tmp/htmlcov"
