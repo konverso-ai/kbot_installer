@@ -177,36 +177,18 @@ class PygitVersioner(VersionerBase):
             repo = self._get_repository(repository_path)
             index = repo.index
 
-            # Check if there are any staged changes
-            if not index:
-                error_msg = "No staged changes to commit"
-                raise VersionerError(error_msg)
-
-            # Get the current HEAD or create initial commit
-            try:
-                parent = repo.head.target
-                if parent is None:
-                    # No HEAD, this is the initial commit
-                    parent = []
-                elif not isinstance(parent, list):
-                    parent = [parent]
-            except pygit2.GitError:
-                # No HEAD, this is the initial commit
-                parent = []
-
             # Create the commit
             tree = index.write_tree()
             author = pygit2.Signature("Git Versioner", "versioner@example.com")
             committer = author
 
-            repo.create_commit(
-                "HEAD",
-                author,
-                committer,
-                message,
-                tree,
-                parent if isinstance(parent, list) else [parent],
-            )
+            # Get parent commit (empty list for initial commit)
+            try:
+                parent = [repo.head.target] if repo.head.target else []
+            except pygit2.GitError:
+                parent = []
+
+            repo.create_commit("HEAD", author, committer, message, tree, parent)
 
         except pygit2.GitError as e:
             error_msg = f"Failed to commit changes: {e}"
