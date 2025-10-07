@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from kbot_installer.core.auth.pygit_authentication import create_pygit_authentication
+from kbot_installer.core.auth.pygit_authentication.factory import create_pygit_authentication
 from kbot_installer.core.versioner.factory import create_versioner
 
 # Charger les variables d'environnement depuis le fichier .env
@@ -47,7 +47,7 @@ async def example_bitbucket_operations() -> None:
     try:
         # 1. Cloner le dépôt
         print("\n1. Clonage du dépôt Bitbucket...")
-        await versioner.clone(bitbucket_repo_url, repo_path, branch="master")
+        await versioner.clone(bitbucket_repo_url, repo_path)
         print(f"✅ Dépôt cloné vers {repo_path}")
 
         # 2. Changer de branche (checkout)
@@ -103,7 +103,7 @@ async def example_github_operations() -> None:
     try:
         # 1. Cloner le dépôt
         print("\n1. Clonage du dépôt GitHub...")
-        await versioner.clone(github_repo_url, repo_path, branch="dev")
+        await versioner.clone(github_repo_url, repo_path)
         print(f"✅ Dépôt cloné vers {repo_path}")
 
         # 2. Changer de branche (checkout)
@@ -170,7 +170,7 @@ async def example_public_repositories() -> None:
 
             # 1. Cloner le dépôt
             print(f"1. Clonage du dépôt {repo_name}...")
-            await versioner.clone(repo_url, repo_path, branch=repo_branch)
+            await versioner.clone(repo_url, repo_path)
             print(f"✅ Dépôt {repo_name} cloné vers {repo_path}")
 
             # 2. Pull des dernières modifications

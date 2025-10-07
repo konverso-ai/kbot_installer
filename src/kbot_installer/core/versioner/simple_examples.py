@@ -12,8 +12,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from kbot_installer.core.auth.pygit_authentication import (
+from kbot_installer.core.auth.pygit_authentication.key_pair_pygit_authentication import (
     KeyPairPygitAuthentication,
+)
+from kbot_installer.core.auth.pygit_authentication.user_pass_pygit_authentication import (
     UserPassPygitAuthentication,
 )
 from kbot_installer.core.versioner.factory import create_versioner
@@ -46,7 +48,7 @@ async def example_bitbucket_operations() -> None:
 
     try:
         # 1. Cloner le dépôt
-        await versioner.clone(bitbucket_repo_url, repo_path, branch="main")
+        await versioner.clone(bitbucket_repo_url, repo_path)
 
         # 2. Changer de branche (checkout)
         await versioner.checkout(repo_path, "develop")
@@ -93,7 +95,7 @@ async def example_github_operations() -> None:
 
     try:
         # 1. Cloner le dépôt
-        await versioner.clone(github_repo_url, repo_path, branch="main")
+        await versioner.clone(github_repo_url, repo_path)
 
         # 2. Changer de branche (checkout)
         await versioner.checkout(repo_path, "feature/new-feature")
@@ -146,7 +148,7 @@ async def example_public_repositories() -> None:
 
         try:
             # 1. Cloner le dépôt
-            await versioner.clone(repo_url, repo_path, branch=repo_branch)
+            await versioner.clone(repo_url, repo_path)
 
             # 2. Pull des dernières modifications
             await versioner.pull(repo_path, branch=repo_branch)
@@ -176,9 +178,7 @@ async def example_mixed_authentication() -> None:
         bitbucket_repo_url = f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE', 'mon-workspace')}/mon-depot.git"
         bitbucket_repo_path = base_dir / "bitbucket_mixed"
 
-        await bitbucket_versioner.clone(
-            bitbucket_repo_url, bitbucket_repo_path, branch="main"
-        )
+        await bitbucket_versioner.clone(bitbucket_repo_url, bitbucket_repo_path)
         await bitbucket_versioner.pull(bitbucket_repo_path, branch="main")
 
     except Exception as e:
@@ -198,7 +198,7 @@ async def example_mixed_authentication() -> None:
         github_repo_url = f"git@github.com:{os.getenv('GITHUB_USERNAME', 'mon-username')}/mon-depot.git"
         github_repo_path = base_dir / "github_mixed"
 
-        await github_versioner.clone(github_repo_url, github_repo_path, branch="main")
+        await github_versioner.clone(github_repo_url, github_repo_path)
         await github_versioner.pull(github_repo_path, branch="main")
 
     except Exception as e:
@@ -211,7 +211,7 @@ async def example_mixed_authentication() -> None:
         public_repo_url = "https://github.com/torvalds/linux.git"
         public_repo_path = base_dir / "linux_mixed"
 
-        await public_versioner.clone(public_repo_url, public_repo_path, branch="master")
+        await public_versioner.clone(public_repo_url, public_repo_path)
         await public_versioner.pull(public_repo_path, branch="master")
 
     except Exception as e:
