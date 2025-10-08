@@ -35,26 +35,21 @@ help:
 # Install production dependencies
 install:
 	uv sync
-	# Install only production dependencies
 
 # Install all dependencies (production + lint + test)
 install-dev:
 	uv sync --all-packages --all-groups --all-extras
-	# Install all dependencies including development tools
 
 # Run ruff linter
 lint:
 	uv run ruff check --fix .
-	# Run code linter to check for issues
 
 # Run ruff formatter
 format:
 	uv run ruff format .
-	# Format code according to style guidelines
 
 # Run both linter and formatter
 check: lint format
-	# Run both linter and formatter in sequence
 
 # Run tests with pytest (using -B to prevent __pycache__)
 # Usage: make test [PKG=package_name]
@@ -74,7 +69,6 @@ else
 	@echo "Running all tests"
 	uv run python -B -m pytest -v
 endif
-	# Run tests using pytest (all tests or specific package)
 
 # Run tests with coverage report (using -B to prevent __pycache__)
 # Usage: make test-cov [PKG=package_name]
@@ -94,7 +88,6 @@ else
 	@echo "Running all tests with coverage"
 	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term -v
 endif
-	# Run tests with coverage report (all tests or specific package)
 
 # Clean Python cache files
 clean:
@@ -105,4 +98,3 @@ clean:
 	find . -name ".coverage" -delete 2>/dev/null || true
 	find . -name "htmlcov" -type d -exec rm -rf {} + 2>/dev/null || true
 	find . -name ".ruff_cache" -type d -exec rm -rf {} + 2>/dev/null || true
-	# Remove all Python cache files and temporary directories
