@@ -13,6 +13,40 @@ logging.basicConfig(
 )
 
 
+def _parse_providers(uses: str | None) -> list[str] | None:
+    """Parse comma-separated provider string into a list of providers.
+
+    Args:
+        uses: Comma-separated string of providers (e.g., 'github,bitbucket' or 'nexus').
+
+    Returns:
+        List of provider names in lowercase, or None if uses is None.
+
+    Raises:
+        click.Abort: If any provider is invalid.
+
+    """
+    if not uses:
+        return None
+
+    # Split by comma and strip whitespace
+    providers_list = [p.strip() for p in uses.split(",")]
+
+    # Validate providers
+    valid_providers = {"nexus", "github", "bitbucket"}
+    invalid_providers = [p for p in providers_list if p.lower() not in valid_providers]
+    if invalid_providers:
+        click.echo(
+            f"Error: Invalid providers: {', '.join(invalid_providers)}",
+            err=True,
+        )
+        click.echo("Valid providers are: nexus, github, bitbucket", err=True)
+        raise click.Abort
+
+    # Convert to lowercase for consistency
+    return [p.lower() for p in providers_list]
+
+
 @click.group()
 @click.version_option(version="0.1.0", prog_name="kbot-installer")
 def cli() -> None:
@@ -48,30 +82,48 @@ def cli() -> None:
     default=False,
     help="Skip installing product dependencies (default: False)",
 )
+@click.option(
+    "--uses",
+    type=str,
+    help="Specify which providers to use for installation. Comma-separated list (e.g., 'github,bitbucket' or 'nexus'). If not specified, all providers will be tried in order.",
+)
 def installer(
     installer_dir: str,
     version: str,
     product: str,
     *,
     no_rec: bool = False,
+    uses: str | None = None,
 ) -> None:
     """Install a kbot product with specified version.
 
     This command installs the specified product at the given version.
     By default, it will also install all dependencies unless --no-rec is used.
+    Use --uses to specify which providers to use for installation.
 
     Examples:
         kbot-installer installer -v 2025.03 -p jira
         kbot-installer installer -v dev -p jira --no-rec
         kbot-installer installer -i /custom/path -v master -p ithd
+        kbot-installer installer -v 2025.03 -p jira --uses github,bitbucket
+        kbot-installer installer -v dev -p kbot-latest-dev --uses nexus
 
     """
     try:
-        service = InstallerService(installer_dir)
+        # Parse comma-separated providers if specified
+        selected_providers = _parse_providers(uses)
+
+        service = InstallerService(installer_dir, providers=selected_providers)
 
         click.echo(
             f"Installing product '{product}' version '{version}' to '{installer_dir}'"
         )
+
+        # Show which providers will be used
+        if selected_providers:
+            click.echo(f"Using providers: {', '.join(selected_providers)}")
+        else:
+            click.echo("Using all available providers: nexus, github, bitbucket")
 
         # Install the product (will load products and dependencies automatically)
         include_dependencies = not no_rec

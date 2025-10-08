@@ -388,3 +388,51 @@ class TestSelectorProvider:
         assert "nexus" in repr_str
         assert "github" in repr_str
         assert "https://example.com" in repr_str
+
+    @patch("kbot_installer.core.provider.selector_provider.create_provider")
+    def test_provider_name_updated_in_clone_by_name(
+        self, mock_create: MagicMock
+    ) -> None:
+        """Test that self.name is updated when cloning by name."""
+        # Mock provider
+        mock_provider = MagicMock()
+        mock_provider.get_name.return_value = "github"
+        mock_create.return_value = mock_provider
+
+        # Mock credential manager
+        with patch(
+            "kbot_installer.core.provider.selector_provider.CredentialManager"
+        ) as mock_cred_mgr:
+            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
+
+            selector = SelectorProvider(["github"])
+            selector.clone_and_checkout(
+                "/tmp/test", "main", repository_name="test-repo"
+            )
+
+            # Verify that self.name was updated
+            assert selector.name == "github"
+
+    @patch("kbot_installer.core.provider.selector_provider.create_provider")
+    def test_provider_name_updated_in_clone_by_url(
+        self, mock_create: MagicMock
+    ) -> None:
+        """Test that self.name is updated when cloning by URL."""
+        # Mock provider
+        mock_provider = MagicMock()
+        mock_provider.get_name.return_value = "bitbucket"
+        mock_create.return_value = mock_provider
+
+        # Mock credential manager
+        with patch(
+            "kbot_installer.core.provider.selector_provider.CredentialManager"
+        ) as mock_cred_mgr:
+            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
+
+            selector = SelectorProvider(["bitbucket"])
+            selector.clone_and_checkout(
+                "/tmp/test", "main", repository_url="https://example.com/repo"
+            )
+
+            # Verify that self.name was updated
+            assert selector.name == "bitbucket"

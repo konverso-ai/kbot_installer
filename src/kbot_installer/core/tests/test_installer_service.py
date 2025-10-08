@@ -68,9 +68,7 @@ class TestInstallerService:
 
             # Mock the selector provider and product loading
             with (
-                patch.object(
-                    service.selector_provider, "clone_and_checkout"
-                ),
+                patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
                     "kbot_installer.core.installer_service.Product.from_installer_folder"
                 ) as mock_from_folder,
@@ -88,9 +86,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             with (
-                patch.object(
-                    service.selector_provider, "clone_and_checkout"
-                ),
+                patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
                     "kbot_installer.core.installer_service.Product.from_installer_folder",
                     return_value=None,
@@ -122,9 +118,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             with (
-                patch.object(
-                    service.selector_provider, "clone_and_checkout"
-                ),
+                patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
                     "kbot_installer.core.installer_service.Product.from_installer_folder"
                 ) as mock_from_folder,
@@ -478,6 +472,9 @@ class TestInstallerService:
                 patch.object(
                     service.installation_table, "add_result"
                 ) as mock_add_result,
+                patch.object(
+                    service.selector_provider, "get_name", return_value="selector"
+                ),
             ):
                 # Test
                 service._load_product_from_repository("test-product", "1.0.0")
