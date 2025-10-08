@@ -504,9 +504,7 @@ class TestProductCollection:
                 )
 
                 ProductCollection.from_installer(str(installer_path))
-                ProductCollection.from_installer_folder(
-                    str(installer_path)
-                )
+                ProductCollection.from_installer_folder(str(installer_path))
 
                 # Both should call the same method
                 assert mock_from_installer.call_count == 2

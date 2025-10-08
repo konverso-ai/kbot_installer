@@ -132,7 +132,7 @@ class TestSelectorProviderErrorDetails:
                 assert "nexus:" in error_msg
                 assert "github:" in error_msg
                 assert "bitbucket:" in error_msg
-                assert "no credentials available" in error_msg
+                assert "Missing credentials:" in error_msg
                 assert "Repository 'test-repo' not found" in error_msg
 
     def test_clone_by_url_all_providers_fail_detailed_error(self) -> None:

@@ -2,9 +2,63 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
-from kbot_installer.cli.commands import cli
+from kbot_installer.cli.commands import _parse_providers, cli
+
+
+class TestParseProviders:
+    """Test cases for _parse_providers function."""
+
+    def test_parse_providers_none(self) -> None:
+        """Test parsing when uses is None."""
+        result = _parse_providers(None)
+        assert result is None
+
+    def test_parse_providers_empty_string(self) -> None:
+        """Test parsing when uses is empty string."""
+        result = _parse_providers("")
+        assert result is None
+
+    def test_parse_providers_single_provider(self) -> None:
+        """Test parsing single provider."""
+        result = _parse_providers("github")
+        assert result == ["github"]
+
+    def test_parse_providers_multiple_providers(self) -> None:
+        """Test parsing multiple providers."""
+        result = _parse_providers("github,bitbucket")
+        assert result == ["github", "bitbucket"]
+
+    def test_parse_providers_with_spaces(self) -> None:
+        """Test parsing providers with spaces."""
+        result = _parse_providers("github, bitbucket")
+        assert result == ["github", "bitbucket"]
+
+    def test_parse_providers_case_insensitive(self) -> None:
+        """Test parsing providers with different cases."""
+        result = _parse_providers("GITHUB,BitBucket")
+        assert result == ["github", "bitbucket"]
+
+    def test_parse_providers_all_providers(self) -> None:
+        """Test parsing all valid providers."""
+        result = _parse_providers("nexus,github,bitbucket")
+        assert result == ["nexus", "github", "bitbucket"]
+
+    def test_parse_providers_invalid_provider(self) -> None:
+        """Test parsing with invalid provider raises click.Abort."""
+        from click import Abort
+
+        with pytest.raises(Abort):
+            _parse_providers("gitlab")
+
+    def test_parse_providers_mixed_valid_invalid(self) -> None:
+        """Test parsing with mix of valid and invalid providers."""
+        from click import Abort
+
+        with pytest.raises(Abort):
+            _parse_providers("github,gitlab,bitbucket")
 
 
 class TestCLI:
@@ -67,7 +121,7 @@ class TestInstallerCommand:
 
         # Assertions
         assert result.exit_code == 0
-        mock_service_class.assert_called_once_with(installer_dir)
+        mock_service_class.assert_called_once_with(installer_dir, providers=None)
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=True
         )
@@ -101,7 +155,7 @@ class TestInstallerCommand:
 
         # Assertions
         assert result.exit_code == 0
-        mock_service_class.assert_called_once_with(installer_dir)
+        mock_service_class.assert_called_once_with(installer_dir, providers=None)
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=False
         )

@@ -228,13 +228,13 @@ class SelectorProvider(ProviderBase):
         """
         return f"SelectorProvider(providers={self.providers})"
 
-    def _clone_by_url(
+    def _clone_with_providers(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
-        """Clone a repository by URL using the first available provider.
+        """Clone a repository using available providers.
 
         Args:
-            repository_name: Name of the repository to clone.
+            repository_name: Name or URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to clone. If None, clones the default branch.
 
@@ -342,6 +342,22 @@ class SelectorProvider(ProviderBase):
 
         raise ProviderError(error_msg)
 
+    def _clone_by_url(
+        self, repository_name: str, target_path: str | Path, branch: str | None = None
+    ) -> None:
+        """Clone a repository by URL using the first available provider.
+
+        Args:
+            repository_name: URL of the repository to clone.
+            target_path: Local path where the repository should be cloned.
+            branch: Specific branch to clone. If None, clones the default branch.
+
+        Raises:
+            ProviderError: If all providers fail to clone the repository.
+
+        """
+        self._clone_with_providers(repository_name, target_path, branch)
+
     def _clone_by_name(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
@@ -359,78 +375,7 @@ class SelectorProvider(ProviderBase):
             ProviderError: If all providers fail to clone the repository.
 
         """
-        target_path = Path(target_path)
-        target_path.mkdir(parents=True, exist_ok=True)
-
-        provider_errors = []
-        success = False
-
-        for provider_name in self.providers:
-            try:
-                provider = self._create_provider_with_credentials(provider_name)
-                if not provider:
-                    error_msg = (
-                        f"Provider '{provider_name}' skipped: no credentials available"
-                    )
-                    logger.info("⚠️  %s", error_msg)
-                    provider_errors.append(f"• {provider_name}: {error_msg}")
-                    continue
-
-                logger.info(
-                    "🔄 Trying provider '%s' for repository '%s'",
-                    provider_name,
-                    repository_name,
-                )
-
-                # Skip repository existence check for now (pygit2.remote_ls issue)
-                logger.debug(
-                    "Skipping repository existence check for provider '%s'",
-                    provider_name,
-                )
-
-                # Handle both sync and async providers
-                if hasattr(provider, "clone_and_checkout") and callable(
-                    provider.clone_and_checkout
-                ):
-                    if inspect.iscoroutinefunction(provider.clone_and_checkout):
-                        # Provider has async clone method
-                        asyncio.run(
-                            provider.clone_and_checkout(
-                                repository_name, target_path, branch
-                            )
-                        )
-                    else:
-                        # Provider has sync clone method
-                        provider.clone_and_checkout(
-                            repository_name, target_path, branch
-                        )
-                # Update the name of the provider
-                self.name = provider.get_name()
-
-                logger.info(
-                    "✅ Successfully cloned repository using provider '%s'",
-                    provider_name,
-                )
-                success = True
-                break
-            except Exception as e:
-                error_msg = f"Provider '{provider_name}' failed: {e}"
-                logger.info("❌ %s", error_msg)
-                provider_errors.append(f"• {provider_name}: {e}")
-
-        if success:
-            return
-
-        if provider_errors:
-            # Create a detailed error message with all provider failures
-            error_details = "\n".join(provider_errors)
-            msg = f"❌ All providers failed to clone repository '{repository_name}':\n{error_details}"
-            logger.error(msg)
-            raise ProviderError(msg)
-
-        msg = f"❌ No providers available to clone repository '{repository_name}'"
-        logger.error(msg)
-        raise ProviderError(msg)
+        self._clone_with_providers(repository_name, target_path, branch)
 
     async def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using the first available provider.
