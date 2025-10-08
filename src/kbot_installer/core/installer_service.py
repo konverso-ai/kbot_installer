@@ -286,9 +286,11 @@ class InstallerService:
         )
 
         # Add to installation table since this is a successful installation
+        # Use the actual provider name that was used for cloning (not "selector")
+        actual_provider_name = self.selector_provider.get_name()
         self.installation_table.add_result(
             product_name=product_name,
-            provider_name="selector",
+            provider_name=actual_provider_name,
             status="success",
             display_immediately=True,
         )

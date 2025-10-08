@@ -404,6 +404,9 @@ class SelectorProvider(ProviderBase):
                         provider.clone_and_checkout(
                             repository_name, target_path, branch
                         )
+                # Update the name of the provider
+                self.name = provider.get_name()
+
                 logger.info(
                     "✅ Successfully cloned repository using provider '%s'",
                     provider_name,
