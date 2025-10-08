@@ -2,6 +2,7 @@
 
 import logging
 import tarfile
+import tempfile
 from pathlib import Path
 
 import httpx
@@ -86,11 +87,21 @@ def optimized_download_and_extract(
         response.raise_for_status()
 
         # Create tarfile from stream with optimal chunk size (4MB from benchmark)
-        with tarfile.open(
-            fileobj=response.iter_bytes(chunk_size=16 * 1024 * 1024), mode="r|gz"
-        ) as tar:
-            for member in tar:
-                tar.extract(member, path=target_dir, filter="data")
+        # Simple approach: download to temp file then extract
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            # Stream download to temp file
+            for chunk in response.iter_bytes(chunk_size=16 * 1024 * 1024):
+                temp_file.write(chunk)
+            temp_file.flush()
+
+            # Extract from temp file
+            with tarfile.open(temp_file.name, mode="r:gz") as tar:
+                for member in tar:
+                    tar.extract(member, path=target_dir, filter="data")
+
+            # Clean up temp file
+            Path(temp_file.name).unlink()
 
     logger.info(
         "Successfully downloaded and extracted from %s to %s",

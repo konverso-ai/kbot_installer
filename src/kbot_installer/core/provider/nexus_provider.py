@@ -136,7 +136,7 @@ class NexusProvider(ProviderBase):
             # Run streaming download and extract
             self._stream_download_and_extract(
                 file_info=file_info,
-                target_dir=target_path.parent,
+                target_dir=target_path,
                 auth_obj=auth_obj,
             )
 
