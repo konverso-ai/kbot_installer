@@ -3,7 +3,11 @@
 import logging
 import tarfile
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
+from queue import Queue
+from tempfile import SpooledTemporaryFile
+from threading import Thread
 
 import httpx
 
@@ -108,3 +112,101 @@ def optimized_download_and_extract(
         url,
         target_dir,
     )
+
+
+def optimized_download_and_extract_bis(
+    url: str, target_dir: Path, auth_obj: object | None = None
+) -> None:
+    """Télécharge et extrait en parallèle avec threading.
+
+    L'extraction commence dès que suffisamment de données sont disponibles.
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    buffer = SpooledTemporaryFile(max_size=100 * 1024 * 1024)  # noqa: SIM115
+    queue = Queue(maxsize=1)  # Synchronisation
+
+    def download_worker() -> None:
+        """Thread de téléchargement."""
+        try:
+            with httpx.stream("GET", url, timeout=60.0, auth=auth_obj) as response:
+                response.raise_for_status()
+
+                for chunk in response.iter_bytes(chunk_size=16 * 1024 * 1024):
+                    buffer.write(chunk)
+                    buffer.flush()
+
+                    # Signaler qu'on a des données
+                    if buffer.tell() > 10 * 1024 * 1024:  # Attendre 10MB
+                        queue.put("ready")
+
+            queue.put("done")
+        except Exception as e:
+            queue.put(("error", e))
+
+    # Lancer le téléchargement en parallèle
+    download_thread = Thread(target=download_worker, daemon=True)
+    download_thread.start()
+
+    # Attendre que le téléchargement démarre
+    queue.get()
+
+    # Commencer l'extraction pendant le téléchargement
+    buffer.seek(0)
+    with tarfile.open(fileobj=buffer, mode="r:gz") as tar:
+        for member in tar:
+            tar.extract(member, path=target_dir, filter="data")
+
+    # Attendre la fin du téléchargement
+    download_thread.join()
+    buffer.close()
+
+    logger.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
+
+
+def optimized_download_and_extract_ter(
+    url: str, target_dir: Path, auth_obj: object | None = None
+) -> None:
+    """Télécharge et extrait simultanément un tar.gz.
+
+    Utilise le mode pipe de tarfile pour éviter les seeks.
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    with httpx.stream("GET", url, timeout=60.0, auth=auth_obj) as response:
+        response.raise_for_status()
+
+        # Créer un itérateur de chunks
+        def chunk_iterator() -> Iterator[bytes]:
+            yield from response.iter_bytes(chunk_size=16 * 1024 * 1024)
+
+        # Wrapper pour rendre l'itérateur compatible avec tarfile
+        class StreamWrapper:
+            def __init__(self, iterator: Iterator[bytes]) -> None:
+                self.iterator = iterator
+                self.buffer = b""
+
+            def read(self, size: int = -1) -> bytes:
+                while size < 0 or len(self.buffer) < size:
+                    try:
+                        self.buffer += next(self.iterator)
+                    except StopIteration:
+                        break
+
+                if size < 0:
+                    result = self.buffer
+                    self.buffer = b""
+                else:
+                    result = self.buffer[:size]
+                    self.buffer = self.buffer[size:]
+
+                return result
+
+        # Extraire directement depuis le stream
+        # Le mode "|gz" (pipe) permet de lire séquentiellement sans seek
+        stream = StreamWrapper(chunk_iterator())
+        with tarfile.open(fileobj=stream, mode="r|gz") as tar:
+            for member in tar:
+                tar.extract(member, path=target_dir, filter="data")
+
+    logger.info("Successfully downloaded and extracted from %s to %s", url, target_dir)

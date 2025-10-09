@@ -63,40 +63,37 @@ class TestNexusProvider:
 
         url = provider._build_nexus_url("test-repo", "develop")
 
-        expected = "https://example.com/repository/test-repo/test-repo.tar.gz"
+        expected = "https://example.com/repository/test-repo/develop/test-repo/test-repo_latest.tar.gz"
         assert url == expected
 
     def test_build_nexus_url_without_branch(self) -> None:
-        """Test that _build_nexus_url builds correct URL without branch (defaults to main)."""
+        """Test that _build_nexus_url builds correct URL without branch (defaults to master)."""
         provider = NexusProvider("example.com", "test-repo")
 
         url = provider._build_nexus_url("test-repo")
 
-        expected = "https://example.com/repository/test-repo/test-repo.tar.gz"
+        expected = "https://example.com/repository/test-repo/master/test-repo/test-repo_latest.tar.gz"
         assert url == expected
 
     def test_build_nexus_url_with_none_branch(self) -> None:
-        """Test that _build_nexus_url builds correct URL with None branch (defaults to main)."""
+        """Test that _build_nexus_url builds correct URL with None branch (defaults to master)."""
         provider = NexusProvider("example.com", "test-repo")
 
         url = provider._build_nexus_url("test-repo", None)
 
-        expected = "https://example.com/repository/test-repo/test-repo.tar.gz"
+        expected = "https://example.com/repository/test-repo/master/test-repo/test-repo_latest.tar.gz"
         assert url == expected
 
-    @patch("asyncio.run")
-    @patch(
-        "kbot_installer.core.provider.nexus_provider.NexusProvider._stream_download_and_extract",
-    )
+    @patch("kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter")
     @patch("pathlib.Path.mkdir")
-    def test_clone_success(self, mock_mkdir, mock_extract, mock_run) -> None:
+    def test_clone_success(self, mock_mkdir, mock_extract) -> None:
         """Test successful clone operation."""
         provider = NexusProvider("example.com", "test-repo")
         mock_extract.return_value = None
 
         provider.clone_and_checkout("test-repo", "/test/path", "main")
 
-        # Verify _stream_download_and_extract was called
+        # Verify optimized_download_and_extract_ter was called
         mock_extract.assert_called_once()
 
     @patch("asyncio.run")
@@ -124,11 +121,8 @@ class TestNexusProvider:
         """Test that clone creates the target directory."""
         provider = NexusProvider("example.com", "test-repo")
 
-        with (
-            patch("asyncio.run"),
-            patch(
-                "kbot_installer.core.provider.nexus_provider.NexusProvider._stream_download_and_extract",
-            ),
+        with patch(
+            "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter",
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
                 provider.clone_and_checkout("test-repo", temp_dir)

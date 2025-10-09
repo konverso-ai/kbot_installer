@@ -9,8 +9,9 @@ from pathlib import Path
 
 from kbot_installer.core.auth.http_auth.http_auth_base import HttpAuthBase
 from kbot_installer.core.provider.provider_base import ProviderBase, ProviderError
-from kbot_installer.core.provider.utils import FileInfo
-from kbot_installer.core.utils import optimized_download_and_extract
+from kbot_installer.core.utils import (
+    optimized_download_and_extract_ter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,34 +71,8 @@ class NexusProvider(ProviderBase):
 
         """
         branch = branch or "master"
-        # URL correcte pour Nexus (sans branch dans le path)
-        return f"https://{self.domain}/repository/{self.repository}/{repo_name}.tar.gz"
-
-    def _stream_download_and_extract(
-        self, file_info: FileInfo, target_dir: Path, auth_obj: object | None = None
-    ) -> None:
-        """Stream download and extract tar.gz file with minimal RAM usage.
-
-        This method uses the most efficient approach based on benchmark results:
-        - Direct extraction without temporary file when possible
-        - Streaming download with optimal chunk size (4MB) when needed
-
-        Args:
-            file_info: File information for download.
-            target_dir: Target directory for extraction.
-            auth_obj: Authentication object for download.
-
-        Raises:
-            ProviderError: If streaming download/extraction fails.
-
-        """
-        try:
-            # Use optimized streaming approach based on benchmark results
-            optimized_download_and_extract(file_info.url, target_dir, auth_obj)
-
-        except Exception as e:
-            error_msg = f"Streaming download/extraction failed: {e}"
-            raise ProviderError(error_msg) from e
+        # URL correcte pour Nexus avec branch et nom complet du fichier
+        return f"https://{self.domain}/repository/{self.repository}/{branch}/{repo_name}/{repo_name}_latest.tar.gz"
 
     def clone_and_checkout(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
@@ -116,14 +91,6 @@ class NexusProvider(ProviderBase):
         target_path = Path(target_path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create FileInfo object for the repository
-        file_info = FileInfo(
-            name=repository_name,
-            host=self.domain,
-            repository=self.repository,
-            branch=branch or "master",
-        )
-
         logger.info(
             "Downloading repository '%s' from Nexus with streaming", repository_name
         )
@@ -133,12 +100,12 @@ class NexusProvider(ProviderBase):
             auth = self._get_auth()
             auth_obj = auth.get_auth() if auth else None
 
-            # Run streaming download and extract
-            self._stream_download_and_extract(
-                file_info=file_info,
-                target_dir=target_path,
-                auth_obj=auth_obj,
-            )
+            # Build the correct Nexus URL
+            nexus_url = self._build_nexus_url(repository_name, branch)
+
+            # Run streaming download and extract directly with the correct URL
+            # Extract to parent directory so the tar.gz can create the repository folder
+            optimized_download_and_extract_ter(nexus_url, target_path.parent, auth_obj)
 
             logger.info(
                 "Successfully cloned repository '%s' to %s",
