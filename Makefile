@@ -1,18 +1,19 @@
 # Makefile for kbot-installer project
 # Uses uv for Python package management and execution
 
-.PHONY: help install install-dev lint format check test test-cov clean
+.PHONY: help install install-dev lint lint-fix format check test test-cov clean
 
 # Default target - Show help with all available targets and their descriptions
 help:
 	@echo "Available targets:"
 	@echo ""
-	@echo "  check        - Run both linter and formatter in sequence"
+	@echo "  check        - Run formatter then linter to check for issues"
 	@echo "  clean        - Remove all Python cache files and temporary directories"
 	@echo "  format       - Format code according to style guidelines"
 	@echo "  install      - Install only production dependencies"
 	@echo "  install-dev  - Install all dependencies including development tools"
-	@echo "  lint         - Run code linter to check for issues"
+	@echo "  lint         - Run code linter to check for issues (no fixes)"
+	@echo "  lint-fix     - Run code linter and automatically fix issues"
 	@echo "  test         - Run all tests using pytest"
 	@echo "  test-cov     - Run tests with coverage report (HTML and terminal output)"
 	@echo ""
@@ -40,16 +41,20 @@ install:
 install-dev:
 	uv sync --all-packages --all-groups --all-extras
 
-# Run ruff linter
+# Run ruff linter (check only, no fixes)
 lint:
+	uv run ruff check .
+
+# Run ruff linter with automatic fixes
+lint-fix:
 	uv run ruff check --fix .
 
 # Run ruff formatter
 format:
 	uv run ruff format .
 
-# Run both linter and formatter
-check: lint format
+# Run formatter then linter (correct order: format first, then check)
+check: format lint
 
 # Run tests with pytest (using -B to prevent __pycache__)
 # Usage: make test [PKG=package_name]
@@ -70,6 +75,7 @@ else
 	uv run python -B -m pytest -v
 endif
 
+
 # Run tests with coverage report (using -B to prevent __pycache__)
 # Usage: make test-cov [PKG=package_name]
 test-cov:
@@ -88,6 +94,7 @@ else
 	@echo "Running all tests with coverage"
 	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term -v
 endif
+
 
 # Clean Python cache files
 clean:
