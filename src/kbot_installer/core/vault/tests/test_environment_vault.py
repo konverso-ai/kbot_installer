@@ -36,11 +36,13 @@ class TestEnvironmentVault:
         result = self.vault.get_value("NONEXISTENT_KEY")
         assert result == ""
 
-    @pytest.mark.parametrize("invalid_key", [
-        "",
-        None,
-    ])
-    def test_environment_vault_get_value_invalid_key(self, invalid_key: str | None) -> None:
+    @pytest.mark.parametrize(
+        "invalid_key",
+        ["", None],
+    )
+    def test_environment_vault_get_value_invalid_key(
+        self, invalid_key: str | None
+    ) -> None:
         """Test get_value with invalid keys."""
         result = self.vault.get_value(invalid_key)
         assert result is None
@@ -50,27 +52,32 @@ class TestEnvironmentVault:
         with pytest.raises(NotImplementedError) as exc_info:
             self.vault.set_value("key", "value")
 
-        assert "Setting values in environment variables is not supported" in str(exc_info.value)
+        assert "Setting values in environment variables is not supported" in str(
+            exc_info.value
+        )
 
     def test_environment_vault_delete_value_not_implemented(self) -> None:
         """Test that delete_value raises NotImplementedError."""
         with pytest.raises(NotImplementedError) as exc_info:
             self.vault.delete_value("key")
 
-        assert "Deleting values from environment variables is not supported" in str(exc_info.value)
+        assert "Deleting values from environment variables is not supported" in str(
+            exc_info.value
+        )
 
     def test_environment_vault_is_vault_base_instance(self) -> None:
         """Test that EnvironmentVault is an instance of VaultBase."""
         from kbot_installer.core.vault.vault_base import VaultBase
+
         assert isinstance(self.vault, VaultBase)
 
     def test_environment_vault_implements_all_abstract_methods(self) -> None:
         """Test that EnvironmentVault implements all required abstract methods."""
         # Check that all abstract methods are implemented
-        assert hasattr(self.vault, 'get_name')
-        assert hasattr(self.vault, 'get_value')
-        assert hasattr(self.vault, 'set_value')
-        assert hasattr(self.vault, 'delete_value')
+        assert hasattr(self.vault, "get_name")
+        assert hasattr(self.vault, "get_value")
+        assert hasattr(self.vault, "set_value")
+        assert hasattr(self.vault, "delete_value")
 
     @patch.dict(os.environ, {"KEY1": "value1", "KEY2": "value2", "KEY3": "value3"})
     def test_environment_vault_multiple_keys(self) -> None:

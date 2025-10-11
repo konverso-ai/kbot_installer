@@ -1,7 +1,7 @@
 """Azure vault implementation for Azure Key Vault integration."""
 
-from azure.keyvault.secrets import SecretClient
 from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
 from kbot_installer.core.vault.vault_base import VaultBase, VaultError
 
@@ -16,9 +16,7 @@ class AzureVault(VaultBase):
     _name: str = "AZUREKEYVAULT"
 
     def __init__(self) -> None:
-        """Initialize the Azure vault.
-
-        """
+        """Initialize the Azure vault."""
         self._credential = DefaultAzureCredential()
 
     @property

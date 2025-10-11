@@ -1,6 +1,7 @@
 """Environment vault implementation for environment variable storage."""
 
 import os
+
 from kbot_installer.core.vault.vault_base import VaultBase
 
 

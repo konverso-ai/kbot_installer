@@ -1,12 +1,10 @@
 """Factory module for creating vault instances."""
 
-from typing import Any
-
 from kbot_installer.core.factory import factory_method
 from kbot_installer.core.vault.vault_base import VaultBase
 
 
-def create_vault(vault_type: str, **kwargs: Any) -> VaultBase:
+def create_vault(vault_type: str, **kwargs: object) -> VaultBase:
     """Create a vault instance by type name.
 
     This factory function creates vault instances using the generic factory module.
@@ -14,7 +12,7 @@ def create_vault(vault_type: str, **kwargs: Any) -> VaultBase:
 
     Args:
         vault_type (str): The type of vault to create (e.g., 'alias', 'azure', 'environment').
-        **kwargs (Any): Additional keyword arguments passed to the vault constructor.
+        **kwargs (object): Additional keyword arguments passed to the vault constructor.
 
     Returns:
         VaultBase: An instance of the requested vault type.
