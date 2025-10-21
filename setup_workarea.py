@@ -22,6 +22,8 @@ from dialog.User import User
 import utils
 from utils.License import License
 
+import deps
+
 
 class Installer:
     """Installer"""
@@ -140,9 +142,12 @@ class Installer:
     def Update(self, silent=False):
         """Update workarea"""
         self.target = os.environ['KBOT_HOME']
-        self.products.populate()
+
+        # Load the list of the products
+
         self.config = BotConfig(None)
         self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
+
         self.https_port = self.config.Get('https_port')
         self.update = True
         self.silent = silent
@@ -258,12 +263,12 @@ class Installer:
         self._Makedirs(dirname)
 
     def _SetupProducts(self):
+        """Generate a json file with the tree / list of the products"""
         if not self.update:
-            products = os.path.join(self.target, 'products')
-            self._Makedirs(products)
-            for p in self.products:
-                self._LinkAbs(p.dirname, os.path.join(products, p.name))
-                p.dirname = os.path.join(self.target, 'products', p.name)
+            deps.build_dependency_file(self.product, self.path, self.workarea)
+
+            # at this point we are ready to populate things !
+            self.products.populate()
 
     def _UpdatePythonPackages(self):
         """ Upate products  python packages using requirements.txt file"""
