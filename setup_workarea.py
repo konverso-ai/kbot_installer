@@ -29,7 +29,9 @@ from product import Product as BaseProduct
 class Installer:
     """Installer"""
 
-    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None, hostname=None, no_load=False, no_learn=False):
+    #pylint: disable=too-many-positional-arguments
+    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None,
+                 hostname=None, no_load=False, no_learn=False, no_password=False):
         """
             product: Optional top level product name. If present, do not ask for the choice of the top level product
             path: Optional path to lookup the products. If defined, do not prompt for the product paths
@@ -42,7 +44,10 @@ class Installer:
         """
         self.path = path or os.path.realpath(os.path.join(os.environ["KBOT_HOME"], ".."))
         self.product = product
-        self.secret = secret
+        if no_password and not secret:
+            self.secret = "lskjf*22SDFSLKsdf"
+        else:
+            self.secret = secret
         self.default = default
         self.workarea = workarea
         self.license = license
@@ -80,7 +85,6 @@ class Installer:
         self.redis_tls_cert_file = None
         self.redis_tls_key_file = None
         self.redis_tls_ca_cert_file = None
-
         self.cs_ports_offset = None
         self.admin_password = None
 
@@ -110,7 +114,6 @@ class Installer:
             os.makedirs(self.target)
         self._SetupProducts()
         self._SetupBin()
-        self._SetupConf()
         self._SetupCore()
         self._SetupRest()
         self._SetupLogs()
@@ -122,8 +125,7 @@ class Installer:
         self._Link(os.path.join(self.products.kbot().dirname, 'uninstall.sh'), os.path.join(self.target, 'uninstall.sh'))
 
         self.config = BotConfig(None)
-        self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
-
+        self.config.Load(products=self.products)
         self._ReadParameters()
         self._SelectInstallationType()
         self._ValidateLicense()
@@ -151,8 +153,7 @@ class Installer:
         # Load the list of the products
 
         self.config = BotConfig(None)
-        self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
-
+        self.config.Load(products=self.products)
         self.https_port = self.config.Get('https_port')
         self.update = True
         self.silent = silent
@@ -160,7 +161,6 @@ class Installer:
         self._SetupProducts()
 
         self._SetupBin()
-        self._SetupConf()
         self._SetupCore()
         self._SetupRest()
         self._SetupUI()
@@ -210,39 +210,6 @@ class Installer:
         #pylint: disable=anomalous-backslash-in-string
         os.system('sed -i "s/__KBOT_HOME__/%s/" %s'%(os.path.abspath(os.path.expanduser(self.target)).replace('/', '\/'), rcfilename))
         os.system('sed -i "s/__KBOT_USER__/%s/" %s'%(current_user, rcfilename))
-
-    def _SetupConf(self):
-        dirname = os.path.join(self.target, 'conf')
-        self._Makedirs(dirname)
-
-        #for name in ('search_contexts.conf',):
-        #    fullname = os.path.join(dirname, name)
-        #    for src in self.products.get_files('conf', name):
-        #        if os.path.exists(src):
-        #            self._Copy(src, fullname)
-        #            break
-        #    else:
-        #        print("Doesn't find %s" % name)
-
-        kbotconf = os.path.join(dirname, 'kbot.conf')
-        if not os.path.exists(kbotconf):
-            with open(kbotconf, 'w+', encoding='utf8') as fd:
-                fd.write("# Kbot configuration file.")
-                fd.write("\n#If possible, prefere saving in Site or Customer level configuration file")
-
-        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json',
-                     'automations', 'push_campaigns', 'devops-tasks',
-                     'tools', 'tool_groups', 'agents', 'assistants', 'connections'): # 'modsecurity'
-            self._LinkProductFilesToDir(os.path.join('conf', name), os.path.join(dirname, name))
-
-        for name in ('categorization_tests.conf', 'tests.conf', 'editable_files*.json', 'km_*.conf',
-                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json',
-                     'application_assistant.conf'):
-            for fullname in self.products.get_files('conf', name):
-                self._Link(fullname, os.path.join(dirname, os.path.basename(fullname)))
-
-        if self.update:
-            self._ValidateLinksInDir(dirname)
 
     def _SetupCore(self):
         dirname = os.path.join(self.target, 'core')
@@ -321,10 +288,9 @@ class Installer:
         if os.path.exists(os.path.join(self.products.kbot().dirname, 'tests')):
             self._Makedirs(dirname)
             self._LinkProductFilesToDir('tests', dirname)
-        else:
-            if self.update and os.path.exists(dirname):
-                if self.silent or self._AskYN("Not used directory 'tests' (%s). Remove it? [yes]" % dirname):
-                    shutil.rmtree(dirname)
+        elif self.update and os.path.exists(dirname):
+            if self.silent or self._AskYN("Not used directory 'tests' (%s). Remove it? [yes]" % dirname):
+                shutil.rmtree(dirname)
 
     def _PortInUse(self, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -893,11 +859,10 @@ class Installer:
                         print("Error: can't save predefined classifiers! Aborting...")
                         os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                         sys.exit(1)
-                else:
-                    if os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
-                              """%(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
-                        print("Error: can't save predefined classifiers! Aborting...")
-                        sys.exit(1)
+                elif os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
+                               """%(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
+                    print("Error: can't save predefined classifiers! Aborting...")
+                    sys.exit(1)
 
         if not self.no_load:
             print("Loading data...")
@@ -916,12 +881,11 @@ class Installer:
                         print("Error: can't setup admin password! Aborting...")
                         os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                         sys.exit(1)
-                else:
-                    # setup admin password
-                    if os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
+                # setup admin password
+                elif os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
                                  %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
-                        print("Error: can't setup admin password! Aborting...")
-                        sys.exit(1)
+                    print("Error: can't setup admin password! Aborting...")
+                    sys.exit(1)
 
         if not self.no_learn:
             print("Learning models...")
@@ -1080,6 +1044,7 @@ class Installer:
                 if not os.path.exists(dst):
                     os.symlink(self._NewSrc(src, dst), dst)
 
+    #pylint: disable=too-many-positional-arguments
     def _LinkProductFilesToDir(self, relpath, dst, linkdirs=None, exts=None, ignoredirs=None):
         if linkdirs is None:
             linkdirs = []
@@ -1178,9 +1143,9 @@ class Installer:
                 answer = "y"
             else:
                 answer = input(question).strip().lower() or default
-            if answer in ('y', 'yes'):
+            if answer in {'y', 'yes'}:
                 return True
-            if answer in ('n', 'no'):
+            if answer in {'n', 'no'}:
                 return False
             print('Answer either "y" or "n".')
 
@@ -1193,12 +1158,11 @@ class Installer:
                     print("Do not use port number below 1024 as it requires root privileges")
                 elif limit and port > 65535:
                     print("Max port number is 65535.")
+                elif (ptype == 'http' and answer == self.https_port) or \
+                   (ptype == 'https' and answer == self.http_port):
+                    print("HTTP and HTTPS ports could not be the same")
                 else:
-                    if (ptype == 'http' and answer == self.https_port) or \
-                       (ptype == 'https' and answer == self.http_port):
-                        print("HTTP and HTTPS ports could not be the same")
-                    else:
-                        return answer
+                    return answer
             else:
                 print("Wrong port number")
 
@@ -1263,6 +1227,7 @@ if __name__ == '__main__':
                             action="store_true", dest='default', required=False, default=False)
         parser.add_argument('--no-learn', help="Do not learn following the setup", dest='no_learn', action="store_true", required=False, default=False)
         parser.add_argument('--no-load', help="Do not load following the setup", dest='no_load', action="store_true", required=False, default=False)
+        parser.add_argument('--no-password', help="Do not require a password", dest='no_password', action="store_true", required=False, default=False)
 
         #
         # Optional Postgres arguments
@@ -1291,7 +1256,7 @@ if __name__ == '__main__':
 
             installer = Installer(product=_result.product, path=_result.path, secret=_result.secret, workarea=_result.workarea,
                                   license=_result.license, hostname=_result.hostname, default=_result.default,
-                                  no_load=_result.no_load, no_learn=_result.no_learn)
+                                  no_load=_result.no_load, no_learn=_result.no_learn, no_password=_result.no_password)
 
             # Update the installer values based on some argument parameters
             for _param in ('db_host', 'db_port', 'db_user', 'db_password', 'db_name'):
