@@ -3,7 +3,9 @@ import json
 import argparse
 
 # FUTURE: WITH GIT HUB and KB
-# FIX LATER: from kbot_installer.core import product
+# FIX LATER: 
+# 1) from kbot_installer.core import product
+# 2) Move this file in the new "product" package (github / Korantin)
 from product import Product
 
 def build_dependency_file_rec(product_name, installer_path, products):
