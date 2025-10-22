@@ -1049,7 +1049,6 @@ class Installer:
     pythonexts = ('.so', '.py')
 
     def _Link(self, src, dst):
-        #print("_Link", src, dst)
         if os.path.exists(src):
             _, srcext = os.path.splitext(src)
             dstroot, dstext = os.path.splitext(dst)
@@ -1080,9 +1079,6 @@ class Installer:
                     os.symlink(self._NewSrc(src, dst), dst)
 
     def _LinkProductFilesToDir(self, relpath, dst, linkdirs=None, exts=None, ignoredirs=None):
-        #print("Link", relpath, dst)
-
-        #self._LinkFilesToDir(self.products.get_files('core/python', '*'), os.path.join(dirname, 'python'))
         if linkdirs is None:
             linkdirs = []
         if ignoredirs is None:
@@ -1137,8 +1133,6 @@ class Installer:
                     self._Copy(fullname, fdest)
 
     def _LinkDir(self, src, dst, linkdirs=None):
-        #print("_LinkDir", src, dst)
-
         if linkdirs is None:
             linkdirs = []
         self._Makedirs(dst)
