@@ -1068,7 +1068,9 @@ class Installer:
                 if self.update and os.path.islink(dst):
                     targetpath = os.readlink(dst)
                     # Get absolute path
-                    targetpath = os.path.join(os.environ['KBOT_HOME'], targetpath.strip("./"))
+                    if not targetpath.startswith("/"):
+                        targetpath = os.path.join(os.environ['KBOT_HOME'], targetpath.strip("./"))
+
                     if not os.path.exists(targetpath):
                         if self.silent or self._AskYN("Broken link '%s'. Remove it? [yes]" % (dst)):
                             os.unlink(dst)
