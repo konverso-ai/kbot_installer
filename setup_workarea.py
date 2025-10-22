@@ -10,10 +10,11 @@ import time
 import datetime
 import getpass
 import socket
+import json
 import re
 
 import Bot
-#import classification
+import classification
 from classification import MLObject
 from common.Product import ProductList, Product
 from common.Config import BotConfig
@@ -23,7 +24,7 @@ import utils
 from utils.License import License
 
 import deps
-
+from product import Product as BaseProduct
 
 class Installer:
     """Installer"""
@@ -89,7 +90,9 @@ class Installer:
         self.cachedir = None
 
     def Run(self):
-        """Run installer"""
+        """Run the installer
+           Create the work area
+        """
         self._StartInstallation()
         self._ReadLicenseAgreement()
         self._GetProducts()
@@ -120,6 +123,7 @@ class Installer:
 
         self.config = BotConfig(None)
         self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
+
         self._ReadParameters()
         self._SelectInstallationType()
         self._ValidateLicense()
@@ -131,6 +135,7 @@ class Installer:
         self._ValidateHostname()
         self._SetupVariables()
         self._UpdatePythonPackages()
+
         if self.db_internal:
             self._SetupDatabase()
         else:
@@ -140,7 +145,7 @@ class Installer:
         self._SetupPythonDoc()
 
     def Update(self, silent=False):
-        """Update workarea"""
+        """Update an existing workarea"""
         self.target = os.environ['KBOT_HOME']
 
         # Load the list of the products
@@ -153,6 +158,7 @@ class Installer:
         self.silent = silent
 
         self._SetupProducts()
+
         self._SetupBin()
         self._SetupConf()
         self._SetupCore()
@@ -187,9 +193,10 @@ class Installer:
 
         self._LinkProductFilesToDir('bin', os.path.join(self.target, 'bin'))
 
+        # We want the RC script to be a plain file since we are going to recreate it
         rcfilename = os.path.join(self.target, 'bin', 'rc', 'kbot')
-        # FIXME remove bin/rc/kbot symlink
-        if os.path.exists(rcfilename):
+        # Remove bin/rc/kbot symlink
+        if os.path.exists(rcfilename) or os.path.islink(rcfilename):
             os.unlink(rcfilename)
 
         # copy kbot file to work area
@@ -246,9 +253,11 @@ class Installer:
                 filename = '%s%s'%(name, ext)
                 src = os.path.join(self.products.kbot().dirname, 'core', 'python', filename)
                 dst = os.path.join(self.target, 'core', 'python', filename)
+
                 if os.path.exists(dst):
                     os.unlink(dst)
                 if os.path.exists(src):
+                    
                     self._Copy(src, dst)
                     os.chmod(dst, 0o775)
 
@@ -264,9 +273,14 @@ class Installer:
 
     def _SetupProducts(self):
         """Generate a json file with the tree / list of the products"""
-        if not self.update:
-            deps.build_dependency_file(self.product, self.path, self.workarea)
+        installer = self.path
+        work = self.workarea
 
+        # Building the product dependency files.
+        if self.product:
+            deps.build_dependency_file(self.product, installer, work)
+
+        if not len(self.products):
             # at this point we are ready to populate things !
             self.products.populate()
 
@@ -594,7 +608,7 @@ class Installer:
         while True:
             if self.hostname:
                 answer = self.hostname
-            elif hostname.strip():
+            elif hostname and hostname.strip():
                 answer = hostname.strip()
             else:
                 answer = input("Specify the current host name: ").strip()
@@ -775,7 +789,7 @@ class Installer:
         print("Loading tables to external database...")
         sys.stdout.flush()
         for product in reversed(self.products):
-            sqlfile = os.path.join(self.target, 'products', product.name, 'db', 'init', 'db_schema.sql')
+            sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system("export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -f %s"\
                              %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
@@ -845,7 +859,7 @@ class Installer:
         # load database schema definition
         print("Loading database tables...")
         for product in reversed(self.products):
-            sqlfile = os.path.join(self.target, 'products', product.name, 'db', 'init', 'db_schema.sql')
+            sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system('%s -q -v ON_ERROR_STOP=1 -p %s %s -U %s -f %s'\
                              %(pg_psql, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
@@ -990,40 +1004,38 @@ class Installer:
                         path = originalpath
                     else:
                         path = os.path.realpath(os.path.expanduser(path))
-            #path = '/home/konverso/%s'%name
+            # Now recurse in the parents
             if path:
-                if os.path.exists(path):
-                    description = os.path.join(path, 'description.xml')
-                    if os.path.exists(description):
-                        product = Product()
-                        product.Parse(description)
-                        if str(product.name) != str(name):
-                            print("Invalid product name (%s vs %s)" % (product.name, name))
-                        else:
-                            product.filename = description
-                            product.dirname = os.path.dirname(description)
-                            self.products.append(product)
-                            for pname in product.parents:
-                                if pname not in [p.name for p in self.products]:
-                                    self._GetProductPath(pname)
-                            break
-                    else:
-                        print("description.xml doesn't exist in %s" % path)
-                else:
-                    print(f"Path {path} doesn't exist")
+                product = self._GetProduct(path, name)
+                for pname in product.parents:
+                    if pname not in [p.name for p in self.products]:
+                        product = self._GetProductPath(pname)
+                        self.products.append(product)
+
+                return product
             first = False
 
     def _GetProduct(self, path, name):
         if path:
             if os.path.exists(path):
-                description = os.path.join(path, 'description.xml')
-                if os.path.exists(description):
+                description_xml_path = os.path.join(path, 'description.xml')
+
+                if os.path.exists(description_xml_path):
+                    # Use the installer product class to load the product definition
+                    product_def =  BaseProduct.from_xml_file(description_xml_path)
+                    json_def = json.loads(product_def.to_json())
+
+                    # Create a kbot product instance
                     product = Product()
-                    product.Parse(description)
-                    if str(product.name) == str(name):
-                        product.filename = description
-                        product.dirname = os.path.dirname(description)
-                        return product
+                    product.Update(json_def)
+                    product.filename = description_xml_path
+                    product.dirname = path
+                    return product
+            else:
+                print("Path not found:", path)
+        else:
+            print("No path:", path)
+
         return None
 
     def _Copy(self, src, dst):
@@ -1037,6 +1049,7 @@ class Installer:
     pythonexts = ('.so', '.py')
 
     def _Link(self, src, dst):
+        #print("_Link", src, dst)
         if os.path.exists(src):
             _, srcext = os.path.splitext(src)
             dstroot, dstext = os.path.splitext(dst)
@@ -1067,6 +1080,7 @@ class Installer:
                     os.symlink(self._NewSrc(src, dst), dst)
 
     def _LinkProductFilesToDir(self, relpath, dst, linkdirs=None, exts=None, ignoredirs=None):
+        #print("Link", relpath, dst)
 
         #self._LinkFilesToDir(self.products.get_files('core/python', '*'), os.path.join(dirname, 'python'))
         if linkdirs is None:
@@ -1123,6 +1137,8 @@ class Installer:
                     self._Copy(fullname, fdest)
 
     def _LinkDir(self, src, dst, linkdirs=None):
+        #print("_LinkDir", src, dst)
+
         if linkdirs is None:
             linkdirs = []
         self._Makedirs(dst)
@@ -1157,11 +1173,8 @@ class Installer:
             os.makedirs(dst)
 
     def _NewSrc(self, src, dst):
-        dsts = os.path.normpath(dst).split(os.sep)
-        srcs = os.path.normpath(src).split(os.sep)
-        targets = os.path.normpath(self.target).split(os.sep)
-        top = '/'.join((len(dsts) - len(targets) - 1) * ['..'])
-        return os.path.join(top, '/'.join(srcs[len(targets):]))
+        # We return absolute path links
+        return src
 
     def _AskYN(self, question, default='y'):
         while True:
@@ -1300,6 +1313,6 @@ if __name__ == '__main__':
             sys.exit(1)
 
     except Exception as _e:
-        print("Failed due to: ", _e)
+        print("Failed due to: ", _e, show_stack=True)
         usage()
         sys.exit(1)

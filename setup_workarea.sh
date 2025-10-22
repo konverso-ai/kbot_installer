@@ -15,8 +15,6 @@ else
     KBOT_HOME=$INSTALLER_HOME/kbot
 fi
 
-echo Using KBOT_HOME as: $KBOT_HOME
-
 # Note that we send all parameters excepter for the installer path which is not required.
 PARAMS_TO_KEEP=$(($#-1))
 INSTALLER_PARAMS=${@: 1:$PARAMS_TO_KEEP}

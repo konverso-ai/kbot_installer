@@ -6,7 +6,7 @@ import argparse
 # FIX LATER: from kbot_installer.core import product
 from product import Product
 
-def build_dependency_file_rec(product_name, installer_path):
+def build_dependency_file_rec(product_name, installer_path, products):
     product_path = os.path.join(installer_path, product_name)
     description_xml_path = os.path.join(product_path, "description.xml")
 
@@ -15,19 +15,25 @@ def build_dependency_file_rec(product_name, installer_path):
     json_def = json.loads(product_start.to_json())
 
     # All good, but the "childrens are invalid
-    json_def["parents"] = [build_dependency_file_rec(p, installer_path)
+    json_def["parents"] = [build_dependency_file_rec(p, installer_path, products)
                            for p in json_def["parents"]]
     json_def["path"] = product_path
     json_def["description"] = description_xml_path
 
     return json_def
 
-def build_dependency_file(product_name, installer_path, work_area_path):
-    json_def = build_dependency_file_rec(product_name, installer_path)
+def build_dependency_file(product_name, installer_path, work_area_path, products=None):
+    products = products or []
+    json_def = build_dependency_file_rec(product_name, installer_path, products)
 
-    target_file = os.path.join(work_area_path, "var", "products.json")
-    with open(target_file, "w", encoding="utf-8") as fd:
-        fd.write(json.dumps(json_def, indent=4))
+    target_folder = os.path.join(work_area_path, "var")
+    if not os.path.exists(target_folder):
+        os.mkdir(target_folder)
+
+    target_file = os.path.join(target_folder, "products.json")
+    if os.path.exists(os.path.join(work_area_path, "var")):
+        with open(target_file, "w", encoding="utf-8") as fd:
+            fd.write(json.dumps(json_def, indent=4))
 
 if __name__ == "__main__":
     nostart = True
