@@ -5,7 +5,6 @@
 #
 INSTALLER_HOME=${BASH_ARGV[0]}
 
-echo INSTALLER_HOME set to $INSTALLER_HOME
 if [[ $INSTALLER_HOME == "" ]];
 then
     echo Using standard installation path
