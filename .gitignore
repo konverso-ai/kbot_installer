@@ -40,6 +40,9 @@ Thumbs.db
 *.exe
 *.war
 
+# uv builds
+build/
+
 # Large media files
 *.mp4
 *.tiff
