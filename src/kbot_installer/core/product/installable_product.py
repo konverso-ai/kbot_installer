@@ -9,10 +9,14 @@ from xml.etree import ElementTree as ET
 
 from defusedxml import ElementTree as defused_ET
 
-from kbot_installer.core.product.factory import create_installable
-from kbot_installer.core.product.installable_base import InstallableBase
-from kbot_installer.core.product.product_collection import ProductCollection
 from kbot_installer.core.provider import create_provider
+
+# Import here to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from kbot_installer.core.product.product_collection import ProductCollection
+
+from kbot_installer.core.product.installable_base import InstallableBase
 
 
 @dataclass
@@ -75,6 +79,8 @@ class InstallableProduct(InstallableBase):
             Product instance loaded from the provider.
 
         """
+        from kbot_installer.core.product.factory import create_installable
+
         # Create a minimal product instance with just the name using factory
         # The provider will handle the actual loading
         return create_installable(name=product_name)
@@ -451,6 +457,9 @@ class InstallableProduct(InstallableBase):
             ProductCollection with BFS-ordered products.
 
         """
+        # Collect all products using BFS
+        from kbot_installer.core.product.product_collection import ProductCollection
+
         queue = deque([self])
         processed = set()
         collected_products = []

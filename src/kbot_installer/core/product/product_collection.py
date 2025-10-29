@@ -5,7 +5,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from kbot_installer.core.product.product import Product
+from kbot_installer.core.product.dependency_graph import DependencyGraph
+from kbot_installer.core.product.factory import create_installable
+from kbot_installer.core.product.installable_base import InstallableBase
 
 
 class ProductCollection:
@@ -16,7 +18,7 @@ class ProductCollection:
 
     """
 
-    def __init__(self, products: list[Product] | None = None) -> None:
+    def __init__(self, products: list[InstallableBase] | None = None) -> None:
         """Initialize collection with products.
 
         Args:
@@ -25,7 +27,7 @@ class ProductCollection:
         """
         self.products = products or []
 
-    def add_product(self, product: Product) -> None:
+    def add_product(self, product: InstallableBase) -> None:
         """Add a product to the collection.
 
         Args:
@@ -50,7 +52,7 @@ class ProductCollection:
                 return True
         return False
 
-    def get_product(self, name: str) -> Product | None:
+    def get_product(self, name: str) -> InstallableBase | None:
         """Get a product by name.
 
         Args:
@@ -65,7 +67,7 @@ class ProductCollection:
                 return product
         return None
 
-    def get_all_products(self) -> list[Product]:
+    def get_all_products(self) -> list[InstallableBase]:
         """Get all products in the collection.
 
         Returns:
@@ -74,7 +76,7 @@ class ProductCollection:
         """
         return self.products.copy()
 
-    def get_products_by_type(self, product_type: str) -> list[Product]:
+    def get_products_by_type(self, product_type: str) -> list[InstallableBase]:
         """Get products filtered by type.
 
         Args:
@@ -86,7 +88,7 @@ class ProductCollection:
         """
         return [p for p in self.products if p.type == product_type]
 
-    def get_products_by_category(self, category: str) -> list[Product]:
+    def get_products_by_category(self, category: str) -> list[InstallableBase]:
         """Get products filtered by category.
 
         Args:
@@ -107,7 +109,7 @@ class ProductCollection:
         """
         return [p.name for p in self.products]
 
-    def filter_products(self, **filters: str) -> list[Product]:
+    def filter_products(self, **filters: str) -> list[InstallableBase]:
         """Filter products by various criteria.
 
         Args:
@@ -164,12 +166,10 @@ class ProductCollection:
 
         for product_name in product_folders:
             try:
-                product = Product.from_installer_folder(
-                    str(installer_path / product_name)
-                )
-                if product:
-                    products.append(product)
-            except ValueError as e:
+                product = create_installable(name=product_name)
+                product.load_from_installer_folder(installer_path / product_name)
+                products.append(product)
+            except (ValueError, FileNotFoundError) as e:
                 failed_products.append(f"{product_name}: {e}")
 
         if failed_products:
@@ -211,7 +211,7 @@ class ProductCollection:
             if item.is_dir() and (item / "description.xml").exists()
         )
 
-    def load_product(self, installer_path: str, product_name: str) -> Product | None:
+    def load_product(self, installer_path: str, product_name: str) -> InstallableBase | None:
         """Load a specific product from installer directory.
 
         Args:
@@ -232,8 +232,10 @@ class ProductCollection:
             return None
 
         try:
-            return Product.from_installer_folder(str(product_folder))
-        except ValueError:
+            product = create_installable(name=product_name)
+            product.load_from_installer_folder(product_folder)
+            return product
+        except (ValueError, FileNotFoundError):
             return None
 
     def validate_installer(self, installer_path: str) -> tuple[bool, list[str]]:
@@ -334,8 +336,6 @@ class ProductCollection:
             base_path: Base path for cloning.
 
         """
-        from kbot_installer.core.product.dependency_graph import DependencyGraph
-
         graph = DependencyGraph(self.products)
         bfs_products = graph.get_bfs_ordered_products(root_product_name)
 
@@ -354,8 +354,6 @@ class ProductCollection:
             Dictionary with product.name: product.to_json() in BFS order.
 
         """
-        from kbot_installer.core.product.dependency_graph import DependencyGraph
-
         graph = DependencyGraph(self.products)
         bfs_products = graph.get_bfs_ordered_products(root_product_name)
 
@@ -374,7 +372,7 @@ class ProductCollection:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(bfs_dict, f, indent=2, ensure_ascii=False)
 
-    def __iter__(self) -> Iterator[Product]:
+    def __iter__(self) -> Iterator[InstallableBase]:
         """Iterate over products in the collection.
 
         Yields:

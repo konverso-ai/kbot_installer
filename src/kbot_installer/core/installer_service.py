@@ -9,9 +9,10 @@ from kbot_installer.core.installation_table import InstallationTable
 from kbot_installer.core.product import (
     DependencyGraph,
     DependencyTreeRenderer,
-    Product,
+    InstallableBase,
     ProductCollection,
 )
+from kbot_installer.core.product.installable_product import InstallableProduct
 from kbot_installer.core.provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
@@ -193,7 +194,7 @@ class InstallerService:
         return repaired_products
 
     def _repair_products(
-        self, target_products: list[Product], version: str | None
+        self, target_products: list[InstallableBase], version: str | None
     ) -> list[str]:
         """Repair products that need fixing."""
         repaired_products = []
@@ -224,7 +225,7 @@ class InstallerService:
         return False, ""
 
     def _repair_single_product(
-        self, product_dir: Path, product: Product, version: str
+        self, product_dir: Path, product: InstallableBase, version: str
     ) -> None:
         """Repair a single product by removing and reinstalling."""
         # Remove existing directory if it exists
@@ -343,16 +344,16 @@ class InstallerService:
                     # Continue with other dependencies
                     continue
 
-    def _get_product(self, product_name: str) -> Product:
+    def _get_product(self, product_name: str) -> InstallableBase:
         """Get a product by name from the installer directory."""
         product_dir = self.installer_dir / product_name
-        product = Product.from_installer_folder(str(product_dir))
+        product = InstallableProduct.from_installer_folder(product_dir)
         if not product:
             error_msg = f"Product '{product_name}' not found"
             raise ValueError(error_msg)
         return product
 
-    def _get_products_with_dependencies(self, product_name: str) -> list[Product]:
+    def _get_products_with_dependencies(self, product_name: str) -> list[InstallableBase]:
         """Get a product and all its dependencies."""
         # Load all products from installer directory
         product_collection = self._load_products_from_installer_directory()
@@ -513,7 +514,7 @@ class InstallerService:
 
         return "unknown"
 
-    def _install_single_product(self, product: Product, version: str) -> None:
+    def _install_single_product(self, product: InstallableBase, version: str) -> None:
         """Install a single product."""
         logger.debug(
             "Installing single product: %s (version: %s)", product.name, version

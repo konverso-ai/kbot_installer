@@ -3,7 +3,7 @@
 import pytest
 
 from kbot_installer.core.product.dependency_graph import DependencyGraph
-from kbot_installer.core.product.product import Product
+from kbot_installer.core.product.installable_product import InstallableProduct
 from kbot_installer.core.product.renderer import DependencyTreeRenderer
 
 
@@ -16,45 +16,45 @@ class TestDependencyTreeRenderer:
         return DependencyTreeRenderer()
 
     @pytest.fixture
-    def sample_products(self) -> list[Product]:
+    def sample_products(self) -> list[InstallableProduct]:
         """Create sample products for testing."""
         return [
-            Product(
+            InstallableProduct(
                 name="root1",
                 version="1.0.0",
                 type="solution",
                 parents=[],
                 categories=["category1"],
             ),
-            Product(
+            InstallableProduct(
                 name="root2",
                 version="2.0.0",
                 type="solution",
                 parents=[],
                 categories=["category2"],
             ),
-            Product(
+            InstallableProduct(
                 name="dep1",
                 version="1.1.0",
                 type="framework",
                 parents=["root1"],
                 categories=["category1"],
             ),
-            Product(
+            InstallableProduct(
                 name="dep2",
                 version="1.2.0",
                 type="framework",
                 parents=["root1", "root2"],
                 categories=["category1", "category2"],
             ),
-            Product(
+            InstallableProduct(
                 name="leaf1",
                 version="2.1.0",
                 type="customer",
                 parents=["dep1"],
                 categories=["category1"],
             ),
-            Product(
+            InstallableProduct(
                 name="leaf2",
                 version="2.2.0",
                 type="customer",
@@ -64,17 +64,17 @@ class TestDependencyTreeRenderer:
         ]
 
     @pytest.fixture
-    def circular_products(self) -> list[Product]:
+    def circular_products(self) -> list[InstallableProduct]:
         """Create products with circular dependencies for testing."""
         return [
-            Product(
+            InstallableProduct(
                 name="circular1",
                 version="1.0.0",
                 type="solution",
                 parents=["circular2"],
                 categories=["category1"],
             ),
-            Product(
+            InstallableProduct(
                 name="circular2",
                 version="2.0.0",
                 type="solution",
@@ -107,7 +107,7 @@ class TestDependencyTreeRenderer:
 
     def test_render_uv_tree_style_single_product(self, renderer) -> None:
         """Test rendering single product in UV tree style."""
-        products = [Product(name="single", version="1.0.0", type="solution")]
+        products = [InstallableProduct(name="single", version="1.0.0", type="solution")]
         graph = DependencyGraph(products)
         result = renderer.render_uv_tree_style(graph)
 
@@ -151,7 +151,7 @@ class TestDependencyTreeRenderer:
 
     def test_render_file_tree_style_single_product(self, renderer) -> None:
         """Test rendering single product in file tree style."""
-        products = [Product(name="single", version="1.0.0", type="solution")]
+        products = [InstallableProduct(name="single", version="1.0.0", type="solution")]
         graph = DependencyGraph(products)
         result = renderer.render_file_tree_style(graph)
 
@@ -377,8 +377,8 @@ class TestDependencyTreeRenderer:
         """Test rendering tree when there are no clear root products."""
         # Create products where all have dependencies (no clear roots)
         products = [
-            Product(name="dep1", version="1.0.0", type="solution", parents=["dep2"]),
-            Product(name="dep2", version="2.0.0", type="solution", parents=["dep1"]),
+            InstallableProduct(name="dep1", version="1.0.0", type="solution", parents=["dep2"]),
+            InstallableProduct(name="dep2", version="2.0.0", type="solution", parents=["dep1"]),
         ]
         graph = DependencyGraph(products)
 
@@ -392,8 +392,8 @@ class TestDependencyTreeRenderer:
         """Test rendering file tree when there are no clear root products."""
         # Create products where all have dependencies (no clear roots)
         products = [
-            Product(name="dep1", version="1.0.0", type="solution", parents=["dep2"]),
-            Product(name="dep2", version="2.0.0", type="solution", parents=["dep1"]),
+            InstallableProduct(name="dep1", version="1.0.0", type="solution", parents=["dep2"]),
+            InstallableProduct(name="dep2", version="2.0.0", type="solution", parents=["dep1"]),
         ]
         graph = DependencyGraph(products)
 
@@ -406,7 +406,7 @@ class TestDependencyTreeRenderer:
     def test_render_product_info_with_no_categories(self, renderer) -> None:
         """Test rendering product info for product with no categories."""
         products = [
-            Product(name="no_cat", version="1.0.0", type="solution", categories=[])
+            InstallableProduct(name="no_cat", version="1.0.0", type="solution", categories=[])
         ]
         graph = DependencyGraph(products)
 
@@ -417,7 +417,7 @@ class TestDependencyTreeRenderer:
     def test_render_product_info_with_no_dependencies(self, renderer) -> None:
         """Test rendering product info for product with no dependencies."""
         products = [
-            Product(name="no_deps", version="1.0.0", type="solution", parents=[])
+            InstallableProduct(name="no_deps", version="1.0.0", type="solution", parents=[])
         ]
         graph = DependencyGraph(products)
 
@@ -429,7 +429,7 @@ class TestDependencyTreeRenderer:
     def test_render_product_info_with_no_dependents(self, renderer) -> None:
         """Test rendering product info for product with no dependents."""
         products = [
-            Product(name="no_dependents", version="1.0.0", type="solution", parents=[])
+            InstallableProduct(name="no_dependents", version="1.0.0", type="solution", parents=[])
         ]
         graph = DependencyGraph(products)
 
@@ -440,20 +440,20 @@ class TestDependencyTreeRenderer:
     def test_render_with_complex_dependencies(self, renderer) -> None:
         """Test rendering with complex dependency structure."""
         products = [
-            Product(name="root", version="1.0.0", type="solution", parents=[]),
-            Product(
+            InstallableProduct(name="root", version="1.0.0", type="solution", parents=[]),
+            InstallableProduct(
                 name="middle1", version="2.0.0", type="framework", parents=["root"]
             ),
-            Product(
+            InstallableProduct(
                 name="middle2", version="2.1.0", type="framework", parents=["root"]
             ),
-            Product(
+            InstallableProduct(
                 name="leaf1", version="3.0.0", type="customer", parents=["middle1"]
             ),
-            Product(
+            InstallableProduct(
                 name="leaf2", version="3.1.0", type="customer", parents=["middle2"]
             ),
-            Product(
+            InstallableProduct(
                 name="leaf3",
                 version="3.2.0",
                 type="customer",
@@ -480,9 +480,9 @@ class TestDependencyTreeRenderer:
     def test_render_with_circular_dependencies(self, renderer) -> None:
         """Test rendering with complex circular dependencies."""
         products = [
-            Product(name="a", version="1.0.0", type="solution", parents=["b"]),
-            Product(name="b", version="2.0.0", type="solution", parents=["c"]),
-            Product(name="c", version="3.0.0", type="solution", parents=["a"]),
+            InstallableProduct(name="a", version="1.0.0", type="solution", parents=["b"]),
+            InstallableProduct(name="b", version="2.0.0", type="solution", parents=["c"]),
+            InstallableProduct(name="c", version="3.0.0", type="solution", parents=["a"]),
         ]
         graph = DependencyGraph(products)
 

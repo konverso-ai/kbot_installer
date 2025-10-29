@@ -3,7 +3,7 @@
 from collections import defaultdict, deque
 from collections.abc import Iterator
 
-from kbot_installer.core.product.product import Product
+from kbot_installer.core.product.installable_base import InstallableBase
 
 
 class DependencyGraph:
@@ -16,7 +16,7 @@ class DependencyGraph:
 
     """
 
-    def __init__(self, products: list[Product]) -> None:
+    def __init__(self, products: list[InstallableBase]) -> None:
         """Initialize dependency graph with products.
 
         Args:
@@ -301,7 +301,7 @@ class DependencyGraph:
 
         return result
 
-    def get_bfs_ordered_products(self, root_product_name: str) -> list[Product]:
+    def get_bfs_ordered_products(self, root_product_name: str) -> list[InstallableBase]:
         """Get Product instances in BFS order.
 
         Args:
@@ -356,7 +356,7 @@ class DependencyGraph:
             if self.get_product_depth(product.name) == depth
         ]
 
-    def __iter__(self) -> Iterator[Product]:
+    def __iter__(self) -> Iterator[InstallableBase]:
         """Iterate over products in the graph.
 
         Yields:

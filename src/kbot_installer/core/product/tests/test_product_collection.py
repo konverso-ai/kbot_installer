@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from kbot_installer.core.product.product_collection import ProductCollection
+from kbot_installer.core.product.factory import create_installable
 from kbot_installer.core.product.installable_product import InstallableProduct
 
 
@@ -282,8 +283,7 @@ class TestProductCollection:
 
         assert folders == []
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
-    def test_load_product_existing(self, mock_from_installer_folder) -> None:
+    def test_load_product_existing(self) -> None:
         """Test loading an existing product."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
@@ -292,28 +292,20 @@ class TestProductCollection:
 
             # Create description.xml
             description_xml = """
-            <product>
-                <name>test_product</name>
-                <version>1.0.0</version>
-                <type>solution</type>
+            <product name="test_product" version="1.0.0" type="solution">
             </product>
             """
             (product_folder / "description.xml").write_text(description_xml)
 
-            # Mock load_from_installer_folder to update the product instance
-            def mock_load(self, folder_path):
-                self.version = "1.0.0"
-                self.type = "solution"
-
-            mock_from_installer_folder.side_effect = mock_load
-
+            # Since we have a real XML file, we can test the actual functionality
+            # without mocking. Just verify the product is loaded correctly.
             collection = ProductCollection()
             product = collection.load_product(str(installer_path), "test_product")
 
             assert product is not None
             assert product.name == "test_product"
-            assert product.version == "1.0.0"
-            mock_from_installer_folder.assert_called_once()
+            assert product.version == "1.0.0"  # From XML
+            assert product.type == "solution"  # From XML
 
     def test_load_product_nonexistent(self) -> None:
         """Test loading a non-existent product."""
@@ -427,86 +419,51 @@ class TestProductCollection:
         finally:
             Path(file_path).unlink(missing_ok=True)
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
-    def test_from_installer_success(self, mock_from_installer, sample_products) -> None:
+    def test_from_installer_success(self) -> None:
         """Test creating collection from installer directory successfully."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folders
+            # Create product folders with valid XML
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                "<product></product>"
+                '<product name="product1" version="1.0.0" type="solution"></product>'
             )
 
             (installer_path / "product2").mkdir()
             (installer_path / "product2" / "description.xml").write_text(
-                "<product></product>"
+                '<product name="product2" version="2.0.0" type="framework"></product>'
             )
-
-            # Mock load_from_installer_folder to update product instances
-            call_count = 0
-            def mock_load(*args, **kwargs):
-                nonlocal call_count
-                # When called on an instance, first arg is self
-                if args:
-                    self = args[0]
-                    if call_count < len(sample_products[:2]):
-                        product = sample_products[call_count]
-                        self.version = product.version
-                        self.type = product.type
-                        self.parents = product.parents
-                        self.categories = product.categories
-                        self.build = product.build
-                        self.date = product.date
-                        self.license = product.license
-                        call_count += 1
-
-            mock_from_installer.side_effect = mock_load
 
             collection = ProductCollection.from_installer(str(installer_path))
 
             assert len(collection.products) == 2
-            assert collection.products == sample_products[:2]
+            # Verify products have correct names
+            product_names = {p.name for p in collection.products}
+            assert "product1" in product_names
+            assert "product2" in product_names
 
     def test_from_installer_invalid_directory(self) -> None:
         """Test creating collection from invalid directory."""
         with pytest.raises(NotADirectoryError):
             ProductCollection.from_installer("/nonexistent/path")
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
-    def test_from_installer_with_failures(self, mock_from_installer) -> None:
+    def test_from_installer_with_failures(self) -> None:
         """Test creating collection from installer with product loading failures."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folders
+            # Create product folders - one valid, one invalid
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                "<product></product>"
+                '<product name="product1" version="1.0.0" type="solution"></product>'
             )
 
             (installer_path / "product2").mkdir()
+            # Invalid XML that will cause a ValueError
             (installer_path / "product2" / "description.xml").write_text(
-                "<product></product>"
+                "<invalid>not a product</invalid>"
             )
-
-            # Mock load_from_installer_folder to raise ValueError for one product
-            call_count = 0
-            def side_effect(*args, **kwargs):
-                nonlocal call_count
-                if args:
-                    self = args[0]
-                    if call_count == 0:
-                        # First product loads successfully
-                        self.version = "1.0.0"
-                        call_count += 1
-                    else:
-                        # Second product raises error
-                        error_msg = "Invalid product"
-                        raise ValueError(error_msg)
-
-            mock_from_installer.side_effect = side_effect
 
             with pytest.raises(ValueError, match="Failed to load products"):
                 ProductCollection.from_installer(str(installer_path))
@@ -516,26 +473,20 @@ class TestProductCollection:
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folder
+            # Create product folder with valid XML
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                "<product></product>"
+                '<product name="product1" version="1.0.0" type="solution"></product>'
             )
 
-            with patch(
-                "kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder",
-                autospec=True
-            ) as mock_from_installer:
-                def mock_load(*args, **kwargs):
-                    if args:
-                        args[0].version = "1.0.0"
-                mock_from_installer.side_effect = mock_load
+            # Both methods should produce the same result
+            collection1 = ProductCollection.from_installer(str(installer_path))
+            collection2 = ProductCollection.from_installer_folder(str(installer_path))
 
-                ProductCollection.from_installer(str(installer_path))
-                ProductCollection.from_installer_folder(str(installer_path))
-
-                # Both should call the same method
-                assert mock_from_installer.call_count == 2
+            # Both should have the same number of products
+            assert len(collection1.products) == len(collection2.products)
+            assert len(collection1.products) == 1
+            assert collection1.products[0].name == collection2.products[0].name
 
     def test_empty_collection_operations(self, empty_collection) -> None:
         """Test operations on empty collection."""
