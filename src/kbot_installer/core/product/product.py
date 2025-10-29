@@ -11,6 +11,11 @@ from defusedxml import ElementTree as defused_ET
 
 from kbot_installer.core.provider import create_provider
 
+# Import here to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from kbot_installer.core.product.collection import ProductCollection
+
 
 @dataclass
 class Product:
@@ -192,7 +197,7 @@ class Product:
         )
 
     @classmethod
-    def from_xml_file(cls, xml_path: Path) -> "Product":
+    def from_xml_file(cls, xml_path: str | Path) -> "Product":
         """Create Product from XML file.
 
         Args:
@@ -206,6 +211,7 @@ class Product:
             ValueError: If XML is invalid.
 
         """
+        xml_path = Path(xml_path)
         if not xml_path.exists():
             msg = f"XML file not found: {xml_path.name}"
             raise FileNotFoundError(msg)
@@ -213,7 +219,7 @@ class Product:
         return cls.from_xml(xml_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_json_file(cls, json_path: Path) -> "Product":
+    def from_json_file(cls, json_path: str | Path) -> "Product":
         """Create Product from JSON file.
 
         Args:
@@ -227,6 +233,7 @@ class Product:
             ValueError: If JSON is invalid.
 
         """
+        json_path = Path(json_path)
         if not json_path.exists():
             msg = f"JSON file not found: {json_path.name}"
             raise FileNotFoundError(msg)
@@ -400,28 +407,48 @@ class Product:
             self.load_from_installer_folder(path)
             return
 
-        # BFS: Use a queue to process products level by level
-        queue = deque([(self, path)])
-        processed = set()  # Avoid processing the same product multiple times
+        # Use get_dependencies() to get BFS-ordered collection
+        collection = self.get_dependencies()
+
+        # Clone all products in BFS order
+        for product in collection.products:
+            product_path = path.parent / product.name if product.name != self.name else path
+            product.provider.clone_and_checkout(product_path, product.version)
+            product.load_from_installer_folder(product_path)
+
+    def get_dependencies(self) -> "ProductCollection":
+        """Get a ProductCollection containing this product and all its dependencies.
+
+        Uses BFS traversal to collect all dependencies in the correct order.
+
+        Returns:
+            ProductCollection with BFS-ordered products.
+
+        """
+        # Collect all products using BFS
+        from kbot_installer.core.product.collection import ProductCollection
+
+        queue = deque([self])
+        processed = set()
+        collected_products = []
 
         while queue:
-            current_product, current_path = queue.popleft()
+            current_product = queue.popleft()
 
-            # Skip if already processed
             if current_product.name in processed:
                 continue
 
-            # Clone current product
-            current_product.provider.clone_and_checkout(current_path, current_product.version)
-            current_product.load_from_installer_folder(current_path)
+            collected_products.append(current_product)
             processed.add(current_product.name)
 
-            # Add dependencies to queue for next level
+            # Add dependencies to queue
             for parent_name in current_product.parents:
                 if parent_name not in processed:
                     parent_product = self._load_product_by_name(parent_name)
-                    parent_path = current_path / parent_name
-                    queue.append((parent_product, parent_path))
+                    queue.append(parent_product)
+
+        # Create ProductCollection with collected products
+        return ProductCollection(collected_products)
 
     def install(self, path: Path, *, dependencies: bool = True) -> None:
         """Install the product into the workarea.

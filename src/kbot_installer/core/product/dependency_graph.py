@@ -271,6 +271,50 @@ class DependencyGraph:
 
         return levels
 
+    def get_bfs_order(self, root_product_name: str) -> list[str]:
+        """Get products in BFS order starting from root.
+
+        Args:
+            root_product_name: Starting product name.
+
+        Returns:
+            List of product names in BFS order.
+
+        """
+        queue = deque([root_product_name])
+        processed = set()
+        result = []
+
+        while queue:
+            current = queue.popleft()
+
+            if current in processed:
+                continue
+
+            result.append(current)
+            processed.add(current)
+
+            # Add dependencies to queue
+            for dep in self.dependencies[current]:
+                if dep not in processed:
+                    queue.append(dep)
+
+        return result
+
+    def get_bfs_ordered_products(self, root_product_name: str) -> list[Product]:
+        """Get Product instances in BFS order.
+
+        Args:
+            root_product_name: Starting product name.
+
+        Returns:
+            List of Product instances in BFS order.
+
+        """
+        product_map = {p.name: p for p in self.products}
+        bfs_names = self.get_bfs_order(root_product_name)
+        return [product_map[name] for name in bfs_names if name in product_map]
+
     def get_product_depth(self, product_name: str) -> int:
         """Get the maximum depth of dependencies for a product.
 

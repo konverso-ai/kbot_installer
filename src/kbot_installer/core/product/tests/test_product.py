@@ -272,7 +272,8 @@ class TestProduct:
             xml_file = product_dir / "description.xml"
             xml_file.write_text(xml_content)
 
-            product = Product.from_installer_folder(product_dir)
+            product = Product(name="jira")
+            product.load_from_installer_folder(product_dir)
             assert product.name == "jira"
             assert product.version == "2025.02"
 
@@ -303,7 +304,8 @@ class TestProduct:
             json_file = product_dir / "description.json"
             json_file.write_text(json_content)
 
-            product = Product.from_installer_folder(product_dir)
+            product = Product(name="jira")
+            product.load_from_installer_folder(product_dir)
             assert product.name == "jira"
             assert product.version == "2025.03"  # From JSON
             assert product.parents == ["ithd"]  # From XML
@@ -471,3 +473,32 @@ class TestProduct:
             assert product.docs == ["doc1", "doc2"]  # From XML
             assert product.env == "prod"  # From JSON
             assert product.license == "kbot-included"  # From JSON
+
+    def test_get_dependencies(self) -> None:
+        """Test get_dependencies method."""
+        # Create a product with dependencies
+        product_a = Product(name="product-a", version="1.0.0", parents=["product-b", "product-c"])
+        product_b = Product(name="product-b", version="1.0.0", parents=["product-d"])
+        product_c = Product(name="product-c", version="1.0.0")
+        product_d = Product(name="product-d", version="1.0.0")
+
+        # Mock the _load_product_by_name method to return our test products
+        def mock_load_product(name: str) -> Product:
+            products = {"product-b": product_b, "product-c": product_c, "product-d": product_d}
+            return products.get(name, Product(name=name))
+
+        product_a._load_product_by_name = mock_load_product
+
+        # Get dependencies collection
+        collection = product_a.get_dependencies()
+
+        # Check that we get all products in BFS order
+        assert len(collection.products) == 4
+        product_names = [p.name for p in collection.products]
+
+        # BFS order should be: product-a, product-b, product-c, product-d
+        # (product-a first, then its direct dependencies, then their dependencies)
+        assert product_names[0] == "product-a"
+        assert "product-b" in product_names
+        assert "product-c" in product_names
+        assert "product-d" in product_names

@@ -13,6 +13,10 @@ dist/
 # Compiled Python bytecode
 *.py[cod]
 
+# Python egg-info
+*.egg-info/
+.egg-info/
+
 # Log files
 *.log
 

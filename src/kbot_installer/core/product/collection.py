@@ -326,6 +326,54 @@ class ProductCollection:
         tree = ET.ElementTree(root)
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
+    def clone_with_dependencies(self, root_product_name: str, base_path: Path) -> None:
+        """Clone a product and all its dependencies using BFS order.
+
+        Args:
+            root_product_name: Name of the root product to clone.
+            base_path: Base path for cloning.
+
+        """
+        from kbot_installer.core.product.dependency_graph import DependencyGraph
+
+        graph = DependencyGraph(self.products)
+        bfs_products = graph.get_bfs_ordered_products(root_product_name)
+
+        for product in bfs_products:
+            product_path = base_path / product.name
+            product.provider.clone_and_checkout(product_path, product.version)
+            product.load_from_installer_folder(product_path)
+
+    def to_bfs_ordered_dict(self, root_product_name: str) -> dict[str, str]:
+        """Convert collection to BFS-ordered dictionary.
+
+        Args:
+            root_product_name: Starting product name.
+
+        Returns:
+            Dictionary with product.name: product.to_json() in BFS order.
+
+        """
+        from kbot_installer.core.product.dependency_graph import DependencyGraph
+
+        graph = DependencyGraph(self.products)
+        bfs_products = graph.get_bfs_ordered_products(root_product_name)
+
+        return {product.name: product.to_json() for product in bfs_products}
+
+    def save_bfs_ordered_json(self, file_path: Path, root_product_name: str) -> None:
+        """Save collection as BFS-ordered JSON.
+
+        Args:
+            file_path: Path to save the JSON file.
+            root_product_name: Starting product name.
+
+        """
+        bfs_dict = self.to_bfs_ordered_dict(root_product_name)
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(bfs_dict, f, indent=2, ensure_ascii=False)
+
     def __iter__(self) -> Iterator[Product]:
         """Iterate over products in the collection.
 
