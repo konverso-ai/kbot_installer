@@ -55,6 +55,10 @@ ignore = [
     "T201", # print found (acceptable in example files)
 ]
 
+"**/interactivity/*.py" = [
+    "T201", # print found (acceptable in interactive prompts)
+]
+
 "**/test_*.py" = [
     "ANN001",    # Missing type annotation for function argument (test parameters)
     "ANN202",    # Missing return type annotation for private function (test helpers)
