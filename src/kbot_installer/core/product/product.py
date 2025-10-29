@@ -1,12 +1,15 @@
 """Product class for managing product definitions."""
 
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from xml.etree import ElementTree as ET
 
 from defusedxml import ElementTree as defused_ET
+
+from kbot_installer.core.provider import create_provider
 
 
 @dataclass
@@ -28,15 +31,50 @@ class Product:
     """
 
     name: str
-    version: str
+    version: str = ""
     build: str | None = None
     date: str | None = None
     type: str = "solution"
+    docs: list[str] = field(default_factory=list)
+    env: Literal["dev", "prod"] = "dev"
     parents: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     license: str | None = None
     display: dict[str, Any] | None = None
     build_details: dict[str, Any] | None = None
+    providers: list[str] = field(default_factory=lambda: ["nexus", "github", "bitbucket"])
+
+    def __post_init__(self) -> None:
+        self.provider = create_provider(name="selector", providers=self.providers)
+
+    @staticmethod
+    def _parse_comma_separated_string(value: str) -> list[str]:
+        """Parse a comma-separated string into a list of trimmed strings.
+
+        Args:
+            value: Comma-separated string to parse.
+
+        Returns:
+            List of trimmed strings, empty list if value is empty or None.
+
+        """
+        if not value:
+            return []
+        return [item.strip() for item in value.split(",") if item.strip()]
+
+    def _load_product_by_name(self, product_name: str) -> "Product":
+        """Load a product by its name.
+
+        Args:
+            product_name: Name of the product to load.
+
+        Returns:
+            Product instance loaded from the provider.
+
+        """
+        # Create a minimal product instance with just the name
+        # The provider will handle the actual loading
+        return Product(name=product_name)
 
     @classmethod
     def from_xml(cls, xml_content: str) -> "Product":
@@ -91,6 +129,9 @@ class Product:
                 if category_name:
                     categories.append(category_name)
 
+        # Extract doc (comma-separated string -> list)
+        doc = cls._parse_comma_separated_string(root.get("doc", ""))
+
         return cls(
             name=name,
             version=version,
@@ -99,6 +140,7 @@ class Product:
             type=product_type,
             parents=parents,
             categories=categories,
+            docs=doc,
         )
 
     @classmethod
@@ -142,13 +184,15 @@ class Product:
             type=data.get("type", "solution"),
             parents=data.get("parents", []),
             categories=data.get("categories", []),
+            docs=cls._parse_comma_separated_string(data.get("doc", "")),
+            env=data.get("env", "dev"),
             license=data.get("license"),
             display=data.get("display"),
             build_details=build_details,
         )
 
     @classmethod
-    def from_xml_file(cls, xml_path: str) -> "Product":
+    def from_xml_file(cls, xml_path: Path) -> "Product":
         """Create Product from XML file.
 
         Args:
@@ -162,15 +206,14 @@ class Product:
             ValueError: If XML is invalid.
 
         """
-        xml_file = Path(xml_path)
-        if not xml_file.exists():
-            msg = f"XML file not found: {xml_path}"
+        if not xml_path.exists():
+            msg = f"XML file not found: {xml_path.name}"
             raise FileNotFoundError(msg)
 
-        return cls.from_xml(xml_file.read_text(encoding="utf-8"))
+        return cls.from_xml(xml_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_json_file(cls, json_path: str) -> "Product":
+    def from_json_file(cls, json_path: Path) -> "Product":
         """Create Product from JSON file.
 
         Args:
@@ -184,41 +227,60 @@ class Product:
             ValueError: If JSON is invalid.
 
         """
-        json_file = Path(json_path)
-        if not json_file.exists():
-            msg = f"JSON file not found: {json_path}"
+        if not json_path.exists():
+            msg = f"JSON file not found: {json_path.name}"
             raise FileNotFoundError(msg)
 
-        return cls.from_json(json_file.read_text(encoding="utf-8"))
+        return cls.from_json(json_path.read_text(encoding="utf-8"))
 
-    @classmethod
-    def from_installer_folder(cls, folder_path: str) -> "Product":
-        """Create Product from installer folder (XML + optional JSON).
+    def load_from_installer_folder(self, folder_path: Path) -> None:
+        """Load product data from installer folder (XML + optional JSON) into current instance.
 
         Args:
             folder_path: Path to product folder.
-
-        Returns:
-            Product instance with merged data.
 
         Raises:
             FileNotFoundError: If description.xml doesn't exist.
             ValueError: If XML is invalid.
 
         """
-        folder = Path(folder_path)
-        xml_path = folder / "description.xml"
-        json_path = folder / "description.json"
+        xml_path = folder_path / "description.xml"
+        json_path = folder_path / "description.json"
 
         # Load XML (required)
-        xml_product = cls.from_xml_file(str(xml_path))
+        xml_product = self.from_xml_file(xml_path)
 
         # Load JSON if exists (optional)
         if json_path.exists():
-            json_product = cls.from_json_file(str(json_path))
-            return cls.merge_xml_json(xml_product, json_product)
+            json_product = self.from_json_file(json_path)
+            merged_product = self.merge_xml_json(xml_product, json_product)
+            self._update_from_product(merged_product)
+        else:
+            self._update_from_product(xml_product)
 
-        return xml_product
+    def _update_from_product(self, source_product: "Product") -> None:
+        """Update current instance with data from another product.
+
+        This method copies all relevant data from the source product to the current
+        instance, preserving the original name and provider which should remain
+        consistent with the instance's identity.
+
+        Args:
+            source_product: Product to copy data from.
+
+        """
+        self.version = source_product.version
+        self.build = source_product.build
+        self.date = source_product.date
+        self.type = source_product.type
+        self.docs = source_product.docs
+        self.env = source_product.env
+        self.parents = source_product.parents.copy()
+        self.categories = source_product.categories.copy()
+        self.license = source_product.license
+        self.display = source_product.display
+        self.build_details = source_product.build_details
+        # Note: name and provider are not updated as they should remain consistent
 
     @classmethod
     def merge_xml_json(
@@ -252,6 +314,8 @@ class Product:
             type=json_product.type or xml_product.type,
             parents=json_product.parents or xml_product.parents,
             categories=json_product.categories or xml_product.categories,
+            docs=json_product.docs or xml_product.docs,
+            env=json_product.env or xml_product.env,
             license=json_product.license,
             display=json_product.display,
             build_details=json_product.build_details,
@@ -287,6 +351,10 @@ class Product:
                 category_elem = ET.SubElement(categories_elem, "category")
                 category_elem.set("name", category)
 
+        # Add doc attribute (list -> comma-separated string)
+        if self.docs:
+            root.set("doc", ",".join(self.docs))
+
         return ET.tostring(root, encoding="unicode")
 
     def to_json(self) -> str:
@@ -302,6 +370,8 @@ class Product:
             "type": self.type,
             "parents": self.parents,
             "categories": self.categories,
+            "doc": ",".join(self.docs) if self.docs else "",
+            "env": self.env,
         }
 
         if self.build:
@@ -316,6 +386,137 @@ class Product:
             data["build"] = self.build_details
 
         return json.dumps(data, indent=2, ensure_ascii=False)
+
+    def clone(self, path: Path, *, dependencies: bool = True) -> None:
+        """Clone the product to the given path using breadth-first traversal.
+
+        Args:
+            path: Path to clone the product to.
+            dependencies: Whether to clone dependencies.
+
+        """
+        if not dependencies:
+            self.provider.clone_and_checkout(path, self.version)
+            self.load_from_installer_folder(path)
+            return
+
+        # BFS: Use a queue to process products level by level
+        queue = deque([(self, path)])
+        processed = set()  # Avoid processing the same product multiple times
+
+        while queue:
+            current_product, current_path = queue.popleft()
+
+            # Skip if already processed
+            if current_product.name in processed:
+                continue
+
+            # Clone current product
+            current_product.provider.clone_and_checkout(current_path, current_product.version)
+            current_product.load_from_installer_folder(current_path)
+            processed.add(current_product.name)
+
+            # Add dependencies to queue for next level
+            for parent_name in current_product.parents:
+                if parent_name not in processed:
+                    parent_product = self._load_product_by_name(parent_name)
+                    parent_path = current_path / parent_name
+                    queue.append((parent_product, parent_path))
+
+    def install(self, path: Path, *, dependencies: bool = True) -> None:
+        """Install the product into the workarea.
+
+        Args:
+            path: Path to install the product to.
+            dependencies: Whether to install dependencies.
+
+        """
+        msg = "Installation is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def update(self, path: Path, *, dependencies: bool = True) -> None:
+        """Update the product in the workarea.
+
+        Args:
+            path: Path to update the product from.
+            dependencies: Whether to update dependencies.
+
+        """
+        msg = "Update is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def uninstall(self, path: Path) -> None:
+        """Uninstall the product from the workarea.
+
+        Args:
+            path: Path to uninstall the product from.
+
+        """
+        msg = "Uninstall is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def repair(self, path: Path, *, dependencies: bool = True) -> None:
+        """Repair the product in the workarea.
+
+        Args:
+            path: Path to repair the product from.
+            dependencies: Whether to repair dependencies.
+
+        """
+        msg = "Repair is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def upgrade(self, path: Path, *, dependencies: bool = True) -> None:
+        """Upgrade the product in the workarea.
+
+        Args:
+            path: Path to upgrade the product from.
+            dependencies: Whether to upgrade dependencies.
+
+        """
+        msg = "Upgrade is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def downgrade(self, path: Path, *, dependencies: bool = True) -> None:
+        """Downgrade the product in the workarea.
+
+        Args:
+            path: Path to downgrade the product from.
+            dependencies: Whether to downgrade dependencies.
+
+        """
+        msg = "Downgrade is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def backup(self, path: Path) -> None:
+        """Backup the product in the given path.
+
+        Args:
+            path: Path to backup the product from.
+
+        """
+        msg = "Backup is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def restore(self, path: Path) -> None:
+        """Restore the product in the given path.
+
+        Args:
+            path: Path to restore the product from.
+
+        """
+        msg = "Restore is not implemented yet"
+        raise NotImplementedError(msg) from None
+
+    def delete(self, path: Path) -> None:
+        """Delete the product in the given path.
+
+        Args:
+            path: Path to delete the product from.
+
+        """
+        msg = "Delete is not implemented yet"
+        raise NotImplementedError(msg) from None
 
     def __str__(self) -> str:
         """Return string representation of Product."""

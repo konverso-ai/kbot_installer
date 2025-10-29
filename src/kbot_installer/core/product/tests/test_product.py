@@ -28,6 +28,18 @@ class TestProduct:
         assert product.parents == ["parent1"]
         assert product.categories == ["cat1"]
 
+    def test_initialization_minimal(self) -> None:
+        """Test Product initialization with minimal parameters."""
+        product = Product(name="test")
+
+        assert product.name == "test"
+        assert product.version == ""  # Default empty string
+        assert product.type == "solution"  # Default
+        assert product.parents == []  # Default empty list
+        assert product.categories == []  # Default empty list
+        assert product.docs == []  # Default empty list
+        assert product.env == "dev"  # Default
+
     def test_from_xml_simple(self) -> None:
         """Test creating Product from simple XML."""
         xml_content = """
@@ -61,6 +73,28 @@ class TestProduct:
         assert product.name == "jira"
         assert product.parents == ["ithd", "kbot"]
         assert product.categories == ["itsm", "knowledge"]
+
+    def test_from_xml_with_doc(self) -> None:
+        """Test creating Product from XML with doc attribute."""
+        xml_content = """
+        <product name="jira" version="2025.02" type="solution" doc="doc1,doc2,doc3">
+        </product>
+        """
+        product = Product.from_xml(xml_content)
+
+        assert product.name == "jira"
+        assert product.docs == ["doc1", "doc2", "doc3"]
+
+    def test_from_xml_with_empty_doc(self) -> None:
+        """Test creating Product from XML with empty doc attribute."""
+        xml_content = """
+        <product name="jira" version="2025.02" type="solution" doc="">
+        </product>
+        """
+        product = Product.from_xml(xml_content)
+
+        assert product.name == "jira"
+        assert product.docs == []
 
     def test_from_xml_invalid_xml(self) -> None:
         """Test creating Product from invalid XML."""
@@ -98,6 +132,8 @@ class TestProduct:
             "type": "solution",
             "parents": ["ithd"],
             "categories": ["itsm", "knowledge"],
+            "doc": "doc1,doc2,doc3",
+            "env": "prod",
             "license": "kbot-included",
             "display": {
                 "name": {
@@ -118,9 +154,25 @@ class TestProduct:
         assert product.version == "2025.03"
         assert product.parents == ["ithd"]
         assert product.categories == ["itsm", "knowledge"]
+        assert product.docs == ["doc1", "doc2", "doc3"]
+        assert product.env == "prod"
         assert product.license == "kbot-included"
         assert product.display["name"]["en"] == "Kbot for Atlassian"
         assert product.build_details["timestamp"] == "2025/09/29 14:08:06"
+
+    def test_from_json_with_empty_doc(self) -> None:
+        """Test creating Product from JSON with empty doc."""
+        json_content = """
+        {
+            "name": "jira",
+            "version": "2025.03",
+            "doc": ""
+        }
+        """
+        product = Product.from_json(json_content)
+
+        assert product.name == "jira"
+        assert product.docs == []
 
     def test_from_json_invalid_json(self) -> None:
         """Test creating Product from invalid JSON."""
@@ -220,7 +272,7 @@ class TestProduct:
             xml_file = product_dir / "description.xml"
             xml_file.write_text(xml_content)
 
-            product = Product.from_installer_folder(str(product_dir))
+            product = Product.from_installer_folder(product_dir)
             assert product.name == "jira"
             assert product.version == "2025.02"
 
@@ -251,7 +303,7 @@ class TestProduct:
             json_file = product_dir / "description.json"
             json_file.write_text(json_content)
 
-            product = Product.from_installer_folder(str(product_dir))
+            product = Product.from_installer_folder(product_dir)
             assert product.name == "jira"
             assert product.version == "2025.03"  # From JSON
             assert product.parents == ["ithd"]  # From XML
@@ -265,6 +317,7 @@ class TestProduct:
             type="solution",
             parents=["ithd"],
             categories=["itsm"],
+            docs=["doc1", "doc2"],
         )
 
         xml = product.to_xml()
@@ -273,6 +326,7 @@ class TestProduct:
         assert 'type="solution"' in xml
         assert '<parent name="ithd" />' in xml
         assert '<category name="itsm" />' in xml
+        assert 'doc="doc1,doc2"' in xml
 
     def test_to_json(self) -> None:
         """Test converting Product to JSON."""
@@ -282,6 +336,8 @@ class TestProduct:
             type="solution",
             parents=["ithd"],
             categories=["itsm"],
+            docs=["doc1", "doc2"],
+            env="prod",
             license="kbot-included",
         )
 
@@ -293,6 +349,8 @@ class TestProduct:
         assert data["type"] == "solution"
         assert data["parents"] == ["ithd"]
         assert data["categories"] == ["itsm"]
+        assert data["doc"] == "doc1,doc2"
+        assert data["env"] == "prod"
         assert data["license"] == "kbot-included"
 
     def test_str_representation(self) -> None:
@@ -313,3 +371,103 @@ class TestProduct:
         )
         expected = "Product(name='jira', version='2025.02', type='solution', parents=['ithd'], categories=['itsm'])"
         assert repr(product) == expected
+
+    def test_parse_comma_separated_string(self) -> None:
+        """Test _parse_comma_separated_string static method."""
+        # Test with normal string
+        result = Product._parse_comma_separated_string("doc1,doc2,doc3")
+        assert result == ["doc1", "doc2", "doc3"]
+
+        # Test with spaces
+        result = Product._parse_comma_separated_string("doc1, doc2 , doc3")
+        assert result == ["doc1", "doc2", "doc3"]
+
+        # Test with empty string
+        result = Product._parse_comma_separated_string("")
+        assert result == []
+
+        # Test with None (should be handled gracefully)
+        result = Product._parse_comma_separated_string(None)
+        assert result == []
+
+        # Test with empty elements
+        result = Product._parse_comma_separated_string("doc1,,doc2, ,doc3")
+        assert result == ["doc1", "doc2", "doc3"]
+
+    def test_load_product_by_name(self) -> None:
+        """Test _load_product_by_name method."""
+        product = Product(name="test", version="1.0.0")
+        loaded_product = product._load_product_by_name("new-product")
+
+        assert loaded_product.name == "new-product"
+        assert loaded_product.version == ""  # Default empty string
+
+    def test_update_from_product(self) -> None:
+        """Test _update_from_product method."""
+        source_product = Product(
+            name="source",
+            version="2.0.0",
+            build="build123",
+            date="2025-01-01",
+            type="framework",
+            docs=["doc1", "doc2"],
+            env="prod",
+            parents=["parent1", "parent2"],
+            categories=["cat1"],
+            license="MIT",
+            display={"name": {"en": "Source Product"}},
+            build_details={"timestamp": "2025-01-01"},
+        )
+
+        target_product = Product(name="target", version="1.0.0")
+        target_product._update_from_product(source_product)
+
+        # Check that all fields are updated except name and provider
+        assert target_product.name == "target"  # Should remain unchanged
+        assert target_product.version == "2.0.0"
+        assert target_product.build == "build123"
+        assert target_product.date == "2025-01-01"
+        assert target_product.type == "framework"
+        assert target_product.docs == ["doc1", "doc2"]
+        assert target_product.env == "prod"
+        assert target_product.parents == ["parent1", "parent2"]
+        assert target_product.categories == ["cat1"]
+        assert target_product.license == "MIT"
+        assert target_product.display == {"name": {"en": "Source Product"}}
+        assert target_product.build_details == {"timestamp": "2025-01-01"}
+
+    def test_load_from_installer_folder(self) -> None:
+        """Test load_from_installer_folder method."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            product_dir = Path(temp_dir) / "jira"
+            product_dir.mkdir()
+
+            xml_content = """
+            <product name="jira" version="2025.02" type="solution" doc="doc1,doc2">
+                <parents><parent name="ithd"/></parents>
+            </product>
+            """
+            xml_file = product_dir / "description.xml"
+            xml_file.write_text(xml_content)
+
+            json_content = """
+            {
+                "name": "jira",
+                "version": "2025.03",
+                "env": "prod",
+                "license": "kbot-included"
+            }
+            """
+            json_file = product_dir / "description.json"
+            json_file.write_text(json_content)
+
+            # Create a product instance and load data into it
+            product = Product(name="jira")
+            product.load_from_installer_folder(product_dir)
+
+            assert product.name == "jira"  # Should remain unchanged
+            assert product.version == "2025.03"  # From JSON
+            assert product.parents == ["ithd"]  # From XML
+            assert product.docs == ["doc1", "doc2"]  # From XML
+            assert product.env == "prod"  # From JSON
+            assert product.license == "kbot-included"  # From JSON
