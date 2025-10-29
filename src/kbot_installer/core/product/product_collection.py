@@ -1,5 +1,6 @@
 """ProductCollection class for managing collections of products."""
 
+import fnmatch
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -211,7 +212,9 @@ class ProductCollection:
             if item.is_dir() and (item / "description.xml").exists()
         )
 
-    def load_product(self, installer_path: str, product_name: str) -> InstallableBase | None:
+    def load_product(
+        self, installer_path: str, product_name: str
+    ) -> InstallableBase | None:
         """Load a specific product from installer directory.
 
         Args:
@@ -234,9 +237,10 @@ class ProductCollection:
         try:
             product = create_installable(name=product_name)
             product.load_from_installer_folder(product_folder)
-            return product
         except (ValueError, FileNotFoundError):
             return None
+        else:
+            return product
 
     def validate_installer(self, installer_path: str) -> tuple[bool, list[str]]:
         """Validate the installer structure.
@@ -369,7 +373,7 @@ class ProductCollection:
         """
         bfs_dict = self.to_bfs_ordered_dict(root_product_name)
 
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with Path(file_path).open("w", encoding="utf-8") as f:
             json.dump(bfs_dict, f, indent=2, ensure_ascii=False)
 
     def __iter__(self) -> Iterator[InstallableBase]:
@@ -405,6 +409,62 @@ class ProductCollection:
     def __str__(self) -> str:
         """Return string representation of ProductCollection."""
         return f"ProductCollection(products={len(self.products)})"
+
+    def get_files(
+        self, relpath: str, pattern: str, *, exts: tuple[str, ...] | None = None
+    ) -> list[Path]:
+        """Get files matching pattern in relative path across all products.
+
+        This method searches for files in the relative path within each product's
+        directory, similar to the old ProductList.get_files() method.
+
+        Args:
+            relpath: Relative path from product directory (e.g., 'core/python').
+            pattern: File pattern to match (e.g., '*' or 'description.xml').
+            exts: Optional tuple of file extensions to filter (e.g., ('.py', '.so')).
+
+        Returns:
+            List of Path objects matching the pattern, sorted by product order.
+
+        """
+        files: list[Path] = []
+
+        for product in self.products:
+            if not product.dirname:
+                continue
+
+            search_path = product.dirname / relpath
+            if not search_path.exists():
+                continue
+
+            if search_path.is_file():
+                files.extend(self._get_files_from_path(search_path, pattern, exts))
+            elif search_path.is_dir():
+                files.extend(self._get_files_from_directory(search_path, pattern, exts))
+
+        return files
+
+    def _get_files_from_path(
+        self, path: Path, pattern: str, exts: tuple[str, ...] | None
+    ) -> list[Path]:
+        """Get files from a single path matching pattern and extensions."""
+        if not fnmatch.fnmatch(path.name, pattern):
+            return []
+
+        if exts and path.suffix not in exts:
+            return []
+
+        return [path]
+
+    def _get_files_from_directory(
+        self, directory: Path, pattern: str, exts: tuple[str, ...] | None
+    ) -> list[Path]:
+        """Get files from directory recursively matching pattern and extensions."""
+        return [
+            file_path
+            for file_path in directory.rglob(pattern)
+            if file_path.is_file() and (exts is None or file_path.suffix in exts)
+        ]
 
     def __repr__(self) -> str:
         """Detailed string representation of ProductCollection."""

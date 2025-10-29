@@ -45,9 +45,12 @@ class InstallableProduct(InstallableBase):
     license: str | None = None
     display: dict[str, Any] | None = None
     build_details: dict[str, Any] | None = None
-    providers: list[str] = field(default_factory=lambda: ["nexus", "github", "bitbucket"])
+    providers: list[str] = field(
+        default_factory=lambda: ["nexus", "github", "bitbucket"]
+    )
 
     def __post_init__(self) -> None:
+        """Initialize provider after instance creation."""
         self.provider = create_provider(name="selector", providers=self.providers)
 
     @staticmethod
@@ -438,7 +441,9 @@ class InstallableProduct(InstallableBase):
 
         # Clone all products in BFS order
         for product in collection.products:
-            product_path = path.parent / product.name if product.name != self.name else path
+            product_path = (
+                path.parent / product.name if product.name != self.name else path
+            )
             product.provider.clone_and_checkout(product_path, product.version)
             product.load_from_installer_folder(product_path)
 
@@ -570,9 +575,7 @@ class InstallableProduct(InstallableBase):
 
     def __str__(self) -> str:
         """Return string representation of InstallableProduct."""
-        return (
-            f"InstallableProduct(name='{self.name}', version='{self.version}', type='{self.type}')"
-        )
+        return f"InstallableProduct(name='{self.name}', version='{self.version}', type='{self.type}')"
 
     def __repr__(self) -> str:
         """Detailed string representation of InstallableProduct."""

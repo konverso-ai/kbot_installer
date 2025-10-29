@@ -30,7 +30,9 @@ class TestDependencyGraph:
         product1 = InstallableProduct(
             name="test1", version="1.0.0", type="solution", parents=["test2"]
         )
-        product2 = InstallableProduct(name="test2", version="2.0.0", type="framework", parents=[])
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=[]
+        )
         graph = DependencyGraph([product1, product2])
 
         assert "test1" in graph.dependencies
@@ -46,7 +48,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         assert graph.dependencies["test1"] == ["test2", "test3"]
@@ -61,7 +65,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         deps1 = graph.get_dependencies("test1")
@@ -87,7 +93,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         dependents1 = graph.get_dependents("test1")
@@ -107,7 +115,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         deps1 = graph.get_transitive_dependencies("test1")
@@ -127,7 +137,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         dependents1 = graph.get_transitive_dependents("test1")
@@ -147,7 +159,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         assert graph.has_circular_dependency() is False
@@ -184,7 +198,9 @@ class TestDependencyGraph:
         product1 = InstallableProduct(
             name="test1", version="1.0.0", type="solution", parents=["test2"]
         )
-        product2 = InstallableProduct(name="test2", version="2.0.0", type="framework", parents=[])
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=[]
+        )
         graph = DependencyGraph([product1, product2])
 
         cycles = graph.get_circular_dependencies()
@@ -229,7 +245,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         order = graph.get_topological_order()
@@ -259,7 +277,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         levels = graph.get_dependency_levels()
@@ -280,7 +300,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         assert graph.get_product_depth("test1") == 2
@@ -301,7 +323,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         roots = graph.get_root_products()
@@ -316,7 +340,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         leaves = graph.get_leaf_products()
@@ -332,7 +358,9 @@ class TestDependencyGraph:
         product2 = InstallableProduct(
             name="test2", version="2.0.0", type="framework", parents=["test3"]
         )
-        product3 = InstallableProduct(name="test3", version="3.0.0", type="library", parents=[])
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
         graph = DependencyGraph([product1, product2, product3])
 
         depth0 = graph.get_products_at_depth(0)

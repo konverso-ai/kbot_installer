@@ -84,7 +84,9 @@ class TestNexusProvider:
         expected = "https://example.com/repository/test-repo/master/test-repo/test-repo_latest.tar.gz"
         assert url == expected
 
-    @patch("kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter")
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
     @patch("pathlib.Path.mkdir")
     def test_clone_success(self, mock_mkdir, mock_extract) -> None:
         """Test successful clone operation."""

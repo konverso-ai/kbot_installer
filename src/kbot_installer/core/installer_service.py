@@ -353,7 +353,9 @@ class InstallerService:
             raise ValueError(error_msg)
         return product
 
-    def _get_products_with_dependencies(self, product_name: str) -> list[InstallableBase]:
+    def _get_products_with_dependencies(
+        self, product_name: str
+    ) -> list[InstallableBase]:
         """Get a product and all its dependencies."""
         # Load all products from installer directory
         product_collection = self._load_products_from_installer_directory()

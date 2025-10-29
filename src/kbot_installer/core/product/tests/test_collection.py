@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from kbot_installer.core.product.product_collection import ProductCollection
 from kbot_installer.core.product.installable_product import InstallableProduct
+from kbot_installer.core.product.product_collection import ProductCollection
 
 
 class TestProductCollection:
@@ -282,7 +282,10 @@ class TestProductCollection:
 
         assert folders == []
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
+    @patch(
+        "kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder",
+        autospec=True,
+    )
     def test_load_product_existing(self, mock_from_installer_folder) -> None:
         """Test loading an existing product."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -301,7 +304,7 @@ class TestProductCollection:
             (product_folder / "description.xml").write_text(description_xml)
 
             # Mock load_from_installer_folder to update the product instance
-            def mock_load(self, folder_path):
+            def mock_load(self, _folder_path):
                 self.version = "1.0.0"
                 self.type = "solution"
 
@@ -427,7 +430,10 @@ class TestProductCollection:
         finally:
             Path(file_path).unlink(missing_ok=True)
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
+    @patch(
+        "kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder",
+        autospec=True,
+    )
     def test_from_installer_success(self, mock_from_installer, sample_products) -> None:
         """Test creating collection from installer directory successfully."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -446,7 +452,8 @@ class TestProductCollection:
 
             # Mock load_from_installer_folder to update product instances
             call_count = 0
-            def mock_load(*args, **kwargs):
+
+            def mock_load(*args: object, **_kwargs: object) -> None:
                 nonlocal call_count
                 # When called on an instance, first arg is self
                 if args:
@@ -474,7 +481,10 @@ class TestProductCollection:
         with pytest.raises(NotADirectoryError):
             ProductCollection.from_installer("/nonexistent/path")
 
-    @patch("kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder", autospec=True)
+    @patch(
+        "kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder",
+        autospec=True,
+    )
     def test_from_installer_with_failures(self, mock_from_installer) -> None:
         """Test creating collection from installer with product loading failures."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -493,7 +503,8 @@ class TestProductCollection:
 
             # Mock load_from_installer_folder to raise ValueError for one product
             call_count = 0
-            def side_effect(*args, **kwargs):
+
+            def side_effect(*args: object, **_kwargs: object) -> None:
                 nonlocal call_count
                 if args:
                     self = args[0]
@@ -524,11 +535,13 @@ class TestProductCollection:
 
             with patch(
                 "kbot_installer.core.product.installable_product.InstallableProduct.load_from_installer_folder",
-                autospec=True
+                autospec=True,
             ) as mock_from_installer:
-                def mock_load(*args, **kwargs):
+
+                def mock_load(*args: object, **_kwargs: object) -> None:
                     if args:
                         args[0].version = "1.0.0"
+
                 mock_from_installer.side_effect = mock_load
 
                 ProductCollection.from_installer(str(installer_path))

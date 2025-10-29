@@ -151,4 +151,3 @@ class InstallableBase(ABC):
             path: Path to delete the product from.
 
         """
-

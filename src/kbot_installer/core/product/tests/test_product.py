@@ -255,7 +255,9 @@ class TestProduct:
     def test_merge_xml_json_different_names(self) -> None:
         """Test merging products with different names."""
         xml_product = InstallableProduct(name="jira", version="1.0.0", type="solution")
-        json_product = InstallableProduct(name="confluence", version="1.0.0", type="solution")
+        json_product = InstallableProduct(
+            name="confluence", version="1.0.0", type="solution"
+        )
 
         with pytest.raises(ValueError, match="Product names don't match"):
             InstallableProduct.merge_xml_json(xml_product, json_product)
@@ -360,7 +362,8 @@ class TestProduct:
         """Test string representation of InstallableProduct."""
         product = InstallableProduct(name="jira", version="2025.02", type="solution")
         assert (
-            str(product) == "InstallableProduct(name='jira', version='2025.02', type='solution')"
+            str(product)
+            == "InstallableProduct(name='jira', version='2025.02', type='solution')"
         )
 
     def test_repr_representation(self) -> None:
@@ -478,14 +481,22 @@ class TestProduct:
     def test_get_dependencies(self) -> None:
         """Test get_dependencies method."""
         # Create a product with dependencies
-        product_a = InstallableProduct(name="product-a", version="1.0.0", parents=["product-b", "product-c"])
-        product_b = InstallableProduct(name="product-b", version="1.0.0", parents=["product-d"])
+        product_a = InstallableProduct(
+            name="product-a", version="1.0.0", parents=["product-b", "product-c"]
+        )
+        product_b = InstallableProduct(
+            name="product-b", version="1.0.0", parents=["product-d"]
+        )
         product_c = InstallableProduct(name="product-c", version="1.0.0")
         product_d = InstallableProduct(name="product-d", version="1.0.0")
 
         # Mock the _load_product_by_name method to return our test products
         def mock_load_product(name: str) -> InstallableProduct:
-            products = {"product-b": product_b, "product-c": product_c, "product-d": product_d}
+            products = {
+                "product-b": product_b,
+                "product-c": product_c,
+                "product-d": product_d,
+            }
             return products.get(name, InstallableProduct(name=name))
 
         product_a._load_product_by_name = mock_load_product

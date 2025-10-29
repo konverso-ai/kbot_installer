@@ -14,7 +14,7 @@ def create_installable(
     env: str = "dev",
     parents: list[str] | None = None,
     categories: list[str] | None = None,
-    license: str | None = None,
+    license_info: str | None = None,
     display: dict | None = None,
     build_details: dict | None = None,
     providers: list[str] | None = None,
@@ -35,7 +35,7 @@ def create_installable(
         env: Environment (dev, prod).
         parents: List of parent product names (dependencies).
         categories: List of product categories.
-        license: License information.
+        license_info: License information.
         display: Multilingual display information.
         build_details: Detailed build information.
         providers: List of provider names.
@@ -55,7 +55,7 @@ def create_installable(
         "env": env,
         "parents": parents or [],
         "categories": categories or [],
-        "license": license,
+        "license": license_info,
         "display": display,
         "build_details": build_details,
         "providers": providers or ["nexus", "github", "bitbucket"],

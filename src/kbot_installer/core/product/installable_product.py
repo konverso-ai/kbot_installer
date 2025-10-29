@@ -4,19 +4,17 @@ import json
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Import here to avoid circular imports
 from typing import Any, Literal
 from xml.etree import ElementTree as ET
 
 from defusedxml import ElementTree as defused_ET
 
-from kbot_installer.core.provider import create_provider
-
-# Import here to avoid circular imports
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from kbot_installer.core.product.product_collection import ProductCollection
-
+from kbot_installer.core.product.factory import create_installable
 from kbot_installer.core.product.installable_base import InstallableBase
+from kbot_installer.core.product.product_collection import ProductCollection
+from kbot_installer.core.provider import create_provider
 
 
 @dataclass
@@ -49,9 +47,13 @@ class InstallableProduct(InstallableBase):
     license: str | None = None
     display: dict[str, Any] | None = None
     build_details: dict[str, Any] | None = None
-    providers: list[str] = field(default_factory=lambda: ["nexus", "github", "bitbucket"])
+    providers: list[str] = field(
+        default_factory=lambda: ["nexus", "github", "bitbucket"]
+    )
+    dirname: Path | None = None  # Directory path where product is located
 
     def __post_init__(self) -> None:
+        """Initialize provider after instance creation."""
         self.provider = create_provider(name="selector", providers=self.providers)
 
     @staticmethod
@@ -79,8 +81,6 @@ class InstallableProduct(InstallableBase):
             Product instance loaded from the provider.
 
         """
-        from kbot_installer.core.product.factory import create_installable
-
         # Create a minimal product instance with just the name using factory
         # The provider will handle the actual loading
         return create_installable(name=product_name)
@@ -283,6 +283,7 @@ class InstallableProduct(InstallableBase):
             ValueError: If XML is invalid.
 
         """
+        self.dirname = folder_path.resolve()
         xml_path = folder_path / "description.xml"
         json_path = folder_path / "description.json"
 
@@ -444,7 +445,9 @@ class InstallableProduct(InstallableBase):
 
         # Clone all products in BFS order
         for product in collection.products:
-            product_path = path.parent / product.name if product.name != self.name else path
+            product_path = (
+                path.parent / product.name if product.name != self.name else path
+            )
             product.provider.clone_and_checkout(product_path, product.version)
             product.load_from_installer_folder(product_path)
 
@@ -458,8 +461,6 @@ class InstallableProduct(InstallableBase):
 
         """
         # Collect all products using BFS
-        from kbot_installer.core.product.product_collection import ProductCollection
-
         queue = deque([self])
         processed = set()
         collected_products = []
@@ -579,9 +580,7 @@ class InstallableProduct(InstallableBase):
 
     def __str__(self) -> str:
         """Return string representation of InstallableProduct."""
-        return (
-            f"InstallableProduct(name='{self.name}', version='{self.version}', type='{self.type}')"
-        )
+        return f"InstallableProduct(name='{self.name}', version='{self.version}', type='{self.type}')"
 
     def __repr__(self) -> str:
         """Detailed string representation of InstallableProduct."""

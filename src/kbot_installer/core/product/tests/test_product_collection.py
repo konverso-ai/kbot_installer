@@ -3,13 +3,11 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from kbot_installer.core.product.product_collection import ProductCollection
-from kbot_installer.core.product.factory import create_installable
 from kbot_installer.core.product.installable_product import InstallableProduct
+from kbot_installer.core.product.product_collection import ProductCollection
 
 
 class TestProductCollection:
