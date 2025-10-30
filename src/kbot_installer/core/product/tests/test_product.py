@@ -8,6 +8,7 @@ import pytest
 
 from kbot_installer.core.product import create_installable
 from kbot_installer.core.product.installable_product import InstallableProduct
+from kbot_installer.core.product.product_collection import ProductCollection
 
 
 class TestProduct:
@@ -514,3 +515,131 @@ class TestProduct:
         assert "product-b" in product_names
         assert "product-c" in product_names
         assert "product-d" in product_names
+
+    def test_clone_without_dependencies(self) -> None:
+        """Test clone method without dependencies."""
+        from unittest.mock import Mock, patch
+
+        product = InstallableProduct(name="test-product", version="1.0.0")
+        mock_provider = Mock()
+        product.provider = mock_provider
+
+        target_path = Path("/tmp/test-clone")
+        with patch.object(
+            product, "load_from_installer_folder"
+        ) as mock_load_folder:
+            product.clone(target_path, dependencies=False)
+
+            # Verify provider.clone_and_checkout was called
+            mock_provider.clone_and_checkout.assert_called_once_with(
+                target_path, "1.0.0"
+            )
+            # Verify load_from_installer_folder was called
+            mock_load_folder.assert_called_once_with(target_path)
+
+    def test_clone_with_dependencies(self) -> None:
+        """Test clone method with dependencies."""
+        from unittest.mock import Mock, patch
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create products with dependencies
+            product_a = InstallableProduct(
+                name="product-a", version="1.0.0", parents=["product-b"]
+            )
+            product_b = InstallableProduct(name="product-b", version="1.0.0")
+
+            # Mock providers
+            mock_provider_a = Mock()
+            mock_provider_b = Mock()
+            product_a.provider = mock_provider_a
+            product_b.provider = mock_provider_b
+
+            # Mock _load_product_by_name to return product_b
+            def mock_load_product(name: str) -> InstallableProduct:
+                if name == "product-b":
+                    return product_b
+                return InstallableProduct(name=name)
+
+            product_a._load_product_by_name = mock_load_product
+
+            # Mock get_dependencies to return a collection
+            def mock_get_dependencies() -> ProductCollection:
+                return ProductCollection([product_a, product_b])
+
+            product_a.get_dependencies = mock_get_dependencies
+
+            # Mock load_from_installer_folder
+            with patch.object(
+                product_a, "load_from_installer_folder"
+            ) as mock_load_a, patch.object(
+                product_b, "load_from_installer_folder"
+            ) as mock_load_b:
+                base_path = Path(temp_dir)
+                product_a.clone(base_path / "product-a", dependencies=True)
+
+                # Verify both providers were called
+                mock_provider_a.clone_and_checkout.assert_called_once_with(
+                    base_path / "product-a", "1.0.0"
+                )
+                mock_provider_b.clone_and_checkout.assert_called_once_with(
+                    base_path / "product-b", "1.0.0"
+                )
+
+                # Verify load_from_installer_folder was called for both
+                assert mock_load_a.call_count == 1
+                assert mock_load_b.call_count == 1
+
+    def test_clone_with_dependencies_same_product_name(self) -> None:
+        """Test clone when dependency has same name uses base path."""
+        from unittest.mock import Mock, patch
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create product with self as dependency (shouldn't happen but tests path logic)
+            product_a = InstallableProduct(
+                name="product-a", version="1.0.0", parents=["product-b"]
+            )
+            product_b = InstallableProduct(name="product-b", version="1.0.0")
+
+            # Mock providers
+            mock_provider_a = Mock()
+            mock_provider_b = Mock()
+            product_a.provider = mock_provider_a
+            product_b.provider = mock_provider_b
+
+            # Mock _load_product_by_name
+            def mock_load_product(name: str) -> InstallableProduct:
+                if name == "product-b":
+                    return product_b
+                return InstallableProduct(name=name)
+
+            product_a._load_product_by_name = mock_load_product
+
+            # Create collection where product-a is first
+            def mock_get_dependencies() -> ProductCollection:
+                return ProductCollection([product_a, product_b])
+
+            product_a.get_dependencies = mock_get_dependencies
+
+            # Mock load_from_installer_folder
+            with patch.object(
+                product_a, "load_from_installer_folder"
+            ) as mock_load_a, patch.object(
+                product_b, "load_from_installer_folder"
+            ) as mock_load_b:
+                base_path = Path(temp_dir)
+                clone_path = base_path / "product-a"
+
+                product_a.clone(clone_path, dependencies=True)
+
+                # When cloning product_a in collection, if name matches, use original path
+                # Otherwise use parent / product.name
+                mock_provider_a.clone_and_checkout.assert_called_once_with(
+                    clone_path, "1.0.0"
+                )
+                # product-b should be cloned to base_path / "product-b"
+                mock_provider_b.clone_and_checkout.assert_called_once_with(
+                    base_path / "product-b", "1.0.0"
+                )
+
+                assert mock_load_a.call_count == 1
+                assert mock_load_b.call_count == 1
