@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 from kbot_installer.core.linker.symbolic_linker import SymbolicLinker
+from kbot_installer.core.utils import calculate_relative_path, ensure_directory
 
 
 class TestSymbolicLinker:
@@ -124,7 +125,7 @@ class TestSymbolicLinker:
             linker = SymbolicLinker(base_path, update_mode=False, silent_mode=False)
 
             new_dir = base_path / "new" / "nested" / "dir"
-            linker.ensure_directory(new_dir)
+            ensure_directory(new_dir)
 
             assert new_dir.exists()
             assert new_dir.is_dir()
@@ -141,7 +142,7 @@ class TestSymbolicLinker:
             dst.parent.mkdir()
 
             linker = SymbolicLinker(base_path, update_mode=False, silent_mode=False)
-            relative = linker.calculate_relative_path(src, dst)
+            relative = calculate_relative_path(src, dst)
 
             assert isinstance(relative, Path)
             # Relative path should not be absolute (in most cases)
@@ -548,7 +549,7 @@ class TestSymbolicLinker:
             dst = base_path / "dst.txt"
 
             linker = SymbolicLinker(base_path, update_mode=False, silent_mode=False)
-            relative = linker.calculate_relative_path(src, dst)
+            relative = calculate_relative_path(src, dst)
 
             assert isinstance(relative, Path)
             # Should be a simple filename or relative path
@@ -565,7 +566,7 @@ class TestSymbolicLinker:
             dst = base_path / "dst.txt"
 
             linker = SymbolicLinker(base_path, update_mode=False, silent_mode=False)
-            relative = linker.calculate_relative_path(src, dst)
+            relative = calculate_relative_path(src, dst)
 
             assert isinstance(relative, Path)
             # Should contain path to src

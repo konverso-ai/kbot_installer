@@ -1,6 +1,7 @@
 """Utility functions for kbot-installer."""
 
 import logging
+import os
 import tarfile
 import tempfile
 from collections.abc import Iterator
@@ -162,6 +163,27 @@ def optimized_download_and_extract_bis(
     buffer.close()
 
     logger.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
+
+
+def calculate_relative_path(src: Path, dst: Path) -> Path:
+    """Calculate relative path from destination to source.
+
+    Args:
+        src: Source path.
+        dst: Destination path.
+
+    Returns:
+        Relative path from dst to src.
+
+    """
+    src_abs = Path(src).resolve()
+    dst_abs = Path(dst).resolve()
+
+    try:
+        return Path(os.path.relpath(src_abs, dst_abs.parent))
+    except Exception:
+        # If relpath fails (e.g., different drives on some OS), return absolute
+        return src_abs
 
 
 def optimized_download_and_extract_ter(

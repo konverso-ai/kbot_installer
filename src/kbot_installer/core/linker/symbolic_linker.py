@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from kbot_installer.core.linker.linker_base import LinkerBase
+from kbot_installer.core.utils import calculate_relative_path, ensure_directory
 
 
 class SymbolicLinker(LinkerBase):
@@ -38,12 +39,10 @@ class SymbolicLinker(LinkerBase):
             interactive_callback: Function for yes/no prompts.
 
         """
-        super().__init__(
-            base_path,
-            update_mode=update_mode,
-            silent_mode=silent_mode,
-            interactive_callback=interactive_callback,
-        )
+        self.base_path = Path(base_path).resolve()
+        self.update_mode = update_mode
+        self.silent_mode = silent_mode
+        self.interactive_callback = interactive_callback
         self.python_extensions = (".py", ".so")
 
     def link(self, src: Path, dst: Path) -> None:
@@ -98,7 +97,7 @@ class SymbolicLinker(LinkerBase):
         if dst.exists():
             return
 
-        relative_path = self.calculate_relative_path(src, dst)
+        relative_path = calculate_relative_path(src, dst)
         dst.symlink_to(relative_path)
 
     def _link_regular_file(self, src: Path, dst: Path) -> None:
@@ -107,7 +106,7 @@ class SymbolicLinker(LinkerBase):
             self._validate_existing_link(src, dst)
 
         if not dst.exists():
-            relative_path = self.calculate_relative_path(src, dst)
+            relative_path = calculate_relative_path(src, dst)
             dst.symlink_to(relative_path)
 
     def _validate_existing_link(self, src: Path, dst: Path) -> None:
@@ -159,7 +158,7 @@ class SymbolicLinker(LinkerBase):
 
         """
         link_dirs = link_dirs or []
-        self.ensure_directory(dst)
+        ensure_directory(dst)
 
         if not src.exists():
             return
@@ -225,7 +224,7 @@ class SymbolicLinker(LinkerBase):
         if ignoredirs is None:
             ignoredirs = []
 
-        self.ensure_directory(dst)
+        ensure_directory(dst)
 
         # Check broken links in update mode
         if self.update_mode:

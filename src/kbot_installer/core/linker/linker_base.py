@@ -1,8 +1,6 @@
 """Base class for linkers."""
 
-import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
 
 
@@ -21,28 +19,6 @@ class LinkerBase(ABC):
             Should accept (question: str, default: str) -> bool.
 
     """
-
-    def __init__(
-        self,
-        base_path: Path,
-        *,
-        update_mode: bool = False,
-        silent_mode: bool = False,
-        interactive_callback: Callable[[str, str], bool] | None = None,
-    ) -> None:
-        """Initialize linker.
-
-        Args:
-            base_path: Base path for relative link calculations.
-            update_mode: Enable update/validation mode.
-            silent_mode: Suppress interactive prompts.
-            interactive_callback: Function for yes/no prompts.
-
-        """
-        self.base_path = Path(base_path).resolve()
-        self.update_mode = update_mode
-        self.silent_mode = silent_mode
-        self.interactive_callback = interactive_callback
 
     @abstractmethod
     def link(self, src: Path, dst: Path) -> None:
@@ -100,35 +76,3 @@ class LinkerBase(ABC):
             dir_path: Directory path to validate.
 
         """
-
-    def ensure_directory(self, path: Path) -> None:
-        """Ensure a directory exists, creating it if necessary.
-
-        Args:
-            path: Directory path to create.
-
-        """
-        path = Path(path)
-        if not path.exists():
-            path.mkdir(parents=True, exist_ok=True)
-
-    def calculate_relative_path(self, src: Path, dst: Path) -> Path:
-        """Calculate relative path from destination to source.
-
-        Args:
-            src: Source path.
-            dst: Destination path.
-
-        Returns:
-            Relative path from dst to src.
-
-        """
-        src_abs = Path(src).resolve()
-        dst_abs = Path(dst).resolve()
-
-        # Calculate relative path
-        try:
-            return Path(os.path.relpath(src_abs, dst_abs.parent))
-        except ValueError:
-            # If on different drives, return absolute path
-            return src_abs
