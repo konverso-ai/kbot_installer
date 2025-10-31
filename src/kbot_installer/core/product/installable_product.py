@@ -14,6 +14,9 @@ from pathlib import Path
 
 # Import here to avoid circular imports
 from typing import Any, Literal
+
+# xml.etree.ElementTree used only for XML creation (to_xml) - safe because we control the content
+# XXE vulnerabilities only affect XML parsing/reading, not writing
 from xml.etree import ElementTree as ET
 
 from defusedxml import ElementTree as defused_ET

@@ -4,6 +4,9 @@ import fnmatch
 import json
 from collections.abc import Iterator
 from pathlib import Path
+
+# xml.etree.ElementTree used only for XML creation (export_to_xml) - safe because we control the content
+# XXE vulnerabilities only affect XML parsing/reading, not writing
 from xml.etree import ElementTree as ET
 
 from kbot_installer.core.product.dependency_graph import DependencyGraph

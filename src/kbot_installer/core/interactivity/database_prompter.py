@@ -2,6 +2,7 @@
 
 import os
 import socket
+import subprocess
 from pathlib import Path
 
 from kbot_installer.core.interactivity.base import InteractivePrompter
@@ -108,14 +109,43 @@ class DatabasePrompter(InteractivePrompter):
             if not result["db_internal"]:
                 # Test connection to external database
                 pg_dir = Path(os.environ["PG_DIR"])
-                pg_psql = pg_dir / "bin" / "psql"
-                # Note: Using subprocess would be safer but keeping os.system for compatibility
-                test_cmd = (
-                    f"export PGPASSWORD='{result['db_password']}';"
-                    f"{pg_psql} -h {result['db_host']} -p {result['db_port']} "
-                    f"-d {result['db_name']} -U {result['db_user']} -c 'select 1' > /dev/null"
+                # Resolve to absolute path to avoid security risks with partial paths
+                pg_psql = (pg_dir / "bin" / "psql").resolve()
+
+                if not pg_psql.exists():
+                    print(
+                        f"Error: psql executable not found at {pg_psql}. "
+                        "Please check PG_DIR environment variable."
+                    )
+                    continue
+
+                # Use environment variable for password to avoid command injection
+                env = os.environ.copy()
+                env["PGPASSWORD"] = result["db_password"]
+
+                # Use subprocess.run() with list of arguments for security
+                # Redirect stdout/stderr to /dev/null for silent test
+                result_process = subprocess.run(
+                    [
+                        str(pg_psql),
+                        "-h",
+                        result["db_host"],
+                        "-p",
+                        result["db_port"],
+                        "-d",
+                        result["db_name"],
+                        "-U",
+                        result["db_user"],
+                        "-c",
+                        "select 1",
+                    ],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
                 )
-                if os.system(test_cmd) == 0:  # noqa: S605
+
+                if result_process.returncode == 0:
                     break
                 print(
                     "Can't connect to an external database with specified parameters!"

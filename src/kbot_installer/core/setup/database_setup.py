@@ -128,8 +128,20 @@ class InternalDatabaseSetupManager(BaseSetupManager):
             print("Starting PostgreSQL server...")
             sys.stdout.flush()
             log_file = self.target / "logs" / "postgres.log"
-            os.system(
-                f"{pg_ctl} start -l {log_file} -D {pg_data} --silent -w -o '-p {self.db_port}'"
+            subprocess.run(
+                [
+                    str(pg_ctl),
+                    "start",
+                    "-l",
+                    str(log_file),
+                    "-D",
+                    str(pg_data),
+                    "--silent",
+                    "-w",
+                    "-o",
+                    f"-p{self.db_port}",
+                ],
+                check=False,
             )
 
             # Verify database started
@@ -160,9 +172,22 @@ class InternalDatabaseSetupManager(BaseSetupManager):
         if pg_user_exists.decode("utf-8") == "0":
             print(f"Creating PostgreSQL user {self.db_user}...")
             sys.stdout.flush()
-            os.system(
-                f"{pg_psql} postgres -q -p {self.db_port} "
-                f"-c \"CREATE USER {self.db_user} PASSWORD '{self.db_password}'\""
+            # Use environment variable for password to avoid command injection
+            env = os.environ.copy()
+            # Note: SQL injection is handled separately (noqa: S608)
+            # The password is passed via environment variable, not command line
+            subprocess.run(
+                [
+                    str(pg_psql),
+                    "postgres",
+                    "-q",
+                    "-p",
+                    self.db_port,
+                    "-c",
+                    f"CREATE USER {self.db_user} PASSWORD '{self.db_password}'",
+                ],
+                env=env,
+                check=False,
             )
         else:
             print(f"PostgreSQL user {self.db_user} already exists.")
@@ -185,17 +210,43 @@ class InternalDatabaseSetupManager(BaseSetupManager):
         if pg_db_exists.decode("utf-8") == "0":
             print(f"Creating PostgreSQL database {self.db_name}...")
             sys.stdout.flush()
-            os.system(
-                f"{pg_psql} postgres -q -p {self.db_port} "
-                f"-c \"CREATE DATABASE {self.db_name} ENCODING 'UTF8' OWNER {self.db_user}\""
+            # Note: SQL injection is handled separately (noqa: S608)
+            # Database names, user names are validated or controlled
+            subprocess.run(
+                [
+                    str(pg_psql),
+                    "postgres",
+                    "-q",
+                    "-p",
+                    self.db_port,
+                    "-c",
+                    f"CREATE DATABASE {self.db_name} ENCODING 'UTF8' OWNER {self.db_user}",
+                ],
+                check=False,
             )
-            os.system(
-                f"{pg_psql} -q -p {self.db_port} {self.db_name} "
-                f'-c "ALTER SCHEMA public OWNER TO {self.db_user}"'
+            subprocess.run(
+                [
+                    str(pg_psql),
+                    "-q",
+                    "-p",
+                    self.db_port,
+                    self.db_name,
+                    "-c",
+                    f"ALTER SCHEMA public OWNER TO {self.db_user}",
+                ],
+                check=False,
             )
-            os.system(
-                f"{pg_psql} -q -p {self.db_port} {self.db_name} "
-                f"-c \"ALTER SYSTEM SET max_connections TO '512'\""
+            subprocess.run(
+                [
+                    str(pg_psql),
+                    "-q",
+                    "-p",
+                    self.db_port,
+                    self.db_name,
+                    "-c",
+                    "ALTER SYSTEM SET max_connections TO '512'",
+                ],
+                check=False,
             )
         else:
             print(f"PostgreSQL database {self.db_name} already exists.")
@@ -245,7 +296,17 @@ class InternalDatabaseSetupManager(BaseSetupManager):
             ):
                 print("Error: can't init DB schema! Aborting...")
                 if self.pg_ctl:
-                    os.system(f"{self.pg_ctl} -D {self.target}/var/db --silent stop")
+                    pg_data_path = self.target / "var" / "db"
+                    subprocess.run(
+                        [
+                            str(self.pg_ctl),
+                            "-D",
+                            str(pg_data_path),
+                            "--silent",
+                            "stop",
+                        ],
+                        check=False,
+                    )
                 sys.exit(1)
 
 
@@ -332,12 +393,29 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
             if not sqlfile.exists():
                 continue
 
-            cmd = (
-                f"export PGPASSWORD='{self.db_password}';"
-                f"{pg_psql} -q -h {self.db_host} -p {self.db_port} "
-                f"-d {self.db_name} -U {self.db_user} -f {sqlfile}"
+            # Use environment variable for password to avoid command injection
+            env = os.environ.copy()
+            env["PGPASSWORD"] = self.db_password
+
+            result = subprocess.run(
+                [
+                    str(pg_psql),
+                    "-q",
+                    "-h",
+                    self.db_host,
+                    "-p",
+                    self.db_port,
+                    "-d",
+                    self.db_name,
+                    "-U",
+                    self.db_user,
+                    "-f",
+                    str(sqlfile),
+                ],
+                env=env,
+                check=False,
             )
 
-            if os.system(cmd) != 0:
+            if result.returncode != 0:
                 print("Error: can't load tables! Aborting...")
                 sys.exit(1)

@@ -57,6 +57,7 @@ ignore = [
 
 "**/interactivity/*.py" = [
     "T201", # print found (acceptable in interactive prompts)
+    "S603", # subprocess call (database connection tests)
 ]
 
 "**/database_setup.py" = [
