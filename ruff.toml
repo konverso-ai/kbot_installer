@@ -59,6 +59,12 @@ ignore = [
     "T201", # print found (acceptable in interactive prompts)
 ]
 
+"**/database_setup.py" = [
+    "T201", # print found (database setup output)
+    "S603", # subprocess call (database operations)
+    "S605", # Starting a process with a shell (database commands)
+]
+
 "**/test_*.py" = [
     "ANN001",    # Missing type annotation for function argument (test parameters)
     "ANN202",    # Missing return type annotation for private function (test helpers)

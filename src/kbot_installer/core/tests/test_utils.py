@@ -1,7 +1,6 @@
 """Tests for utils module."""
 
 import io
-import os
 import tarfile
 import tempfile
 from pathlib import Path
@@ -270,7 +269,9 @@ class TestOptimizedDownloadAndExtract:
                 mock_stream.return_value.__enter__.return_value = mock_response
                 mock_stream.return_value.__exit__.return_value = None
 
-                optimized_download_and_extract("http://example.com/file.tar.gz", target_dir)
+                optimized_download_and_extract(
+                    "http://example.com/file.tar.gz", target_dir
+                )
 
                 # Verify the file was extracted
                 extracted_file = target_dir / "test.txt"
@@ -292,7 +293,10 @@ class TestOptimizedDownloadAndExtract:
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         chunk_size = 16 * 1024 * 1024
-        chunks = [tar_data_bytes[i : i + chunk_size] for i in range(0, len(tar_data_bytes), chunk_size)]
+        chunks = [
+            tar_data_bytes[i : i + chunk_size]
+            for i in range(0, len(tar_data_bytes), chunk_size)
+        ]
         if not chunks:
             chunks = [tar_data_bytes]
         mock_response.iter_bytes.return_value = iter(chunks)
@@ -308,9 +312,16 @@ class TestOptimizedDownloadAndExtract:
                 context_manager.__exit__.return_value = None
                 mock_stream.return_value = context_manager
 
-                optimized_download_and_extract("http://example.com/file.tar.gz", target_dir, mock_auth)
+                optimized_download_and_extract(
+                    "http://example.com/file.tar.gz", target_dir, mock_auth
+                )
 
-                mock_stream.assert_called_once_with("GET", "http://example.com/file.tar.gz", timeout=60.0, auth=mock_auth)
+                mock_stream.assert_called_once_with(
+                    "GET",
+                    "http://example.com/file.tar.gz",
+                    timeout=60.0,
+                    auth=mock_auth,
+                )
 
     def test_optimized_download_and_extract_http_error(self) -> None:
         """Test download and extraction with HTTP error."""
@@ -329,7 +340,9 @@ class TestOptimizedDownloadAndExtract:
                 mock_stream.return_value = context_manager
 
                 with pytest.raises(httpx.HTTPStatusError):
-                    optimized_download_and_extract("http://example.com/file.tar.gz", target_dir)
+                    optimized_download_and_extract(
+                        "http://example.com/file.tar.gz", target_dir
+                    )
 
     def test_optimized_download_and_extract_creates_target_dir(self) -> None:
         """Test that target directory is created if it doesn't exist."""
@@ -346,7 +359,10 @@ class TestOptimizedDownloadAndExtract:
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         chunk_size = 16 * 1024 * 1024
-        chunks = [tar_data_bytes[i : i + chunk_size] for i in range(0, len(tar_data_bytes), chunk_size)]
+        chunks = [
+            tar_data_bytes[i : i + chunk_size]
+            for i in range(0, len(tar_data_bytes), chunk_size)
+        ]
         if not chunks:
             chunks = [tar_data_bytes]
         mock_response.iter_bytes.return_value = iter(chunks)
@@ -361,7 +377,9 @@ class TestOptimizedDownloadAndExtract:
                 context_manager.__exit__.return_value = None
                 mock_stream.return_value = context_manager
 
-                optimized_download_and_extract("http://example.com/file.tar.gz", target_dir)
+                optimized_download_and_extract(
+                    "http://example.com/file.tar.gz", target_dir
+                )
 
                 assert target_dir.exists()
                 assert target_dir.is_dir()
@@ -385,7 +403,10 @@ class TestOptimizedDownloadAndExtractBis:
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         chunk_size = 16 * 1024 * 1024
-        chunks = [tar_data_bytes[i : i + chunk_size] for i in range(0, len(tar_data_bytes), chunk_size)]
+        chunks = [
+            tar_data_bytes[i : i + chunk_size]
+            for i in range(0, len(tar_data_bytes), chunk_size)
+        ]
         if not chunks:
             chunks = [tar_data_bytes]
         mock_response.iter_bytes.return_value = iter(chunks)
@@ -402,7 +423,9 @@ class TestOptimizedDownloadAndExtractBis:
                 # Wait for the thread to complete
                 import time
 
-                optimized_download_and_extract_bis("http://example.com/file.tar.gz", target_dir)
+                optimized_download_and_extract_bis(
+                    "http://example.com/file.tar.gz", target_dir
+                )
                 time.sleep(0.1)  # Give thread time to process
 
                 # The extraction might not complete in this test due to threading,
@@ -427,7 +450,10 @@ class TestOptimizedDownloadAndExtractTer:
 
         # Create chunks for streaming
         chunk_size = 1024
-        data_chunks = [tar_data_bytes[i : i + chunk_size] for i in range(0, len(tar_data_bytes), chunk_size)]
+        data_chunks = [
+            tar_data_bytes[i : i + chunk_size]
+            for i in range(0, len(tar_data_bytes), chunk_size)
+        ]
         if not data_chunks:
             data_chunks = [tar_data_bytes]
 
@@ -444,7 +470,9 @@ class TestOptimizedDownloadAndExtractTer:
                 context_manager.__exit__.return_value = None
                 mock_stream.return_value = context_manager
 
-                optimized_download_and_extract_ter("http://example.com/file.tar.gz", target_dir)
+                optimized_download_and_extract_ter(
+                    "http://example.com/file.tar.gz", target_dir
+                )
 
                 # Verify the file was extracted
                 extracted_file = target_dir / "ter_test.txt"
@@ -465,7 +493,10 @@ class TestOptimizedDownloadAndExtractTer:
 
         # Create chunks for streaming
         chunk_size = 16 * 1024 * 1024
-        data_chunks = [tar_data_bytes[i : i + chunk_size] for i in range(0, len(tar_data_bytes), chunk_size)]
+        data_chunks = [
+            tar_data_bytes[i : i + chunk_size]
+            for i in range(0, len(tar_data_bytes), chunk_size)
+        ]
         if not data_chunks:
             data_chunks = [tar_data_bytes]
 
@@ -483,7 +514,9 @@ class TestOptimizedDownloadAndExtractTer:
                 context_manager.__exit__.return_value = None
                 mock_stream.return_value = context_manager
 
-                optimized_download_and_extract_ter("http://example.com/file.tar.gz", target_dir)
+                optimized_download_and_extract_ter(
+                    "http://example.com/file.tar.gz", target_dir
+                )
 
                 assert target_dir.exists()
                 assert target_dir.is_dir()

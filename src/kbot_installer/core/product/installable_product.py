@@ -576,7 +576,7 @@ class InstallableProduct(InstallableBase):
 
         return result
 
-    def _is_path_ignored(
+    def _is_path_ignored(  # noqa: C901, PLR0912
         self,
         file_path: Path,
         workarea_root: Path,
@@ -723,7 +723,7 @@ class InstallableProduct(InstallableBase):
 
                     processed.add(item_path.resolve())
 
-    def _handle_work_copy(
+    def _handle_work_copy(  # noqa: C901, PLR0912
         self,
         workarea_root: Path,
         product_dir: Path,
@@ -804,7 +804,7 @@ class InstallableProduct(InstallableBase):
                     shutil.copy2(src_file, dest_file)
                     processed.add(dest_file.resolve())
 
-    def _handle_work_link(
+    def _handle_work_link(  # noqa: C901, PLR0912
         self,
         workarea_root: Path,
         product_dir: Path,
@@ -949,7 +949,7 @@ class InstallableProduct(InstallableBase):
             dest_path.symlink_to(source_path.resolve())
             processed.add(dest_path.resolve())
 
-    def install(self, path: Path, *, dependencies: bool = True) -> None:
+    def install(self, path: Path, *, dependencies: bool = True) -> None:  # noqa: C901, PLR0912
         """Install the product into the workarea.
 
         Extracts the [work] section from pyproject.toml for this product and all

@@ -20,13 +20,13 @@ class InternalDatabaseSetupManager(BaseSetupManager):
     def __init__(
         self,
         target: str | Path,
-        products: Any,
+        products: Any,  # noqa: ANN401
         prompter: InteractivePrompter | None = None,
         *,
         db_port: str = "5432",
         db_name: str = "kbot_db",
         db_user: str = "kbot_db_user",
-        db_password: str = "kbot_db_pwd",
+        db_password: str = "kbot_db_pwd",  # noqa: S107
         update_mode: bool = False,
         silent_mode: bool = False,
     ) -> None:
@@ -42,6 +42,7 @@ class InternalDatabaseSetupManager(BaseSetupManager):
             db_password: Database password.
             update_mode: Enable update/validation mode.
             silent_mode: Suppress interactive prompts.
+
         """
         super().__init__(
             target,
@@ -60,7 +61,8 @@ class InternalDatabaseSetupManager(BaseSetupManager):
         """Set up internal PostgreSQL database."""
         pg_dir = os.environ.get("PG_DIR")
         if not pg_dir:
-            raise RuntimeError("PG_DIR environment variable not set")
+            error_msg = "PG_DIR environment variable not set"
+            raise RuntimeError(error_msg)
 
         pg_bin = Path(pg_dir) / "bin"
         pg_psql = pg_bin / "psql"
@@ -108,9 +110,13 @@ class InternalDatabaseSetupManager(BaseSetupManager):
         self.pg_ctl = str(pg_ctl)
 
     def _ensure_database_running(
-        self, pg_ctl: Path, pg_psql: Path, pg_data: Path
+        self,
+        pg_ctl: Path,
+        pg_psql: Path,
+        pg_data: Path,
     ) -> None:
         """Ensure PostgreSQL database is running."""
+        _ = pg_psql  # unused but kept for API consistency
         # Check if database is running
         try:
             subprocess.check_output(
@@ -147,7 +153,7 @@ class InternalDatabaseSetupManager(BaseSetupManager):
                 "-p",
                 self.db_port,
                 "-c",
-                f"SELECT count(*) FROM pg_user WHERE usename = '{self.db_user}'",
+                f"SELECT count(*) FROM pg_user WHERE usename = '{self.db_user}'",  # noqa: S608
             ]
         ).strip()
 
@@ -172,7 +178,7 @@ class InternalDatabaseSetupManager(BaseSetupManager):
                 "-p",
                 self.db_port,
                 "-c",
-                f"SELECT count(*) FROM pg_database WHERE datname = '{self.db_name}'",
+                f"SELECT count(*) FROM pg_database WHERE datname = '{self.db_name}'",  # noqa: S608
             ]
         ).strip()
 
@@ -252,14 +258,14 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
     def __init__(
         self,
         target: str | Path,
-        products: Any,
+        products: Any,  # noqa: ANN401
         prompter: InteractivePrompter | None = None,
         *,
         db_host: str = "localhost",
         db_port: str = "5432",
         db_name: str = "kbot_db",
         db_user: str = "kbot_db_user",
-        db_password: str = "kbot_db_pwd",
+        db_password: str = "kbot_db_pwd",  # noqa: S107
         update_mode: bool = False,
         silent_mode: bool = False,
     ) -> None:
@@ -276,6 +282,7 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
             db_password: Database password.
             update_mode: Enable update/validation mode.
             silent_mode: Suppress interactive prompts.
+
         """
         super().__init__(
             target,
@@ -294,7 +301,8 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
         """Load database schema into external database."""
         pg_dir = os.environ.get("PG_DIR")
         if not pg_dir:
-            raise RuntimeError("PG_DIR environment variable not set")
+            error_msg = "PG_DIR environment variable not set"
+            raise RuntimeError(error_msg)
 
         pg_bin = Path(pg_dir) / "bin"
         pg_psql = pg_bin / "psql"

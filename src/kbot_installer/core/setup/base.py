@@ -24,7 +24,7 @@ class BaseSetupManager:
     def __init__(
         self,
         target: str | Path,
-        products: Any,  # ProductList ou ProductCollection
+        products: Any,  # noqa: ANN401  # ProductList ou ProductCollection
         prompter: InteractivePrompter | None = None,
         *,
         update_mode: bool = False,
@@ -38,6 +38,7 @@ class BaseSetupManager:
             prompter: Optional InteractivePrompter for user interaction.
             update_mode: Enable update/validation mode.
             silent_mode: Suppress interactive prompts.
+
         """
         self.target = Path(target)
         self.products = products
@@ -52,8 +53,10 @@ class BaseSetupManager:
 
         This method should be overridden by subclasses to implement
         their specific setup logic.
+
         """
-        raise NotImplementedError("Subclasses must implement setup()")
+        error_msg = "Subclasses must implement setup()"
+        raise NotImplementedError(error_msg)
 
     def ensure_directory(self, path: str | Path) -> Path:
         """Ensure a directory exists, creating it if necessary.
@@ -63,12 +66,13 @@ class BaseSetupManager:
 
         Returns:
             Path object of the created directory.
+
         """
         dir_path = self.target / path if not Path(path).is_absolute() else Path(path)
         ensure_dir_util(dir_path)
         return dir_path
 
-    def get_kbot_product(self) -> Any:
+    def get_kbot_product(self) -> Any:  # noqa: ANN401
         """Get the kbot product from the collection.
 
         Returns:
@@ -77,6 +81,7 @@ class BaseSetupManager:
         Raises:
             AttributeError: If products collection doesn't have kbot() method.
             RuntimeError: If kbot product not found.
+
         """
         if hasattr(self.products, "kbot"):
             return self.products.kbot()
@@ -84,4 +89,5 @@ class BaseSetupManager:
         for product in self.products:
             if hasattr(product, "name") and product.name == "kbot":
                 return product
-        raise RuntimeError("kbot product not found in collection")
+        error_msg = "kbot product not found in collection"
+        raise RuntimeError(error_msg)

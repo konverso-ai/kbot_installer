@@ -546,7 +546,9 @@ class TestProductCollection:
 
         # Should return dictionary with product names as keys and JSON as values
         assert isinstance(bfs_dict, dict)
-        assert "product3" in bfs_dict or "product1" in bfs_dict or "product2" in bfs_dict
+        assert (
+            "product3" in bfs_dict or "product1" in bfs_dict or "product2" in bfs_dict
+        )
 
     def test_save_bfs_ordered_json(self, populated_collection) -> None:
         """Test saving collection as BFS-ordered JSON."""
