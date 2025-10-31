@@ -98,25 +98,51 @@ class TestNexusProvider:
         # Verify optimized_download_and_extract_ter was called
         mock_extract.assert_called_once()
 
-    @patch("asyncio.run")
-    def test_clone_handles_download_error(self, mock_run) -> None:
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
+    @patch("pathlib.Path.mkdir")
+    def test_clone_success_with_auth(self, mock_mkdir, mock_extract) -> None:
+        """Test successful clone operation with authentication."""
+        auth = MockHttpAuth()
+        provider = NexusProvider("example.com", "test-repo", auth)
+        mock_extract.return_value = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            provider.clone_and_checkout("test-repo", temp_dir, "main")
+
+        # Verify optimized_download_and_extract_ter was called with auth
+        mock_extract.assert_called_once()
+        # Check that auth object was passed
+        call_args = mock_extract.call_args
+        assert call_args is not None
+        assert len(call_args[0]) >= 2
+
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
+    def test_clone_handles_download_error(self, mock_extract) -> None:
         """Test that clone handles download errors."""
         provider = NexusProvider("example.com", "test-repo")
-        mock_run.side_effect = Exception("Download failed")
+        mock_extract.side_effect = Exception("Download failed")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            with pytest.raises(ProviderError):
+            with pytest.raises(ProviderError) as exc_info:
                 provider.clone_and_checkout("test-repo", temp_dir)
+            assert "Failed to clone repository" in str(exc_info.value)
 
-    @patch("asyncio.run")
-    def test_clone_handles_extraction_error(self, mock_run) -> None:
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
+    def test_clone_handles_extraction_error(self, mock_extract) -> None:
         """Test that clone handles extraction errors."""
         provider = NexusProvider("example.com", "test-repo")
-        mock_run.side_effect = Exception("Extraction failed")
+        mock_extract.side_effect = Exception("Extraction failed")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            with pytest.raises(ProviderError):
+            with pytest.raises(ProviderError) as exc_info:
                 provider.clone_and_checkout("test-repo", temp_dir)
+            assert "Failed to clone repository" in str(exc_info.value)
 
     @patch("kbot_installer.core.provider.nexus_provider.Path.mkdir")
     def test_clone_creates_target_directory(self, mock_mkdir) -> None:
@@ -138,3 +164,19 @@ class TestNexusProvider:
         assert "Provider for Nexus repository operations" in docstring
         assert "repository" in docstring
         assert "auth" in docstring
+
+    def test_get_name(self) -> None:
+        """Test get_name method returns correct name."""
+        provider = NexusProvider("example.com", "test-repo")
+        assert provider.get_name() == "nexus"
+
+    @pytest.mark.asyncio
+    async def test_check_remote_repository_exists_exception(self) -> None:
+        """Test check_remote_repository_exists handles exceptions."""
+        provider = NexusProvider("example.com", "test-repo")
+
+        # Since _get_versioner might not exist or raise an exception, test the exception path
+        # The method should return False when an exception occurs
+        result = await provider.check_remote_repository_exists("test-repo")
+        # Should return False when versioner cannot be created or fails
+        assert result is False

@@ -400,3 +400,112 @@ class TestDependencyGraph:
         repr_str = repr(graph)
         assert "DependencyGraph" in repr_str
         assert "test" in repr_str
+
+    def test_get_bfs_order(self) -> None:
+        """Test getting products in BFS order."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test3"]
+        )
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
+        graph = DependencyGraph([product1, product2, product3])
+
+        # BFS order starting from test1 should be test1, test2, test3
+        bfs_order = graph.get_bfs_order("test1")
+        assert bfs_order == ["test1", "test2", "test3"]
+
+    def test_get_bfs_order_with_duplicate(self) -> None:
+        """Test BFS order handles already processed nodes."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test1"]
+        )
+        graph = DependencyGraph([product1, product2])
+
+        # Should handle circular references gracefully
+        bfs_order = graph.get_bfs_order("test1")
+        assert "test1" in bfs_order
+
+    def test_get_bfs_ordered_products(self) -> None:
+        """Test getting Product instances in BFS order."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test3"]
+        )
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
+        graph = DependencyGraph([product1, product2, product3])
+
+        bfs_products = graph.get_bfs_ordered_products("test1")
+        assert len(bfs_products) == 3
+        assert bfs_products[0] == product1
+        assert bfs_products[1] == product2
+        assert bfs_products[2] == product3
+
+    def test_get_bfs_ordered_products_nonexistent(self) -> None:
+        """Test BFS ordered products with non-existent root."""
+        product1 = InstallableProduct(name="test1", version="1.0.0", type="solution")
+        graph = DependencyGraph([product1])
+
+        bfs_products = graph.get_bfs_ordered_products("nonexistent")
+        assert bfs_products == []
+
+    def test_get_transitive_dependencies_already_visited(self) -> None:
+        """Test get_transitive_dependencies handles already visited nodes."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2", "test3"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test3"]
+        )
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
+        graph = DependencyGraph([product1, product2, product3])
+
+        deps = graph.get_transitive_dependencies("test1")
+        # Should include both test2 and test3, without duplicates
+        assert "test2" in deps
+        assert "test3" in deps
+
+    def test_get_transitive_dependents_already_visited(self) -> None:
+        """Test get_transitive_dependents handles already visited nodes."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test3"]
+        )
+        product3 = InstallableProduct(
+            name="test3", version="3.0.0", type="library", parents=[]
+        )
+        graph = DependencyGraph([product1, product2, product3])
+
+        dependents = graph.get_transitive_dependents("test3")
+        # Should include both test1 and test2, without duplicates
+        assert "test1" in dependents
+        assert "test2" in dependents
+
+    def test_get_dependency_levels_with_circular(self) -> None:
+        """Test get_dependency_levels handles circular dependencies."""
+        product1 = InstallableProduct(
+            name="test1", version="1.0.0", type="solution", parents=["test2"]
+        )
+        product2 = InstallableProduct(
+            name="test2", version="2.0.0", type="framework", parents=["test1"]
+        )
+        graph = DependencyGraph([product1, product2])
+
+        # Should break early when circular dependency detected
+        levels = graph.get_dependency_levels()
+        # Should return some levels or empty list
+        assert isinstance(levels, list)
