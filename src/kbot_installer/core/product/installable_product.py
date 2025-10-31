@@ -1,6 +1,13 @@
 """InstallableProduct class for managing installable product definitions."""
 
+import configparser
+import contextlib
+import fnmatch
 import json
+import shutil
+import site
+import sys
+import tomllib
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,6 +22,7 @@ from kbot_installer.core.product.factory import create_installable
 from kbot_installer.core.product.installable_base import InstallableBase
 from kbot_installer.core.product.product_collection import ProductCollection
 from kbot_installer.core.provider import create_provider
+from kbot_installer.core.utils import ensure_directory
 
 
 @dataclass
@@ -483,16 +491,534 @@ class InstallableProduct(InstallableBase):
         # Create ProductCollection with collected products
         return ProductCollection(collected_products)
 
+    @property
+    def pyproject_path(self) -> Path:
+        """Get the path to pyproject.toml for this product.
+
+        Returns:
+            Path to pyproject.toml file.
+
+        Raises:
+            FileNotFoundError: If pyproject.toml doesn't exist or dirname is not set.
+
+        """
+        if not self.dirname:
+            msg = f"Product {self.name} has no dirname set"
+            raise FileNotFoundError(msg)
+
+        pyproject_file = self.dirname / "pyproject.toml"
+        if not pyproject_file.exists():
+            msg = f"pyproject.toml not found in {self.dirname}"
+            raise FileNotFoundError(msg)
+
+        return pyproject_file
+
+    def get_kconf(self, product: str | None = None) -> dict[str, Any]:
+        """Get kbot.conf configuration for product and all dependencies.
+
+        Aggregates kbot.conf files from the current product and all its dependencies
+        using BFS traversal. Returns a structure with:
+        - "aggregated": merged configuration from all products
+        - "{product_name}": configuration for each specific product
+
+        Args:
+            product: Optional product name. If None, uses current product.
+
+        Returns:
+            Dictionary with aggregated config and per-product configs.
+
+        """
+        # Determine target product
+        target_product = self
+        if product:
+            collection = self.get_dependencies()
+            found_product = collection.get_product(product)
+            if not found_product:
+                msg = f"Product {product} not found in dependencies"
+                raise ValueError(msg)
+            target_product = found_product
+
+        # Get all products in BFS order
+        collection = target_product.get_dependencies()
+        result: dict[str, Any] = {"aggregated": {}}
+
+        # Load kbot.conf from each product
+        for prod in collection.products:
+            if not prod.dirname:
+                continue
+
+            conf_path = prod.dirname / "conf" / "kbot.conf"
+            if not conf_path.exists():
+                result[prod.name] = {}
+                continue
+
+            # Parse INI-style config file
+            parser = configparser.ConfigParser()
+            try:
+                parser.read(conf_path, encoding="utf-8")
+            except configparser.Error:
+                result[prod.name] = {}
+                continue
+
+            # Convert to dict
+            prod_config: dict[str, Any] = {}
+            for section in parser.sections():
+                prod_config[section] = dict(parser[section])
+
+            result[prod.name] = prod_config
+
+            # Aggregate into merged config
+            for section, values in prod_config.items():
+                if section not in result["aggregated"]:
+                    result["aggregated"][section] = {}
+                # Last product wins for same keys (BFS order ensures correct precedence)
+                result["aggregated"][section].update(values)
+
+        return result
+
+    def _is_path_ignored(
+        self,
+        file_path: Path,
+        workarea_root: Path,
+        ignore_patterns: dict[str, list[str]],
+        source_dir_path: Path | None = None,
+    ) -> bool:
+        """Check if a file path should be ignored based on ignore patterns.
+
+        Args:
+            file_path: Path to check (can be source file or workarea file).
+            workarea_root: Root of the workarea.
+            ignore_patterns: Dict mapping source dirs to list of ignore patterns.
+            source_dir_path: Optional source directory path to calculate relative path.
+
+        Returns:
+            True if path should be ignored.
+
+        """
+        # Check each source directory's ignore patterns
+        for source_dir, patterns in ignore_patterns.items():
+            # Calculate relative path from source directory
+            rel_to_source: Path | None = None
+
+            if source_dir_path:
+                # For source files, calculate relative to source_dir_path / source_dir
+                source_base = source_dir_path / source_dir
+                try:
+                    rel_to_source = file_path.relative_to(source_base)
+                except ValueError:
+                    # Try relative to source_dir_path
+                    try:
+                        rel = file_path.relative_to(source_dir_path)
+                        # Check if it starts with source_dir
+                        if source_dir != "." and not str(rel).startswith(
+                            source_dir + "/"
+                        ):
+                            continue
+                        # Extract part after source_dir
+                        if source_dir != ".":
+                            parts = str(rel).split("/", 1)
+                            if len(parts) > 1 and parts[0] == source_dir:
+                                rel_to_source = Path(parts[1])
+                            else:
+                                continue
+                        else:
+                            rel_to_source = rel
+                    except ValueError:
+                        continue
+            else:
+                # For workarea files, calculate relative to workarea_root
+                try:
+                    rel_path = file_path.relative_to(workarea_root)
+                    if source_dir != "." and not rel_path.is_relative_to(source_dir):
+                        continue
+                    rel_to_source = (
+                        rel_path.relative_to(source_dir)
+                        if source_dir != "."
+                        else rel_path
+                    )
+                except ValueError:
+                    continue
+
+            if rel_to_source is None:
+                continue
+
+            for pattern in patterns:
+                # Match against relative path
+                rel_str = str(rel_to_source)
+                # Check full path
+                if fnmatch.fnmatch(rel_str, pattern):
+                    return True
+                # Check just the name
+                if fnmatch.fnmatch(rel_to_source.name, pattern):
+                    return True
+                # Check any component in the path
+                if "/" in rel_str or "\\" in rel_str:
+                    parts = rel_str.replace("\\", "/").split("/")
+                    if any(fnmatch.fnmatch(part, pattern) for part in parts):
+                        return True
+
+        return False
+
+    def _is_destination_taken(self, dest_path: Path, processed: set[Path]) -> bool:
+        """Check if a destination path is already processed (first-come-first-served).
+
+        Also checks if any parent directory is already processed (for directories).
+
+        Args:
+            dest_path: Destination path to check.
+            processed: Set of already processed destination paths.
+
+        Returns:
+            True if destination is already taken.
+
+        """
+        dest_resolved = dest_path.resolve()
+
+        # Check exact match
+        if dest_resolved in processed:
+            return True
+
+        # Check if any parent is in processed (directory case)
+        for processed_path in processed:
+            with contextlib.suppress(ValueError):
+                dest_resolved.relative_to(processed_path.resolve())
+                return True
+
+        # Check if dest is a parent of any processed path
+        for processed_path in processed:
+            with contextlib.suppress(ValueError):
+                processed_path.resolve().relative_to(dest_resolved)
+                return True
+
+        return False
+
+    def _handle_work_init(
+        self,
+        workarea_root: Path,
+        init_config: dict[str, list[str]],
+        processed: set[Path],
+    ) -> None:
+        """Handle work.init section - create directories and files.
+
+        Args:
+            workarea_root: Root of the workarea.
+            init_config: Dict mapping base directories to lists of items to create.
+            processed: Set to track processed paths.
+
+        """
+        for base_dir, items in init_config.items():
+            base_path = workarea_root / base_dir
+            ensure_directory(base_path)
+
+            for item in items:
+                item_path = base_path / item
+
+                if not self._is_destination_taken(item_path, processed):
+                    if item_path.suffix:  # Has extension, assume it's a file
+                        item_path.parent.mkdir(parents=True, exist_ok=True)
+                        if not item_path.exists():
+                            item_path.touch()
+                    else:  # Assume it's a directory
+                        ensure_directory(item_path)
+
+                    processed.add(item_path.resolve())
+
+    def _handle_work_copy(
+        self,
+        workarea_root: Path,
+        product_dir: Path,
+        copy_config: dict[str, list[str]],
+        ignore_patterns: dict[str, list[str]],
+        processed: set[Path],
+    ) -> None:
+        """Handle work.copy section - copy files matching patterns.
+
+        Args:
+            workarea_root: Root of the workarea.
+            product_dir: Directory of the product being processed.
+            copy_config: Dict mapping source dirs to lists of file patterns.
+            ignore_patterns: Patterns to ignore.
+            processed: Set to track processed paths.
+
+        """
+        for source_dir, patterns in copy_config.items():
+            source_path = product_dir / source_dir
+            if not source_path.exists():
+                continue
+
+            dest_base = workarea_root / source_dir
+
+            # If patterns is empty, copy everything
+            if not patterns:
+                if (
+                    not self._is_destination_taken(dest_base, processed)
+                    and source_path.is_file()
+                ):
+                    dest_base.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_path, dest_base)
+                    processed.add(dest_base.resolve())
+                elif (
+                    not self._is_destination_taken(dest_base, processed)
+                    and source_path.is_dir()
+                ):
+                    if dest_base.exists():
+                        shutil.rmtree(dest_base)
+                    shutil.copytree(source_path, dest_base, dirs_exist_ok=True)
+                    processed.add(dest_base.resolve())
+                continue
+
+            # Process patterns
+            for pattern in patterns:
+                # Use rglob to find matching files
+                if source_path.is_file():
+                    files = (
+                        [source_path]
+                        if fnmatch.fnmatch(source_path.name, pattern)
+                        else []
+                    )
+                else:
+                    files = list(source_path.rglob(pattern))
+
+                for src_file in files:
+                    if not src_file.is_file():
+                        continue
+
+                    # Check ignore patterns
+                    if self._is_path_ignored(
+                        src_file, workarea_root, ignore_patterns, product_dir
+                    ):
+                        continue
+
+                    # Calculate relative path from source_dir
+                    try:
+                        rel_path = src_file.relative_to(source_path)
+                    except ValueError:
+                        rel_path = Path(src_file.name)
+
+                    dest_file = dest_base / rel_path
+
+                    if self._is_destination_taken(dest_file, processed):
+                        continue
+
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, dest_file)
+                    processed.add(dest_file.resolve())
+
+    def _handle_work_link(
+        self,
+        workarea_root: Path,
+        product_dir: Path,
+        link_config: dict[str, list[str]],
+        ignore_patterns: dict[str, list[str]],
+        processed: set[Path],
+    ) -> None:
+        """Handle work.link section - create symlinks for files matching patterns.
+
+        Args:
+            workarea_root: Root of the workarea.
+            product_dir: Directory of the product being processed.
+            link_config: Dict mapping source dirs to lists of file patterns.
+            ignore_patterns: Patterns to ignore.
+            processed: Set to track processed paths.
+
+        """
+        for source_dir, patterns in link_config.items():
+            source_path = product_dir / source_dir
+            if not source_path.exists():
+                continue
+
+            dest_base = workarea_root / source_dir
+
+            # If patterns is empty, link everything
+            if not patterns:
+                if (
+                    not self._is_destination_taken(dest_base, processed)
+                    and source_path.is_file()
+                ):
+                    dest_base.parent.mkdir(parents=True, exist_ok=True)
+                    if dest_base.exists() and not dest_base.is_symlink():
+                        dest_base.unlink(missing_ok=True)
+                    if not dest_base.exists():
+                        dest_base.symlink_to(source_path.resolve())
+                    processed.add(dest_base.resolve())
+                elif (
+                    not self._is_destination_taken(dest_base, processed)
+                    and source_path.is_dir()
+                ):
+                    # Link the directory itself
+                    if dest_base.exists() and dest_base.is_symlink():
+                        dest_base.unlink()
+                    elif dest_base.exists():
+                        # If it's not a symlink, it's already been processed
+                        processed.add(dest_base.resolve())
+                        continue
+
+                    dest_base.parent.mkdir(parents=True, exist_ok=True)
+                    dest_base.symlink_to(source_path.resolve())
+                    processed.add(dest_base.resolve())
+                continue
+
+            # Process patterns
+            for pattern in patterns:
+                # Use rglob to find matching files
+                if source_path.is_file():
+                    files = (
+                        [source_path]
+                        if fnmatch.fnmatch(source_path.name, pattern)
+                        else []
+                    )
+                else:
+                    files = list(source_path.rglob(pattern))
+
+                for src_file in files:
+                    # Check ignore patterns
+                    if self._is_path_ignored(
+                        src_file, workarea_root, ignore_patterns, product_dir
+                    ):
+                        continue
+
+                    # Calculate relative path from source_dir
+                    try:
+                        rel_path = src_file.relative_to(source_path)
+                    except ValueError:
+                        rel_path = Path(src_file.name)
+
+                    dest_file = dest_base / rel_path
+
+                    if self._is_destination_taken(dest_file, processed):
+                        continue
+
+                    # Create symlink
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    if dest_file.exists() and dest_file.is_symlink():
+                        dest_file.unlink()
+                    elif dest_file.exists():
+                        # Already exists and not a symlink - skip
+                        processed.add(dest_file.resolve())
+                        continue
+
+                    # Create symlink from source to destination
+                    dest_file.symlink_to(src_file.resolve())
+                    processed.add(dest_file.resolve())
+
+    def _handle_work_link_external(
+        self,
+        workarea_root: Path,
+        external_config: dict[str, str],
+        processed: set[Path],
+    ) -> None:
+        """Handle work.link.external section - link files from site-packages.
+
+        Args:
+            workarea_root: Root of the workarea.
+            external_config: Dict mapping source paths in site-packages to dest paths.
+            processed: Set to track processed paths.
+
+        """
+        # Get site-packages directory
+        try:
+            site_packages = site.getsitepackages()[0]
+        except (IndexError, AttributeError):
+            # Fallback for virtualenv or custom Python installations
+            site_packages = next(
+                (Path(p) for p in sys.path if "site-packages" in p), Path.cwd()
+            )
+
+        site_packages_path = Path(site_packages)
+
+        for source_rel, dest_rel in external_config.items():
+            source_path = site_packages_path / source_rel
+            if not source_path.exists():
+                continue
+
+            dest_path = workarea_root / dest_rel
+
+            if self._is_destination_taken(dest_path, processed):
+                continue
+
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if dest_path.exists() and dest_path.is_symlink():
+                dest_path.unlink()
+            elif dest_path.exists():
+                # Already exists and not a symlink - skip
+                processed.add(dest_path.resolve())
+                continue
+
+            # Create symlink from site-packages source to workarea destination
+            dest_path.symlink_to(source_path.resolve())
+            processed.add(dest_path.resolve())
+
     def install(self, path: Path, *, dependencies: bool = True) -> None:
         """Install the product into the workarea.
 
+        Extracts the [work] section from pyproject.toml for this product and all
+        dependencies (if enabled), and assembles the workarea according to the
+        configuration. Handles work.init, work.copy, work.link, and work.link.external
+        sections in that order.
+
         Args:
-            path: Path to install the product to.
+            path: Path to install the product to (workarea root).
             dependencies: Whether to install dependencies.
 
         """
-        msg = "Installation is not implemented yet"
-        raise NotImplementedError(msg) from None
+        ensure_directory(path)
+
+        # Get products to process (BFS order)
+        if dependencies:
+            collection = self.get_dependencies()
+            products = collection.products
+        else:
+            products = [self]
+
+        # Track processed destinations (first-come-first-served)
+        processed: set[Path] = set()
+
+        # Process each product in BFS order
+        for product in products:
+            if not product.dirname:
+                continue
+
+            try:
+                pyproject_file = product.pyproject_path
+            except FileNotFoundError:
+                # Skip products without pyproject.toml
+                continue
+
+            # Load pyproject.toml
+            try:
+                with pyproject_file.open("rb") as f:
+                    pyproject_data = tomllib.load(f)
+            except (OSError, tomllib.TOMLDecodeError):
+                continue
+
+            work_config = pyproject_data.get("work", {})
+            if not work_config:
+                continue
+
+            # Extract sections
+            init_config = work_config.get("init", {})
+            copy_config = work_config.get("copy", {})
+            ignore_config = work_config.get("ignore", {})
+            link_config = work_config.get("link", {})
+            link_section = work_config.get("link", {})
+            if isinstance(link_section, dict):
+                link_external_config = link_section.get("external", {})
+            else:
+                link_external_config = {}
+
+            # Process in order: init, copy, link, link.external
+            if init_config:
+                self._handle_work_init(path, init_config, processed)
+
+            if copy_config:
+                self._handle_work_copy(path, product.dirname, copy_config, ignore_config, processed)
+
+            if link_config:
+                self._handle_work_link(path, product.dirname, link_config, ignore_config, processed)
+
+            if link_external_config:
+                self._handle_work_link_external(path, link_external_config, processed)
 
     def update(self, path: Path, *, dependencies: bool = True) -> None:
         """Update the product in the workarea.
