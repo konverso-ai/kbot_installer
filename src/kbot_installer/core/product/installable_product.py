@@ -1012,10 +1012,14 @@ class InstallableProduct(InstallableBase):
                 self._handle_work_init(path, init_config, processed)
 
             if copy_config:
-                self._handle_work_copy(path, product.dirname, copy_config, ignore_config, processed)
+                self._handle_work_copy(
+                    path, product.dirname, copy_config, ignore_config, processed
+                )
 
             if link_config:
-                self._handle_work_link(path, product.dirname, link_config, ignore_config, processed)
+                self._handle_work_link(
+                    path, product.dirname, link_config, ignore_config, processed
+                )
 
             if link_external_config:
                 self._handle_work_link_external(path, link_external_config, processed)

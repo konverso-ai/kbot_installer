@@ -525,9 +525,7 @@ class TestProduct:
         product.provider = mock_provider
 
         target_path = Path("/tmp/test-clone")
-        with patch.object(
-            product, "load_from_installer_folder"
-        ) as mock_load_folder:
+        with patch.object(product, "load_from_installer_folder") as mock_load_folder:
             product.clone(target_path, dependencies=False)
 
             # Verify provider.clone_and_checkout was called
@@ -569,11 +567,10 @@ class TestProduct:
             product_a.get_dependencies = mock_get_dependencies
 
             # Mock load_from_installer_folder
-            with patch.object(
-                product_a, "load_from_installer_folder"
-            ) as mock_load_a, patch.object(
-                product_b, "load_from_installer_folder"
-            ) as mock_load_b:
+            with (
+                patch.object(product_a, "load_from_installer_folder") as mock_load_a,
+                patch.object(product_b, "load_from_installer_folder") as mock_load_b,
+            ):
                 base_path = Path(temp_dir)
                 product_a.clone(base_path / "product-a", dependencies=True)
 
@@ -621,11 +618,10 @@ class TestProduct:
             product_a.get_dependencies = mock_get_dependencies
 
             # Mock load_from_installer_folder
-            with patch.object(
-                product_a, "load_from_installer_folder"
-            ) as mock_load_a, patch.object(
-                product_b, "load_from_installer_folder"
-            ) as mock_load_b:
+            with (
+                patch.object(product_a, "load_from_installer_folder") as mock_load_a,
+                patch.object(product_b, "load_from_installer_folder") as mock_load_b,
+            ):
                 base_path = Path(temp_dir)
                 clone_path = base_path / "product-a"
 
