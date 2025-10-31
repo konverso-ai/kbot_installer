@@ -4,23 +4,20 @@ from pathlib import Path
 from typing import Any
 
 from kbot_installer.core.interactivity.base import InteractivePrompter
-from kbot_installer.core.linker.symbolic_linker import SymbolicLinker
 from kbot_installer.core.utils import ensure_directory as ensure_dir_util
 
 
 class BaseSetupManager:
     """Base class for all setup managers.
 
-    Provides common functionality for creating directories, linking files,
-    and managing setup operations. Uses SymbolicLinker for file operations
-    and InteractivePrompter for user interaction.
+    Provides common functionality for creating directories and managing
+    setup operations. Uses InteractivePrompter for user interaction.
 
     Attributes:
         target: Target workarea directory path.
         products: Product collection (ProductList or ProductCollection).
-        linker: SymbolicLinker instance for file operations.
         prompter: InteractivePrompter instance for user interaction.
-        update_mode: If True, operates in update mode (validates existing links).
+        update_mode: If True, operates in update mode (validates existing setup).
 
     """
 
@@ -28,7 +25,6 @@ class BaseSetupManager:
         self,
         target: str | Path,
         products: Any,  # ProductList ou ProductCollection
-        linker: SymbolicLinker,
         prompter: InteractivePrompter | None = None,
         *,
         update_mode: bool = False,
@@ -39,14 +35,12 @@ class BaseSetupManager:
         Args:
             target: Target workarea directory path.
             products: Product collection (ProductList or compatible).
-            linker: SymbolicLinker instance for file operations.
             prompter: Optional InteractivePrompter for user interaction.
             update_mode: Enable update/validation mode.
             silent_mode: Suppress interactive prompts.
         """
         self.target = Path(target)
         self.products = products
-        self.linker = linker
         self.prompter = prompter or InteractivePrompter(
             use_defaults=False, silent=silent_mode
         )
