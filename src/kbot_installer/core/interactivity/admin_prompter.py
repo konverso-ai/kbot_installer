@@ -1,5 +1,7 @@
 """Admin password prompter."""
 
+from collections.abc import Callable
+
 from kbot_installer.core.interactivity.base import InteractivePrompter
 
 
@@ -10,8 +12,8 @@ class AdminPrompter(InteractivePrompter):
         self,
         *,
         default_password: str | None = None,
-        password_validator: callable[[str], bool] | None = None,
-        encrypt_fn: callable[[str], str] | None = None,
+        password_validator: Callable[[str], bool] | None = None,
+        encrypt_fn: Callable[[str], str] | None = None,
     ) -> str:
         """Prompt for admin password with validation.
 

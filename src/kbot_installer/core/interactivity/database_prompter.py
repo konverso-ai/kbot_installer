@@ -1,6 +1,7 @@
 """Database parameter prompter."""
 
 import os
+import re
 import socket
 import subprocess
 from pathlib import Path
@@ -10,6 +11,155 @@ from kbot_installer.core.interactivity.base import InteractivePrompter
 
 class DatabasePrompter(InteractivePrompter):
     """Prompter for database-related parameters."""
+
+    # Constants for validation
+    MAX_HOSTNAME_LENGTH = 255
+    MIN_PORT = 1
+    MAX_PORT = 65535
+    MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL identifier limit
+
+    def _validate_db_host(self, host: str) -> str:
+        """Validate and sanitize database hostname.
+
+        Args:
+            host: Hostname to validate.
+
+        Returns:
+            Validated hostname.
+
+        Raises:
+            ValueError: If hostname is invalid or contains dangerous characters.
+
+        """
+        # Strip whitespace first
+        host = host.strip()
+        # Allow alphanumeric, dots, hyphens, underscores, and colons (for IPv6)
+        if not re.match(r"^[a-zA-Z0-9._:-]+$", host):
+            msg = f"Invalid hostname: {host}. Only alphanumeric, dots, hyphens, underscores, and colons are allowed."
+            raise ValueError(msg)
+        # Limit length to prevent buffer overflow
+        if len(host) > self.MAX_HOSTNAME_LENGTH:
+            msg = f"Hostname too long (max {self.MAX_HOSTNAME_LENGTH} characters)."
+            raise ValueError(msg)
+        return host
+
+    def _validate_db_port(self, port: str) -> str:
+        """Validate and sanitize database port number.
+
+        Args:
+            port: Port number to validate.
+
+        Returns:
+            Validated port number.
+
+        Raises:
+            ValueError: If port is invalid.
+
+        """
+        # Port must be numeric and within valid range
+        if not port.isdigit():
+            msg = f"Invalid port: {port}. Port must be numeric."
+            raise ValueError(msg)
+        port_num = int(port)
+        if port_num < self.MIN_PORT or port_num > self.MAX_PORT:
+            msg = f"Invalid port: {port}. Port must be between {self.MIN_PORT} and {self.MAX_PORT}."
+            raise ValueError(msg)
+        return port
+
+    def _validate_db_identifier(self, identifier: str, name: str) -> str:
+        """Validate and sanitize database name or username.
+
+        Args:
+            identifier: Database name or username to validate.
+            name: Type of identifier ('database name' or 'username').
+
+        Returns:
+            Validated identifier.
+
+        Raises:
+            ValueError: If identifier is invalid or contains dangerous characters.
+
+        """
+        # Strip whitespace first
+        identifier = identifier.strip()
+        # PostgreSQL identifiers: alphanumeric, underscore, dollar sign, but for safety
+        # we'll be more restrictive and disallow dollar sign
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", identifier):
+            msg = (
+                f"Invalid {name}: {identifier}. "
+                "Must start with letter or underscore and contain only alphanumeric characters and underscores."
+            )
+            raise ValueError(msg)
+        # Limit length (PostgreSQL limit is 63 bytes)
+        if len(identifier) > self.MAX_IDENTIFIER_LENGTH:
+            msg = f"{name.capitalize()} too long (max {self.MAX_IDENTIFIER_LENGTH} characters)."
+            raise ValueError(msg)
+        return identifier
+
+    def _test_external_database_connection(self, result: dict[str, str | bool]) -> bool:
+        """Test connection to external database with validated parameters.
+
+        Args:
+            result: Dictionary with database parameters.
+
+        Returns:
+            True if connection successful, False otherwise.
+
+        """
+        pg_dir = Path(os.environ["PG_DIR"])
+        # Resolve to absolute path to avoid security risks with partial paths
+        pg_psql = (pg_dir / "bin" / "psql").resolve()
+
+        if not pg_psql.exists():
+            print(
+                f"Error: psql executable not found at {pg_psql}. "
+                "Please check PG_DIR environment variable."
+            )
+            return False
+
+        # Validate all user inputs before passing to subprocess
+        # This prevents command injection even though we use a list of arguments
+        try:
+            validated_host = self._validate_db_host(result["db_host"])
+            validated_port = self._validate_db_port(result["db_port"])
+            validated_db_name = self._validate_db_identifier(
+                result["db_name"], "database name"
+            )
+            validated_db_user = self._validate_db_identifier(
+                result["db_user"], "username"
+            )
+        except ValueError as e:
+            print(f"Validation error: {e}")
+            return False
+
+        # Use environment variable for password to avoid command injection
+        env = os.environ.copy()
+        env["PGPASSWORD"] = result["db_password"]
+
+        # Use subprocess.run() with list of arguments for security
+        # All user inputs are validated and sanitized above
+        # Redirect stdout/stderr to /dev/null for silent test
+        result_process = subprocess.run(
+            [
+                str(pg_psql),
+                "-h",
+                validated_host,
+                "-p",
+                validated_port,
+                "-d",
+                validated_db_name,
+                "-U",
+                validated_db_user,
+                "-c",
+                "select 1",
+            ],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+
+        return result_process.returncode == 0
 
     def prompt_database_parameters(
         self,
@@ -108,44 +258,7 @@ class DatabasePrompter(InteractivePrompter):
 
             if not result["db_internal"]:
                 # Test connection to external database
-                pg_dir = Path(os.environ["PG_DIR"])
-                # Resolve to absolute path to avoid security risks with partial paths
-                pg_psql = (pg_dir / "bin" / "psql").resolve()
-
-                if not pg_psql.exists():
-                    print(
-                        f"Error: psql executable not found at {pg_psql}. "
-                        "Please check PG_DIR environment variable."
-                    )
-                    continue
-
-                # Use environment variable for password to avoid command injection
-                env = os.environ.copy()
-                env["PGPASSWORD"] = result["db_password"]
-
-                # Use subprocess.run() with list of arguments for security
-                # Redirect stdout/stderr to /dev/null for silent test
-                result_process = subprocess.run(
-                    [
-                        str(pg_psql),
-                        "-h",
-                        result["db_host"],
-                        "-p",
-                        result["db_port"],
-                        "-d",
-                        result["db_name"],
-                        "-U",
-                        result["db_user"],
-                        "-c",
-                        "select 1",
-                    ],
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
-
-                if result_process.returncode == 0:
+                if self._test_external_database_connection(result):
                     break
                 print(
                     "Can't connect to an external database with specified parameters!"
