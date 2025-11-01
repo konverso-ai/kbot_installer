@@ -5,14 +5,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from kbot_installer.core.installable import InstallableBase
+from kbot_installer.core.installable.dependency_graph import DependencyGraph
+from kbot_installer.core.installable.product_collection import ProductCollection
+from kbot_installer.core.installable.product_installable import ProductInstallable
+from kbot_installer.core.installable.renderer import DependencyTreeRenderer
 from kbot_installer.core.installation_table import InstallationTable
-from kbot_installer.core.product import (
-    DependencyGraph,
-    DependencyTreeRenderer,
-    InstallableBase,
-    ProductCollection,
-)
-from kbot_installer.core.product.installable_product import InstallableProduct
 from kbot_installer.core.provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
@@ -347,7 +345,7 @@ class InstallerService:
     def _get_product(self, product_name: str) -> InstallableBase:
         """Get a product by name from the installer directory."""
         product_dir = self.installer_dir / product_name
-        product = InstallableProduct.from_installer_folder(product_dir)
+        product = ProductInstallable.from_installer_folder(product_dir)
         if not product:
             error_msg = f"Product '{product_name}' not found"
             raise ValueError(error_msg)

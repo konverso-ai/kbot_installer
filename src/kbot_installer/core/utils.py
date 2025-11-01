@@ -10,8 +10,6 @@ from queue import Queue
 from tempfile import SpooledTemporaryFile
 from threading import Thread
 
-import httpx
-
 logger = logging.getLogger(__name__)
 
 
@@ -84,6 +82,9 @@ def optimized_download_and_extract(
         OSError: If there are issues with file system operations during extraction.
 
     """
+    # Import httpx locally to avoid heavy import at module level
+    import httpx  # noqa: PLC0415
+
     # Ensure target directory exists
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -122,6 +123,9 @@ def optimized_download_and_extract_bis(
 
     L'extraction commence dès que suffisamment de données sont disponibles.
     """
+    # Import httpx locally to avoid heavy import at module level
+    import httpx  # noqa: PLC0415
+
     target_dir.mkdir(parents=True, exist_ok=True)
 
     buffer = SpooledTemporaryFile(max_size=100 * 1024 * 1024)  # noqa: SIM115
@@ -193,6 +197,9 @@ def optimized_download_and_extract_ter(
 
     Utilise le mode pipe de tarfile pour éviter les seeks.
     """
+    # Import httpx locally to avoid heavy import at module level
+    import httpx  # noqa: PLC0415
+
     target_dir.mkdir(parents=True, exist_ok=True)
 
     with httpx.stream("GET", url, timeout=60.0, auth=auth_obj) as response:

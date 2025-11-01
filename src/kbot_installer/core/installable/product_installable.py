@@ -1,4 +1,4 @@
-"""InstallableProduct class for managing installable product definitions."""
+"""ProductInstallable class for managing installable product definitions."""
 
 import configparser
 import contextlib
@@ -14,19 +14,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from defusedxml import ElementTree as defused_ET
-
-from kbot_installer.core.product.factory import create_installable
-from kbot_installer.core.product.installable_base import InstallableBase
-from kbot_installer.core.product.product_collection import ProductCollection
+from kbot_installer.core.installable.factory import create_installable
+from kbot_installer.core.installable.installable_base import InstallableBase
+from kbot_installer.core.installable.product_collection import ProductCollection
 from kbot_installer.core.provider import create_provider
 from kbot_installer.core.utils import ensure_directory
-
-# Access underlying ElementTree for creation (safe - we control the content)
-# defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
-# __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
-_etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
-ET = importlib.import_module(_etree_module_name)
 
 # Type alias for product configuration (INI-style: section -> option -> value)
 ProductConfig = dict[str, dict[str, str]]
@@ -52,7 +44,7 @@ class BuildDetails(TypedDict, total=False):
 
 
 @dataclass
-class InstallableProduct(InstallableBase):
+class ProductInstallable(InstallableBase):
     """Represents a product with its metadata and dependencies.
 
     Attributes:
@@ -79,14 +71,14 @@ class InstallableProduct(InstallableBase):
     parents: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     license: str | None = None
-    display: dict[str, dict[str, str]] | None = (
-        None  # Multilingual info: {"name": {"en": "...", "fr": "..."}, ...}
-    )
+    # Multilingual info: {"name": {"en": "...", "fr": "..."}, ...}
+    display: dict[str, dict[str, str]] | None = None
     build_details: BuildDetails | None = None
     providers: list[str] = field(
         default_factory=lambda: ["nexus", "github", "bitbucket"]
     )
-    dirname: Path | None = None  # Directory path where product is located
+    # Directory path where product is located
+    dirname: Path | None = None
 
     def __post_init__(self) -> None:
         """Initialize provider after instance creation."""
@@ -107,7 +99,7 @@ class InstallableProduct(InstallableBase):
             return []
         return [item.strip() for item in value.split(",") if item.strip()]
 
-    def _load_product_by_name(self, product_name: str) -> "InstallableProduct":
+    def _load_product_by_name(self, product_name: str) -> InstallableBase:
         """Load a product by its name.
 
         Args:
@@ -122,7 +114,7 @@ class InstallableProduct(InstallableBase):
         return create_installable(name=product_name)
 
     @classmethod
-    def from_xml(cls, xml_content: str) -> "InstallableProduct":
+    def from_xml(cls, xml_content: str) -> InstallableBase:
         """Create Product from XML content.
 
         Args:
@@ -135,6 +127,9 @@ class InstallableProduct(InstallableBase):
             ValueError: If XML is invalid or missing required fields.
 
         """
+        # Import defusedxml locally to avoid heavy import at module level
+        from defusedxml import ElementTree as defused_ET  # noqa: PLC0415
+
         try:
             root = defused_ET.fromstring(xml_content)
         except defused_ET.ParseError as e:
@@ -189,7 +184,7 @@ class InstallableProduct(InstallableBase):
         )
 
     @classmethod
-    def from_json(cls, json_content: str) -> "InstallableProduct":
+    def from_json(cls, json_content: str) -> InstallableBase:
         """Create Product from JSON content.
 
         Args:
@@ -237,7 +232,7 @@ class InstallableProduct(InstallableBase):
         )
 
     @classmethod
-    def from_xml_file(cls, xml_path: str | Path) -> "InstallableProduct":
+    def from_xml_file(cls, xml_path: str | Path) -> InstallableBase:
         """Create Product from XML file.
 
         Args:
@@ -259,7 +254,7 @@ class InstallableProduct(InstallableBase):
         return cls.from_xml(xml_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_json_file(cls, json_path: str | Path) -> "InstallableProduct":
+    def from_json_file(cls, json_path: str | Path) -> InstallableBase:
         """Create Product from JSON file.
 
         Args:
@@ -281,14 +276,14 @@ class InstallableProduct(InstallableBase):
         return cls.from_json(json_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_installer_folder(cls, folder_path: Path) -> "InstallableProduct":
-        """Create InstallableProduct from installer folder (XML + optional JSON).
+    def from_installer_folder(cls, folder_path: Path) -> InstallableBase:
+        """Create ProductInstallable from installer folder (XML + optional JSON).
 
         Args:
             folder_path: Path to product folder.
 
         Returns:
-            InstallableProduct instance with merged data.
+            ProductInstallable instance with merged data.
 
         Raises:
             FileNotFoundError: If description.xml doesn't exist.
@@ -334,7 +329,7 @@ class InstallableProduct(InstallableBase):
         else:
             self._update_from_product(xml_product)
 
-    def _update_from_product(self, source_product: "InstallableProduct") -> None:
+    def _update_from_product(self, source_product: InstallableBase) -> None:
         """Update current instance with data from another product.
 
         This method copies all relevant data from the source product to the current
@@ -360,8 +355,8 @@ class InstallableProduct(InstallableBase):
 
     @classmethod
     def merge_xml_json(
-        cls, xml_product: "InstallableProduct", json_product: "InstallableProduct"
-    ) -> "InstallableProduct":
+        cls, xml_product: InstallableBase, json_product: InstallableBase
+    ) -> InstallableBase:
         """Merge XML and JSON products, with JSON taking precedence.
 
         Args:
@@ -404,6 +399,14 @@ class InstallableProduct(InstallableBase):
             XML string representation.
 
         """
+        # Access underlying ElementTree for creation (safe - we control the content)
+        # defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
+        # __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
+        from defusedxml import ElementTree as defused_ET  # noqa: PLC0415
+
+        _etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
+        ET = importlib.import_module(_etree_module_name)  # noqa: N806
+
         root = ET.Element("product")
         root.set("name", self.name)
         root.set("version", self.version)
@@ -487,7 +490,7 @@ class InstallableProduct(InstallableBase):
             product.provider.clone_and_checkout(product_path, product.version)
             product.load_from_installer_folder(product_path)
 
-    def get_dependencies(self) -> "ProductCollection":
+    def get_dependencies(self) -> ProductCollection:
         """Get a ProductCollection containing this product and all its dependencies.
 
         Uses BFS traversal to collect all dependencies in the correct order.
@@ -1139,12 +1142,12 @@ class InstallableProduct(InstallableBase):
         raise NotImplementedError(msg) from None
 
     def __str__(self) -> str:
-        """Return string representation of InstallableProduct."""
-        return f"InstallableProduct(name='{self.name}', version='{self.version}', type='{self.type}')"
+        """Return string representation of ProductInstallable."""
+        return f"ProductInstallable(name='{self.name}', version='{self.version}', type='{self.type}')"
 
     def __repr__(self) -> str:
-        """Detailed string representation of InstallableProduct."""
+        """Detailed string representation of ProductInstallable."""
         return (
-            f"InstallableProduct(name='{self.name}', version='{self.version}', "
+            f"ProductInstallable(name='{self.name}', version='{self.version}', "
             f"type='{self.type}', parents={self.parents}, categories={self.categories})"
         )

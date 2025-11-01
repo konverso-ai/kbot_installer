@@ -70,7 +70,7 @@ class TestInstallerService:
             with (
                 patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
-                    "kbot_installer.core.product.installable_product.InstallableProduct.from_installer_folder"
+                    "kbot_installer.core.installable.product_installable.ProductInstallable.from_installer_folder"
                 ) as mock_from_folder,
                 patch("shutil.rmtree"),
             ):
@@ -88,7 +88,7 @@ class TestInstallerService:
             with (
                 patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
-                    "kbot_installer.core.product.installable_product.InstallableProduct.from_installer_folder",
+                    "kbot_installer.core.installable.product_installable.ProductInstallable.from_installer_folder",
                     return_value=None,
                 ),
                 patch("shutil.rmtree"),
@@ -120,7 +120,7 @@ class TestInstallerService:
             with (
                 patch.object(service.selector_provider, "clone_and_checkout"),
                 patch(
-                    "kbot_installer.core.product.installable_product.InstallableProduct.from_installer_folder"
+                    "kbot_installer.core.installable.product_installable.ProductInstallable.from_installer_folder"
                 ) as mock_from_folder,
                 patch("shutil.rmtree"),
             ):
@@ -591,7 +591,7 @@ class TestInstallerService:
 
             mock_product = MagicMock()
             with patch(
-                "kbot_installer.core.product.installable_product.InstallableProduct.from_installer_folder",
+                "kbot_installer.core.installable.product_installable.ProductInstallable.from_installer_folder",
                 return_value=mock_product,
             ):
                 # Test
@@ -606,7 +606,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             with patch(
-                "kbot_installer.core.product.installable_product.InstallableProduct.from_installer_folder",
+                "kbot_installer.core.installable.product_installable.ProductInstallable.from_installer_folder",
                 return_value=None,
             ):
                 # Test and expect error

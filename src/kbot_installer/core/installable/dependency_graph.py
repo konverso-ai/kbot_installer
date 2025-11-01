@@ -3,7 +3,7 @@
 from collections import defaultdict, deque
 from collections.abc import Iterator
 
-from kbot_installer.core.product.installable_base import InstallableBase
+from kbot_installer.core.installable.installable_base import InstallableBase
 
 
 class DependencyGraph:

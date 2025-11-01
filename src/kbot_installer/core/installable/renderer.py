@@ -1,6 +1,6 @@
 """DependencyTreeRenderer class for visualizing dependency trees."""
 
-from kbot_installer.core.product.dependency_graph import DependencyGraph
+from kbot_installer.core.installable.dependency_graph import DependencyGraph
 
 
 class DependencyTreeRenderer:

@@ -27,7 +27,7 @@ def factory_class(name: str, package: str) -> type[T]:
         AttributeError: If the class is not found in the package.
 
     Example:
-        >>> NexusProvider = factory_class("nexus", "provider")
+        >>> NexusProvider = factory_class("nexus", "kbot_installer.core.provider")
         >>> print(NexusProvider)
         <class 'provider.nexus_provider.NexusProvider'>
 

@@ -8,9 +8,9 @@ from pathlib import Path
 
 from defusedxml import ElementTree as defused_ET
 
-from kbot_installer.core.product.dependency_graph import DependencyGraph
-from kbot_installer.core.product.factory import create_installable
-from kbot_installer.core.product.installable_base import InstallableBase
+from kbot_installer.core.installable.dependency_graph import DependencyGraph
+from kbot_installer.core.installable.factory import create_installable
+from kbot_installer.core.installable.installable_base import InstallableBase
 
 # Access underlying ElementTree for creation (safe - we control the content)
 # defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe

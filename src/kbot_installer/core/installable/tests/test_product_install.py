@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from kbot_installer.core.product.installable_product import InstallableProduct
-from kbot_installer.core.product.product_collection import ProductCollection
+from kbot_installer.core.installable.product_collection import ProductCollection
+from kbot_installer.core.installable.product_installable import ProductInstallable
 
 
 class TestProductInstall:
@@ -19,7 +19,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             # Create pyproject.toml
@@ -31,7 +31,7 @@ class TestProductInstall:
 
     def test_pyproject_path_no_dirname(self) -> None:
         """Test pyproject_path property when dirname is not set."""
-        product = InstallableProduct(name="test-product")
+        product = ProductInstallable(name="test-product")
         product.dirname = None
 
         with pytest.raises(FileNotFoundError, match="has no dirname set"):
@@ -43,7 +43,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             with pytest.raises(FileNotFoundError, match=r"pyproject\.toml not found"):
@@ -63,7 +63,7 @@ class TestProductInstall:
                 "[database]\nhost = localhost\nport = 5432\n\n[app]\nname = test\n"
             )
 
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             # Mock get_dependencies to return just this product
@@ -103,10 +103,10 @@ class TestProductInstall:
                 "[database]\nhost = db2\n\n[logging]\nlevel = debug\n"
             )
 
-            product1 = InstallableProduct(name="product1")
+            product1 = ProductInstallable(name="product1")
             product1.dirname = product1_dir
 
-            product2 = InstallableProduct(name="product2", parents=["product1"])
+            product2 = ProductInstallable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             # Mock get_dependencies to return both products in BFS order
@@ -139,7 +139,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -166,10 +166,10 @@ class TestProductInstall:
             product2_dir = Path(temp_dir) / "product2"
             product2_dir.mkdir()
 
-            product1 = InstallableProduct(name="product1")
+            product1 = ProductInstallable(name="product1")
             product1.dirname = product1_dir
 
-            product2 = InstallableProduct(name="product2", parents=["product1"])
+            product2 = ProductInstallable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -184,7 +184,7 @@ class TestProductInstall:
 
     def test_get_kconf_invalid_product(self) -> None:
         """Test get_kconf with invalid product name."""
-        product = InstallableProduct(name="test-product")
+        product = ProductInstallable(name="test-product")
 
         def mock_get_dependencies() -> ProductCollection:
             return ProductCollection([product])
@@ -210,7 +210,7 @@ logs = ["httpd"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -246,7 +246,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -284,7 +284,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -326,7 +326,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -373,10 +373,10 @@ core = ["RunBot.py", "Learn.py"]
 """
             )
 
-            product1 = InstallableProduct(name="product1")
+            product1 = ProductInstallable(name="product1")
             product1.dirname = product1_dir
 
-            product2 = InstallableProduct(name="product2", parents=["product1"])
+            product2 = ProductInstallable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             # Mock get_dependencies to return in BFS order (product1 first, then product2)
@@ -420,7 +420,7 @@ ui = ["static"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -455,7 +455,7 @@ bin = []
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -476,7 +476,7 @@ bin = []
             product_dir.mkdir()
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -501,7 +501,7 @@ bin = []
             pyproject_file.write_text('[project]\nname = "test-product"\n')
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -550,7 +550,7 @@ bin = ["*.sh"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = InstallableProduct(name="test-product")
+            product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:

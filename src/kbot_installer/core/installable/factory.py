@@ -3,10 +3,10 @@
 from typing import TYPE_CHECKING
 
 from kbot_installer.core.factory.factory import factory_class
-from kbot_installer.core.product.installable_base import InstallableBase
+from kbot_installer.core.installable.installable_base import InstallableBase
 
 if TYPE_CHECKING:
-    from kbot_installer.core.product.installable_product import BuildDetails
+    from kbot_installer.core.installable.product_installable import BuildDetails
 
 
 def create_installable(
@@ -27,7 +27,7 @@ def create_installable(
     """Create an InstallableBase instance.
 
     This is the factory method for creating installable products. It currently
-    creates InstallableProduct instances, but could be extended to support
+    creates ProductInstallable instances, but could be extended to support
     other types in the future.
 
     Args:
@@ -49,7 +49,7 @@ def create_installable(
         InstallableBase instance.
 
     """
-    # Prepare kwargs for InstallableProduct constructor
+    # Prepare kwargs for ProductInstallable constructor
     product_kwargs = {
         "name": name,
         "version": version,
@@ -68,8 +68,8 @@ def create_installable(
 
     # Get the class using factory_class
     cls = factory_class(
-        name="installable",
-        package="kbot_installer.core.product",
+        name="product",
+        package="kbot_installer.core.installable",
     )
 
     # Instantiate with the product kwargs

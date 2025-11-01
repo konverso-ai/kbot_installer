@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kbot_installer.core.product.product_collection import ProductCollection
+    from kbot_installer.core.installable.product_collection import ProductCollection
 
 
 class InstallableBase(ABC):

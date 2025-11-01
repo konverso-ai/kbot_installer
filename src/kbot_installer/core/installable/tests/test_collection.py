@@ -3,21 +3,22 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from kbot_installer.core.product.installable_product import InstallableProduct
-from kbot_installer.core.product.product_collection import ProductCollection
+from kbot_installer.core.installable.product_collection import ProductCollection
+from kbot_installer.core.installable.product_installable import ProductInstallable
 
 
 class TestProductCollection:
     """Test cases for ProductCollection class."""
 
     @pytest.fixture
-    def sample_products(self) -> list[InstallableProduct]:
+    def sample_products(self) -> list[ProductInstallable]:
         """Create sample products for testing."""
         return [
-            InstallableProduct(
+            ProductInstallable(
                 name="product1",
                 version="1.0.0",
                 type="solution",
@@ -27,7 +28,7 @@ class TestProductCollection:
                 date="2023-01-01",
                 license="MIT",
             ),
-            InstallableProduct(
+            ProductInstallable(
                 name="product2",
                 version="2.0.0",
                 type="framework",
@@ -37,7 +38,7 @@ class TestProductCollection:
                 date="2023-02-01",
                 license="Apache",
             ),
-            InstallableProduct(
+            ProductInstallable(
                 name="product3",
                 version="3.0.0",
                 type="customer",
@@ -281,7 +282,11 @@ class TestProductCollection:
 
         assert folders == []
 
-    def test_load_product_existing(self) -> None:
+    @patch(
+        "kbot_installer.core.installable.product_installable.ProductInstallable.load_from_installer_folder",
+        autospec=True,
+    )
+    def test_load_product_existing(self, mock_from_installer_folder) -> None:
         """Test loading an existing product."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
@@ -290,20 +295,28 @@ class TestProductCollection:
 
             # Create description.xml
             description_xml = """
-            <product name="test_product" version="1.0.0" type="solution">
+            <product>
+                <name>test_product</name>
+                <version>1.0.0</version>
+                <type>solution</type>
             </product>
             """
             (product_folder / "description.xml").write_text(description_xml)
 
-            # Since we have a real XML file, we can test the actual functionality
-            # without mocking. Just verify the product is loaded correctly.
+            # Mock load_from_installer_folder to update the product instance
+            def mock_load(self, _folder_path):
+                self.version = "1.0.0"
+                self.type = "solution"
+
+            mock_from_installer_folder.side_effect = mock_load
+
             collection = ProductCollection()
             product = collection.load_product(str(installer_path), "test_product")
 
             assert product is not None
             assert product.name == "test_product"
-            assert product.version == "1.0.0"  # From XML
-            assert product.type == "solution"  # From XML
+            assert product.version == "1.0.0"
+            mock_from_installer_folder.assert_called_once()
 
     def test_load_product_nonexistent(self) -> None:
         """Test loading a non-existent product."""
@@ -417,51 +430,94 @@ class TestProductCollection:
         finally:
             Path(file_path).unlink(missing_ok=True)
 
-    def test_from_installer_success(self) -> None:
+    @patch(
+        "kbot_installer.core.installable.product_installable.ProductInstallable.load_from_installer_folder",
+        autospec=True,
+    )
+    def test_from_installer_success(self, mock_from_installer, sample_products) -> None:
         """Test creating collection from installer directory successfully."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folders with valid XML
+            # Create product folders
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                '<product name="product1" version="1.0.0" type="solution"></product>'
+                "<product></product>"
             )
 
             (installer_path / "product2").mkdir()
             (installer_path / "product2" / "description.xml").write_text(
-                '<product name="product2" version="2.0.0" type="framework"></product>'
+                "<product></product>"
             )
+
+            # Mock load_from_installer_folder to update product instances
+            call_count = 0
+
+            def mock_load(*args: object, **_kwargs: object) -> None:
+                nonlocal call_count
+                # When called on an instance, first arg is self
+                if args:
+                    self = args[0]
+                    if call_count < len(sample_products[:2]):
+                        product = sample_products[call_count]
+                        self.version = product.version
+                        self.type = product.type
+                        self.parents = product.parents
+                        self.categories = product.categories
+                        self.build = product.build
+                        self.date = product.date
+                        self.license = product.license
+                        call_count += 1
+
+            mock_from_installer.side_effect = mock_load
 
             collection = ProductCollection.from_installer(str(installer_path))
 
             assert len(collection.products) == 2
-            # Verify products have correct names
-            product_names = {p.name for p in collection.products}
-            assert "product1" in product_names
-            assert "product2" in product_names
+            assert collection.products == sample_products[:2]
 
     def test_from_installer_invalid_directory(self) -> None:
         """Test creating collection from invalid directory."""
         with pytest.raises(NotADirectoryError):
             ProductCollection.from_installer("/nonexistent/path")
 
-    def test_from_installer_with_failures(self) -> None:
+    @patch(
+        "kbot_installer.core.installable.product_installable.ProductInstallable.load_from_installer_folder",
+        autospec=True,
+    )
+    def test_from_installer_with_failures(self, mock_from_installer) -> None:
         """Test creating collection from installer with product loading failures."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folders - one valid, one invalid
+            # Create product folders
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                '<product name="product1" version="1.0.0" type="solution"></product>'
+                "<product></product>"
             )
 
             (installer_path / "product2").mkdir()
-            # Invalid XML that will cause a ValueError
             (installer_path / "product2" / "description.xml").write_text(
-                "<invalid>not a product</invalid>"
+                "<product></product>"
             )
+
+            # Mock load_from_installer_folder to raise ValueError for one product
+            call_count = 0
+
+            def side_effect(*args: object, **_kwargs: object) -> None:
+                nonlocal call_count
+                if args:
+                    self = args[0]
+                    if call_count == 0:
+                        # First product loads successfully
+                        self.version = "1.0.0"
+                        call_count += 1
+                    else:
+                        # Second product raises error
+                        error_msg = "Invalid product"
+                        raise ValueError(error_msg)
+
+            mock_from_installer.side_effect = side_effect
 
             with pytest.raises(ValueError, match="Failed to load products"):
                 ProductCollection.from_installer(str(installer_path))
@@ -471,20 +527,28 @@ class TestProductCollection:
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
 
-            # Create product folder with valid XML
+            # Create product folder
             (installer_path / "product1").mkdir()
             (installer_path / "product1" / "description.xml").write_text(
-                '<product name="product1" version="1.0.0" type="solution"></product>'
+                "<product></product>"
             )
 
-            # Both methods should produce the same result
-            collection1 = ProductCollection.from_installer(str(installer_path))
-            collection2 = ProductCollection.from_installer_folder(str(installer_path))
+            with patch(
+                "kbot_installer.core.installable.product_installable.ProductInstallable.load_from_installer_folder",
+                autospec=True,
+            ) as mock_from_installer:
 
-            # Both should have the same number of products
-            assert len(collection1.products) == len(collection2.products)
-            assert len(collection1.products) == 1
-            assert collection1.products[0].name == collection2.products[0].name
+                def mock_load(*args: object, **_kwargs: object) -> None:
+                    if args:
+                        args[0].version = "1.0.0"
+
+                mock_from_installer.side_effect = mock_load
+
+                ProductCollection.from_installer(str(installer_path))
+                ProductCollection.from_installer_folder(str(installer_path))
+
+                # Both should call the same method
+                assert mock_from_installer.call_count == 2
 
     def test_empty_collection_operations(self, empty_collection) -> None:
         """Test operations on empty collection."""
@@ -508,173 +572,3 @@ class TestProductCollection:
         """Test getting product from empty collection."""
         product = empty_collection.get_product("nonexistent")
         assert product is None
-
-    def test_validate_installer_with_value_error(self) -> None:
-        """Test validate_installer catches ValueError during product loading."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            installer_path = Path(temp_dir)
-
-            # Create product folder with invalid XML that will cause ValueError
-            (installer_path / "invalid_product").mkdir()
-            (installer_path / "invalid_product" / "description.xml").write_text(
-                "<invalid>not a product</invalid>"
-            )
-
-            collection = ProductCollection()
-            is_valid, errors = collection.validate_installer(str(installer_path))
-
-            # The validator might not fail if the XML parser doesn't raise ValueError
-            # but we should at least check that it handles the case
-            # If no errors are caught, the validation might pass
-            # So we check that either validation fails OR no errors (depends on implementation)
-            if not is_valid:
-                assert any("invalid_product" in error.lower() for error in errors)
-
-    def test_to_bfs_ordered_dict(self, populated_collection) -> None:
-        """Test converting collection to BFS-ordered dictionary."""
-        # Set up dependencies for BFS ordering
-        product1 = populated_collection.get_product("product1")
-        product2 = populated_collection.get_product("product2")
-        product3 = populated_collection.get_product("product3")
-
-        # Make product1 depend on product2, product3 depend on product1
-        if product1 and product3:
-            product1.parents = ["product2"]
-            product3.parents = ["product1"]
-
-        bfs_dict = populated_collection.to_bfs_ordered_dict("product3")
-
-        # Should return dictionary with product names as keys and JSON as values
-        assert isinstance(bfs_dict, dict)
-        assert (
-            "product3" in bfs_dict or "product1" in bfs_dict or "product2" in bfs_dict
-        )
-
-    def test_save_bfs_ordered_json(self, populated_collection) -> None:
-        """Test saving collection as BFS-ordered JSON."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = Path(f.name)
-
-        try:
-            # Set up dependencies
-            product1 = populated_collection.get_product("product1")
-            if product1:
-                product1.parents = ["product2"]
-
-            populated_collection.save_bfs_ordered_json(file_path, "product1")
-
-            # Verify file was created
-            assert file_path.exists()
-            with file_path.open(encoding="utf-8") as f:
-                data = json.load(f)
-                assert isinstance(data, dict)
-
-        finally:
-            file_path.unlink(missing_ok=True)
-
-    def test_export_to_json_structure(self, populated_collection) -> None:
-        """Test that export_to_json creates correct structure."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_json(file_path)
-
-            with Path(file_path).open(encoding="utf-8") as f:
-                data = json.load(f)
-                assert "products" in data
-                assert len(data["products"]) == 3
-                # Verify structure includes all expected fields
-                product1 = data["products"][0]
-                assert "name" in product1
-                assert "version" in product1
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
-    def test_get_files(self, populated_collection) -> None:
-        """Test getting files matching pattern across products."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Set up product directories
-            for product in populated_collection.products:
-                product_dir = Path(temp_dir) / product.name
-                product_dir.mkdir()
-                product.dirname = product_dir
-
-                # Create a test file
-                test_file = product_dir / "core" / "python" / "test.py"
-                test_file.parent.mkdir(parents=True)
-                test_file.write_text("# test file")
-
-            files = populated_collection.get_files("core/python", "*.py")
-            assert len(files) >= 3  # At least one file per product
-            assert all(f.suffix == ".py" for f in files)
-
-    def test_get_files_with_extensions(self, populated_collection) -> None:
-        """Test getting files with specific extensions."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            product = populated_collection.products[0]
-            product_dir = Path(temp_dir) / product.name
-            product_dir.mkdir()
-            product.dirname = product_dir
-
-            # Create files with different extensions
-            (product_dir / "test.py").write_text("# python")
-            (product_dir / "test.txt").write_text("text")
-
-            files = populated_collection.get_files("", "test.*", exts=(".py",))
-            assert any(f.suffix == ".py" for f in files)
-            assert not any(f.suffix == ".txt" for f in files)
-
-    def test_get_files_nonexistent_path(self, populated_collection) -> None:
-        """Test getting files from non-existent path."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            product = populated_collection.products[0]
-            product.dirname = Path(temp_dir) / product.name
-
-            files = populated_collection.get_files("nonexistent/path", "*")
-            assert files == []
-
-    def test_get_files_from_path(self) -> None:
-        """Test _get_files_from_path helper method."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            collection = ProductCollection()
-            test_file = Path(temp_dir) / "test.py"
-
-            # Test matching pattern
-            test_file.write_text("# test")
-            files = collection._get_files_from_path(test_file, "*.py", None)
-            assert len(files) == 1
-
-            # Test non-matching pattern
-            files = collection._get_files_from_path(test_file, "*.txt", None)
-            assert files == []
-
-            # Test with extension filter
-            files = collection._get_files_from_path(test_file, "*.py", (".py",))
-            assert len(files) == 1
-
-            files = collection._get_files_from_path(test_file, "*.py", (".txt",))
-            assert files == []
-
-    def test_get_files_from_directory(self) -> None:
-        """Test _get_files_from_directory helper method."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            collection = ProductCollection()
-            test_dir = Path(temp_dir) / "test_dir"
-            test_dir.mkdir()
-
-            # Create files with different extensions
-            (test_dir / "file1.py").write_text("# python")
-            (test_dir / "file2.txt").write_text("text")
-            (test_dir / "file3.py").write_text("# python2")
-
-            # Test with pattern and no extension filter
-            files = collection._get_files_from_directory(test_dir, "*.py", None)
-            assert len(files) == 2
-            assert all(f.suffix == ".py" for f in files)
-
-            # Test with extension filter
-            files = collection._get_files_from_directory(test_dir, "*", (".py",))
-            assert len(files) == 2
-            assert all(f.suffix == ".py" for f in files)

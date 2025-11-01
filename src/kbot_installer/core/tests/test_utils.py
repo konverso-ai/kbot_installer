@@ -306,7 +306,7 @@ class TestOptimizedDownloadAndExtract:
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "extract"
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None
@@ -333,7 +333,7 @@ class TestOptimizedDownloadAndExtract:
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "extract"
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None
@@ -371,7 +371,7 @@ class TestOptimizedDownloadAndExtract:
             target_dir = Path(temp_dir) / "nested" / "deep" / "extract"
             assert not target_dir.exists()
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None
@@ -414,7 +414,7 @@ class TestOptimizedDownloadAndExtractBis:
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "extract_bis"
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None
@@ -464,7 +464,7 @@ class TestOptimizedDownloadAndExtractTer:
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "extract_ter"
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None
@@ -508,7 +508,7 @@ class TestOptimizedDownloadAndExtractTer:
             target_dir = Path(temp_dir) / "nested" / "extract_ter"
             assert not target_dir.exists()
 
-            with patch("kbot_installer.core.utils.httpx.stream") as mock_stream:
+            with patch("httpx.stream") as mock_stream:
                 context_manager = MagicMock()
                 context_manager.__enter__.return_value = mock_response
                 context_manager.__exit__.return_value = None

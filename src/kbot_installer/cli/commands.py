@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from kbot_installer.core import InstallerService
+from kbot_installer.core.installer_service import InstallerService
 
 # Configurer le niveau de log pour réduire les messages verbeux
 logging.basicConfig(
