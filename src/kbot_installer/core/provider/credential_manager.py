@@ -101,11 +101,30 @@ class CredentialManager:
                 logger.warning("Unknown auth type: %s", provider_config.auth_type)
                 result = None
 
-        except ImportError:
-            logger.exception("Failed to import authentication module")
+        except ImportError as e:
+            # Log error without exposing sensitive information from stack trace
+            # Using logger.error() instead of logger.exception() to prevent
+            # credential exposure in stack traces (security best practice)
+            # Note: Intentionally using logger.error() instead of logger.exception()
+            # to avoid logging stack traces that may contain credential values
+            logger.error(  # noqa: TRY400
+                "Failed to import authentication module for auth_type '%s': %s",
+                provider_config.auth_type,
+                type(e).__name__,
+            )
             return None
-        except Exception:
-            logger.exception("Failed to create authentication object")
+        except Exception as e:
+            # Log error without exposing sensitive information from stack trace
+            # Do not log exception details that might contain credential values
+            # Using logger.error() instead of logger.exception() to prevent
+            # credential exposure in stack traces (security best practice)
+            # Note: Intentionally using logger.error() instead of logger.exception()
+            # to avoid logging stack traces that may contain credential values
+            logger.error(  # noqa: TRY400
+                "Failed to create authentication object for auth_type '%s': %s",
+                provider_config.auth_type,
+                type(e).__name__,
+            )
             return None
 
         return result

@@ -73,7 +73,8 @@ class SelectorProvider(ProviderBase):
         """
         # Check if credentials are available for this provider
         if not self.credential_manager.has_credentials(provider_name):
-            logger.debug("No credentials available for provider: %s", provider_name)
+            # No credentials available - return None silently to avoid logging
+            # provider names unnecessarily (security best practice)
             return None
 
         # Get provider configuration
@@ -91,8 +92,15 @@ class SelectorProvider(ProviderBase):
 
         try:
             return create_provider(name=provider_name, **params)
-        except Exception:
-            logger.exception("Failed to create provider '%s'", provider_name)
+        except Exception as e:
+            # Log error without exposing sensitive information from stack trace
+            # Using logger.error() instead of logger.exception() to prevent
+            # credential exposure in stack traces (security best practice)
+            logger.error(  # noqa: TRY400
+                "Failed to create provider '%s': %s",
+                provider_name,
+                type(e).__name__,
+            )
             return None
 
     def clone_and_checkout(
@@ -307,16 +315,22 @@ class SelectorProvider(ProviderBase):
                 # Provider-specific error (e.g., repository not found, authentication failed)
                 cause = self._extract_clean_error_cause(str(e))
                 results.append((provider_name, "❌ FAILED", cause))
+                # Log only exception type to avoid exposing sensitive information
                 logger.debug(
-                    "Provider '%s' failed with ProviderError: %s", provider_name, e
+                    "Provider '%s' failed with ProviderError: %s",
+                    provider_name,
+                    type(e).__name__,
                 )
                 continue
             except Exception as e:
                 # Unexpected error during provider creation or clone
-                cause = f"Unexpected error: {e!s}"
+                cause = f"Unexpected error: {type(e).__name__}"
                 results.append((provider_name, "❌ FAILED", cause))
+                # Log only exception type to avoid exposing sensitive information
                 logger.debug(
-                    "Provider '%s' failed with unexpected error: %s", provider_name, e
+                    "Provider '%s' failed with unexpected error: %s",
+                    provider_name,
+                    type(e).__name__,
                 )
                 continue
 
@@ -407,10 +421,11 @@ class SelectorProvider(ProviderBase):
                     return True
 
             except Exception as e:
+                # Log only exception type to avoid exposing sensitive information
                 logger.warning(
                     "Provider %s failed to check repository existence: %s",
                     provider_name,
-                    str(e),
+                    type(e).__name__,
                 )
 
         logger.info("Repository not found with any provider")
