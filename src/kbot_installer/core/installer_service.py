@@ -411,15 +411,32 @@ class InstallerService:
         return product_dir.exists() and any(product_dir.iterdir())
 
     def _is_product_at_version(self, product_name: str, version: str) -> bool:
-        """Check if a product is at the specified version."""
+        """Check if a product is at the specified version.
+
+        Args:
+            product_name: Name of the product to check.
+            version: Version to check against.
+
+        Returns:
+            bool: True if product is at the specified version, False otherwise.
+
+        """
         try:
             product_dir = self.installer_dir / product_name
             if not product_dir.exists():
                 return False
 
-            # Try to get git branch
-            result = subprocess.run(
-                ["git", "branch", "--show-current"],  # noqa: S607
+            # Security: Safe subprocess usage - command executable resolved via shutil.which(),
+            # command arguments are hardcoded, no user input passed as command arguments.
+            # Only cwd (directory path) comes from product_name, which is validated (exists() check)
+            # and comes from trusted installer directory structure. No command injection risk.
+            git_path = shutil.which("git")
+            if not git_path:
+                logger.debug("git command not found in PATH")
+                return False
+
+            result = subprocess.run(  # noqa: S603 - git_path resolved via shutil.which(), args hardcoded, cwd validated
+                [git_path, "branch", "--show-current"],
                 check=False,
                 cwd=product_dir,
                 capture_output=True,
@@ -480,8 +497,16 @@ class InstallerService:
             return "unknown"
 
         # Try to get remote URL to determine provider
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],  # noqa: S607
+        # Security: Safe subprocess usage - command executable resolved via shutil.which(),
+        # command arguments are hardcoded, no user input passed as command arguments.
+        # Only cwd (directory path) is validated (git_dir.exists() check) and comes from
+        # trusted installer directory structure. No command injection risk.
+        git_path = shutil.which("git")
+        if not git_path:
+            return "unknown"
+
+        result = subprocess.run(  # noqa: S603 - git_path resolved via shutil.which(), args hardcoded, cwd validated
+            [git_path, "remote", "get-url", "origin"],
             check=False,
             cwd=product_dir,
             capture_output=True,
