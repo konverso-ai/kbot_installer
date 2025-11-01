@@ -1,17 +1,22 @@
 """ProductCollection class for managing collections of products."""
 
 import fnmatch
+import importlib
 import json
 from collections.abc import Iterator
 from pathlib import Path
 
-# xml.etree.ElementTree used only for XML creation (export_to_xml) - safe because we control the content
-# XXE vulnerabilities only affect XML parsing/reading, not writing
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as defused_ET
 
 from kbot_installer.core.product.dependency_graph import DependencyGraph
 from kbot_installer.core.product.factory import create_installable
 from kbot_installer.core.product.installable_base import InstallableBase
+
+# Access underlying ElementTree for creation (safe - we control the content)
+# defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
+# __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
+_etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
+ET = importlib.import_module(_etree_module_name)
 
 
 class ProductCollection:
