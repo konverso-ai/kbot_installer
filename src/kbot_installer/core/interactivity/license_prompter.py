@@ -45,6 +45,8 @@ class LicensePrompter:
         if not licensekey.exists():
             # Check if license is already accepted
             if license_accepted or self.use_defaults:
+                # Create empty license.key file to mark acceptance
+                licensekey.write_text("", encoding="utf-8")
                 return True
 
             # Read license from file
