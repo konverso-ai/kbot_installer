@@ -1,0 +1,89 @@
+---
+description: Python absolute imports rule - always use absolute imports, never relative imports
+globs: *.py
+---
+
+# Python Absolute Imports Rule
+
+Always use **absolute imports** in Python files, never relative imports.
+
+## Rule: Use Absolute Imports Only
+
+### ✅ Correct - Absolute Imports
+```python
+# Good: Absolute imports
+from providers.provider_base import ProviderBase, ProviderError
+from providers.factory import ProviderFactory
+from providers.nexus_provider import NexusProvider
+from typing import Any, Dict, List
+import os
+import sys
+```
+
+### ❌ Incorrect - Relative Imports
+```python
+# Bad: Relative imports
+from .provider_base import ProviderBase, ProviderError
+from ..factory import ProviderFactory
+from .nexus_provider import NexusProvider
+```
+
+## Why Absolute Imports?
+
+1. **Clarity**: Makes it immediately clear where modules come from
+2. **Maintainability**: Easier to refactor and move files
+3. **Debugging**: Clearer error messages and stack traces
+4. **Consistency**: Follows PEP 8 recommendations
+5. **IDE Support**: Better autocomplete and navigation
+
+## Examples
+
+### Package Structure
+```
+kbot_installer/
+├── providers/
+│   ├── __init__.py
+│   ├── provider_base.py
+│   ├── factory.py
+│   ├── nexus_provider.py
+│   └── fallback.py
+└── tests/
+    └── test_providers.py
+```
+
+### Correct Import Patterns
+```python
+# In providers/factory.py
+from providers.provider_base import ProviderBase, ProviderError
+from typing import Any, ClassVar
+
+# In tests/test_providers.py
+from providers.provider_base import ProviderBase, ProviderError
+from providers.factory import ProviderFactory
+from providers.nexus_provider import NexusProvider
+from providers.bitbucket_provider import BitbucketProvider
+from providers.github_provider import GithubProvider
+from providers.fallback import ProviderFallback
+```
+
+## Enforcement
+
+- All new Python code must use absolute imports
+- Refactor existing relative imports when modifying files
+- Use linters like `ruff` to enforce this rule
+- Code reviews should check for absolute import compliance
+
+## Linter Configuration
+
+Add to your `ruff.toml` or `pyproject.toml`:
+```toml
+[lint]
+select = ["ALL"]
+ignore = ["E501", "ANN003", "D203"]
+
+[lint.isort]
+known-first-party = ["providers"]
+force-single-line = false
+```
+
+This rule ensures consistent, maintainable, and clear import statements throughout the Python codebase.

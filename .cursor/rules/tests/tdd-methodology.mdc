@@ -1,0 +1,59 @@
+---
+description: TDD methodology - Red-Green-Refactor cycle for test-driven development
+globs: *.py
+---
+
+# Python TDD (Test-Driven Development) Methodology
+
+Follow the Red-Green-Refactor cycle for all Python development:
+
+## 1. RED Phase - Write Failing Tests First
+- Write a test that describes the desired functionality
+- The test should fail initially (RED)
+- Focus on the interface and behavior, not implementation
+- Write the minimal test that captures the requirement
+
+## 2. GREEN Phase - Make Tests Pass
+- Write the minimal code to make the test pass
+- Don't worry about code quality yet - just make it work
+- Run tests frequently to ensure they pass (GREEN)
+- Avoid over-engineering at this stage
+
+## 3. REFACTOR Phase - Improve Code Quality
+- Clean up the code while keeping tests green
+- Improve readability, performance, and structure
+- Remove duplication and improve design
+- Ensure all tests still pass after refactoring
+
+## TDD Best Practices
+
+### Test Structure
+- Use descriptive test names that explain the behavior
+- Follow AAA pattern: Arrange, Act, Assert
+- One assertion per test when possible
+- Test edge cases and error conditions
+
+### Code Quality
+- Write clean, readable code
+- Use meaningful variable and function names
+- Keep functions small and focused
+- Follow SOLID principles
+
+### Continuous Integration
+- Run tests before every commit
+- Ensure all tests pass before merging
+- Use test coverage metrics to guide development
+
+## File Organization
+- Place tests in dedicated test directories
+- Mirror the source code structure in test files
+- Use consistent naming conventions (e.g., `test_*.py`)
+
+## When to Apply TDD
+- New feature development
+- Bug fixes (write test first, then fix)
+- Refactoring existing code
+- API development
+- Any code that needs to be reliable
+
+Remember: The goal is to write better code with confidence through comprehensive testing.

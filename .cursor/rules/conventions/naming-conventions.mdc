@@ -1,0 +1,68 @@
+---
+description: Naming conventions for packages, modules, classes, and methods/functions
+globs: *.py
+---
+
+# Python Naming Conventions
+
+Follow these strict naming conventions for all Python code elements:
+
+### Packages and Modules
+- **snake_case** for all package and module names
+- Use lowercase letters and underscores
+- Examples: `user_management`, `data_processor`, `api_client`
+
+### Classes
+- **PascalCase** for all class names
+- Use uppercase letters for each word
+- Examples: `UserManager`, `DataProcessor`, `ApiClient`
+
+### Methods and Functions
+- **snake_case** for all method and function names
+- Use lowercase letters and underscores
+- Examples: `get_user_data()`, `process_payment()`, `validate_input()`
+
+### File Naming Rule
+- **Class name must match module name**
+- If class is `ExampleClass`, the file must be `example_class.py`
+- If class is `UserManager`, the file must be `user_manager.py`
+- If class is `DataProcessor`, the file must be `data_processor.py`
+
+## Examples
+
+### Correct Naming
+```python
+# File: user_service.py
+class UserService:
+    def get_user_by_id(self, user_id):
+        pass
+    
+    def create_new_user(self, user_data):
+        pass
+
+# File: payment_processor.py
+class PaymentProcessor:
+    def process_payment(self, amount):
+        pass
+    
+    def validate_card(self, card_number):
+        pass
+```
+
+### Incorrect Naming
+```python
+# File: UserService.py (WRONG - should be user_service.py)
+class UserService:  # WRONG - class name doesn't match file name
+    def getUserById(self):  # WRONG - should be snake_case
+        pass
+
+# File: payment_processor.py
+class paymentProcessor:  # WRONG - should be PascalCase
+    def ProcessPayment(self):  # WRONG - should be snake_case
+        pass
+```
+
+## Enforcement
+- Always follow these conventions for new code
+- Refactor existing code to match these conventions when possible
+- Use linters and formatters to enforce these rules automatically

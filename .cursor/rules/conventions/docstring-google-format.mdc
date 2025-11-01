@@ -1,0 +1,152 @@
+---
+globs: *.py
+alwaysApply: false
+---
+# Python Docstring Standards
+
+## Format Requirements
+
+All Python functions, classes, and modules must have docstrings written in **English** using the **Google format**.
+
+## Google Docstring Format
+
+### Function Docstrings
+
+```python
+def function_name(param1: str, param2: int, optional_param: bool = False) -> str:
+    """Brief description of what the function does.
+
+    More detailed description if needed. Can span multiple lines.
+    Explain the purpose, behavior, and any important details.
+
+    Args:
+        param1 (str): Description of the first parameter.
+        param2 (int): Description of the second parameter.
+        optional_param (bool, optional): Description of optional parameter.
+            Defaults to False.
+
+    Returns:
+        str: Description of what the function returns.
+
+    Raises:
+        ValueError: Description of when this exception is raised.
+        TypeError: Description of when this exception is raised.
+
+    Example:
+        >>> result = function_name("hello", 42)
+        >>> print(result)
+        "hello42"
+    """
+```
+
+### Class Docstrings
+
+```python
+class MyClass:
+    """Brief description of the class.
+
+    More detailed description of the class purpose and behavior.
+    Explain the class's role in the system.
+
+    Attributes:
+        attribute1 (str): Description of the first attribute.
+        attribute2 (int): Description of the second attribute.
+
+    Example:
+        >>> obj = MyClass("value1", 42)
+        >>> print(obj.attribute1)
+        "value1"
+    """
+```
+
+### Module Docstrings
+
+```python
+"""Module-level docstring.
+
+Brief description of the module's purpose and functionality.
+This should be the first statement in the file.
+
+This module provides functionality for...
+"""
+
+import os
+import sys
+```
+
+## Key Rules
+
+1. **Language**: Always write docstrings in English
+2. **Format**: Use Google format with proper sections
+3. **Sections**: Include Args, Returns, Raises when applicable
+4. **Type hints**: Include type information in Args and Returns
+5. **Examples**: Add usage examples when helpful
+6. **Consistency**: Use consistent formatting throughout the codebase
+
+## Required Sections
+
+- **Args**: For each parameter (required and optional)
+- **Returns**: Description of return value and type
+- **Raises**: For exceptions that might be raised
+- **Example**: Code examples when they add value
+
+## Optional Sections
+
+- **Note**: Additional important information
+- **Warning**: Important warnings about usage
+- **Todo**: Future improvements or known issues
+- **References**: Links to related documentation
+
+## Examples
+
+### Simple Function
+```python
+def calculate_area(length: float, width: float) -> float:
+    """Calculate the area of a rectangle.
+
+    Args:
+        length (float): The length of the rectangle.
+        width (float): The width of the rectangle.
+
+    Returns:
+        float: The area of the rectangle.
+    """
+    return length * width
+```
+
+### Complex Function
+```python
+def process_data(data: List[Dict], validate: bool = True) -> Tuple[List, int]:
+    """Process a list of data dictionaries.
+
+    This function takes a list of dictionaries, validates them if requested,
+    and returns the processed data along with a count of valid entries.
+
+    Args:
+        data (List[Dict]): List of dictionaries to process.
+        validate (bool, optional): Whether to validate data before processing.
+            Defaults to True.
+
+    Returns:
+        Tuple[List, int]: A tuple containing:
+            - List of processed data dictionaries
+            - Count of valid entries processed
+
+    Raises:
+        ValueError: If data is empty and validation is enabled.
+        TypeError: If data contains non-dictionary items.
+
+    Example:
+        >>> data = [{"id": 1, "name": "test"}, {"id": 2, "name": "example"}]
+        >>> processed, count = process_data(data)
+        >>> print(f"Processed {count} items")
+        Processed 2 items
+    """
+```
+
+## Enforcement
+
+- All new Python code must follow this format
+- Existing code should be updated when modified
+- Code reviews should check docstring compliance
+- Use tools like `pydocstyle` to enforce formatting
