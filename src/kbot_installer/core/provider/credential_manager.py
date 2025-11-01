@@ -63,10 +63,10 @@ class CredentialManager:
         missing_vars = [var for var in provider_config.env_vars if not os.getenv(var)]
 
         if missing_vars:
-            logger.debug("Missing credentials for %s: %s", provider_name, missing_vars)
+            logger.debug("Missing environment variables for %s: %s", provider_name, provider_config.env_vars)
             return False
 
-        logger.debug("All credentials available for %s", provider_name)
+        logger.debug("All is good for %s", provider_name)
         return True
 
     def _create_auth_object(
