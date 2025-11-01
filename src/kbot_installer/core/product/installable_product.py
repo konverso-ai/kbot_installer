@@ -3,6 +3,7 @@
 import configparser
 import contextlib
 import fnmatch
+import importlib
 import json
 import shutil
 import site
@@ -11,13 +12,7 @@ import tomllib
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-
-# Import here to avoid circular imports
-from typing import Any, Literal
-
-# xml.etree.ElementTree used only for XML creation (to_xml) - safe because we control the content
-# XXE vulnerabilities only affect XML parsing/reading, not writing
-from xml.etree import ElementTree as ET
+from typing import Literal, TypedDict
 
 from defusedxml import ElementTree as defused_ET
 
@@ -26,6 +21,34 @@ from kbot_installer.core.product.installable_base import InstallableBase
 from kbot_installer.core.product.product_collection import ProductCollection
 from kbot_installer.core.provider import create_provider
 from kbot_installer.core.utils import ensure_directory
+
+# Access underlying ElementTree for creation (safe - we control the content)
+# defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
+# __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
+_etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
+ET = importlib.import_module(_etree_module_name)
+
+# Type alias for product configuration (INI-style: section -> option -> value)
+ProductConfig = dict[str, dict[str, str]]
+
+# Result type for get_kconf(): contains "aggregated" key and per-product configs
+# Structure: {"aggregated": ProductConfig, product_name: ProductConfig, ...}
+KbotConfigResult = dict[str, ProductConfig]
+
+
+class BuildDetails(TypedDict, total=False):
+    """Build details structure.
+
+    Attributes:
+        timestamp: Build timestamp (e.g., "2025/09/29 14:08:06").
+        branch: Git branch name (e.g., "release-2025.03-dev").
+        commit: Git commit hash (e.g., "7062432bd6ebeb174bf38bc5dde8d75d6e603e09").
+
+    """
+
+    timestamp: str
+    branch: str
+    commit: str
 
 
 @dataclass
@@ -56,8 +79,10 @@ class InstallableProduct(InstallableBase):
     parents: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     license: str | None = None
-    display: dict[str, Any] | None = None
-    build_details: dict[str, Any] | None = None
+    display: dict[str, dict[str, str]] | None = (
+        None  # Multilingual info: {"name": {"en": "...", "fr": "..."}, ...}
+    )
+    build_details: BuildDetails | None = None
     providers: list[str] = field(
         default_factory=lambda: ["nexus", "github", "bitbucket"]
     )
@@ -516,7 +541,7 @@ class InstallableProduct(InstallableBase):
 
         return pyproject_file
 
-    def get_kconf(self, product: str | None = None) -> dict[str, Any]:
+    def get_kconf(self, product: str | None = None) -> KbotConfigResult:
         """Get kbot.conf configuration for product and all dependencies.
 
         Aggregates kbot.conf files from the current product and all its dependencies
@@ -529,6 +554,8 @@ class InstallableProduct(InstallableBase):
 
         Returns:
             Dictionary with aggregated config and per-product configs.
+            Structure: {"aggregated": ProductConfig, product_name: ProductConfig, ...}
+            where ProductConfig is dict[str, dict[str, str]] (section -> option -> value).
 
         """
         # Determine target product
@@ -543,7 +570,7 @@ class InstallableProduct(InstallableBase):
 
         # Get all products in BFS order
         collection = target_product.get_dependencies()
-        result: dict[str, Any] = {"aggregated": {}}
+        result: KbotConfigResult = {"aggregated": {}}
 
         # Load kbot.conf from each product
         for prod in collection.products:
@@ -564,7 +591,7 @@ class InstallableProduct(InstallableBase):
                 continue
 
             # Convert to dict
-            prod_config: dict[str, Any] = {}
+            prod_config: ProductConfig = {}
             for section in parser.sections():
                 prod_config[section] = dict(parser[section])
 

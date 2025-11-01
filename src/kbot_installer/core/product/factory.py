@@ -1,7 +1,12 @@
 """Factory for creating installable products."""
 
+from typing import TYPE_CHECKING
+
 from kbot_installer.core.factory.factory import factory_class
 from kbot_installer.core.product.installable_base import InstallableBase
+
+if TYPE_CHECKING:
+    from kbot_installer.core.product.installable_product import BuildDetails
 
 
 def create_installable(
@@ -15,8 +20,8 @@ def create_installable(
     parents: list[str] | None = None,
     categories: list[str] | None = None,
     license_info: str | None = None,
-    display: dict | None = None,
-    build_details: dict | None = None,
+    display: dict[str, dict[str, str]] | None = None,
+    build_details: "BuildDetails | None" = None,
     providers: list[str] | None = None,
 ) -> InstallableBase:
     """Create an InstallableBase instance.
