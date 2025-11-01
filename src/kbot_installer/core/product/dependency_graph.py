@@ -255,7 +255,8 @@ class DependencyGraph:
 
         while remaining:
             current_level = []
-            for product_name in list(remaining):
+            # Sort for deterministic iteration order
+            for product_name in sorted(remaining):
                 # Check if all dependencies are processed
                 deps = set(self.dependencies[product_name])
                 if deps.issubset(processed):
