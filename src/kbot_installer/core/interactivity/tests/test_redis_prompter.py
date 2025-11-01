@@ -1,7 +1,6 @@
 """Tests for RedisPrompter class."""
 
 import tempfile
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from kbot_installer.core.interactivity.redis_prompter import RedisPrompter
@@ -70,7 +69,8 @@ class TestRedisPrompterPromptRedisParameters:
         assert result["redis_pwd"] == "redis_password"
 
     @patch(
-        "builtins.input", side_effect=["n", "redis.example.com", "0", "n", "y", "6379", "n", "", "", ""]
+        "builtins.input",
+        side_effect=["n", "redis.example.com", "0", "n", "y", "6379", "n", "", "", ""],
     )
     @patch("builtins.print")
     def test_prompt_redis_parameters_external_with_tls(

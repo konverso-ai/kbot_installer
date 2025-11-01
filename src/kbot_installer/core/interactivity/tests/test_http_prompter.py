@@ -11,6 +11,7 @@ from kbot_installer.core.interactivity.http_prompter import HttpPrompter
 @pytest.fixture(autouse=True)
 def mock_print() -> Iterator[None]:
     """Fixture to automatically mock print to prevent memory accumulation."""
+
     # Use a simple function that does nothing - no storage, no accumulation
     def _noop(*args: object, **kwargs: object) -> None:
         """No-op function that discards all arguments immediately."""
@@ -149,5 +150,3 @@ class TestHttpPrompterPromptHostname:
         }
         result = prompter.prompt_hostname(config)
         assert result["kbot_external_root_url"] == "https://existing.example.com"
-
-

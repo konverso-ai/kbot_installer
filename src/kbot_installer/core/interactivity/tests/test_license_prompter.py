@@ -147,5 +147,3 @@ class TestLicensePrompterPromptLicenseAgreement:
                 assert mock_print.called
                 license_key = target_path / "license.key"
                 assert license_key.exists()
-
-

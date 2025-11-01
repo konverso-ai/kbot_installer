@@ -98,5 +98,3 @@ class TestAdminPrompter:
             password_validator=validator, encrypt_fn=encrypt_fn
         )
         assert result == "encrypted_admin123"
-
-
