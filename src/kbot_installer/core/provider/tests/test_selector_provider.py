@@ -182,18 +182,22 @@ class TestSelectorProvider:
         selector = SelectorProvider(["nexus", "github"])
 
         with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            mock_provider = MagicMock()
-            mock_provider.clone_and_checkout = AsyncMock(
-                side_effect=ProviderError("All providers failed")
-            )
-            mock_create.return_value = mock_provider
+            # Create separate mock providers for each provider name
+            def mock_create_side_effect(provider_name: str) -> MagicMock:  # noqa: ARG001
+                mock_provider = MagicMock()
+                mock_provider.clone_and_checkout = AsyncMock(
+                    side_effect=ProviderError("All providers failed")
+                )
+                return mock_provider
 
-        with pytest.raises(
-            ProviderError, match="All providers failed to clone repository"
-        ):
-            selector.clone_and_checkout(
-                "/tmp/test_path", "main", repository_url="test_repo"
-            )
+            mock_create.side_effect = mock_create_side_effect
+
+            with pytest.raises(
+                ProviderError, match="All providers failed to clone repository"
+            ):
+                selector.clone_and_checkout(
+                    "/tmp/test_path", "main", repository_url="test_repo"
+                )
 
     def test_clone_all_providers_fail_general_exception(self) -> None:
         """Test clone when all providers fail with general exception."""

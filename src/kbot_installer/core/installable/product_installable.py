@@ -62,6 +62,8 @@ class ProductInstallable(InstallableBase):
         license: License information.
         display: Multilingual display information.
         build_details: Detailed build information (timestamp, branch, commit).
+        branch: Specific branch to use (overrides version_to_branch calculation).
+               If specified, env is forced to "dev".
 
     """
 
@@ -87,6 +89,8 @@ class ProductInstallable(InstallableBase):
     provider_name_used: str | None = None
     # Branch that was successfully used during clone
     branch_used: str | None = None
+    # Specific branch to use (overrides version_to_branch calculation)
+    branch: str | None = None
 
     def __post_init__(self) -> None:
         """Initialize provider after instance creation."""
@@ -130,13 +134,18 @@ class ProductInstallable(InstallableBase):
         providers = self.providers
         # Use default_version if provided, otherwise use parent's version as fallback
         version = default_version or self.version
+        # Use the same branch as the parent product if specified
+        branch = self.branch
 
         # Try to load from cloned repository if base_path is provided
         if base_path:
             cloned_product_path = base_path / product_name
             if (cloned_product_path / "description.xml").exists():
                 product = create_installable(
-                    name=product_name, providers=providers, version=version
+                    name=product_name,
+                    providers=providers,
+                    version=version,
+                    branch=branch,
                 )
                 product.load_from_installer_folder(cloned_product_path)
                 # If description.xml doesn't specify a version, keep the default version
@@ -146,9 +155,9 @@ class ProductInstallable(InstallableBase):
 
         # Otherwise, create a minimal product instance with just the name using factory
         # The provider will handle the actual loading when cloning
-        # Pass providers and version to ensure dependencies use the same providers and version as the main product
+        # Pass providers, version, and branch to ensure dependencies use the same as the main product
         return create_installable(
-            name=product_name, providers=providers, version=version
+            name=product_name, providers=providers, version=version, branch=branch
         )
 
     @classmethod
@@ -386,6 +395,11 @@ class ProductInstallable(InstallableBase):
             self.version = source_product.version
         # If source version is empty but we have a version, keep ours (inherited from parent)
         # This happens when description.xml has version="" - we want to keep parent's version
+        # Preserve branch: only update if source has an explicit branch, otherwise keep ours
+        # This ensures branch inherited from parent is not lost when loading from XML
+        if hasattr(source_product, "branch") and source_product.branch is not None:
+            self.branch = source_product.branch
+        # If source doesn't have branch or has None, self.branch remains unchanged
         self.build = source_product.build
         self.date = source_product.date
         self.type = source_product.type
@@ -396,7 +410,7 @@ class ProductInstallable(InstallableBase):
         self.license = source_product.license
         self.display = source_product.display
         self.build_details = source_product.build_details
-        # Note: name and provider are not updated as they should remain consistent
+        # Note: name, provider, and branch are preserved as they should remain consistent
 
     @classmethod
     def merge_xml_json(
@@ -422,6 +436,13 @@ class ProductInstallable(InstallableBase):
             raise ValueError(msg)
 
         # JSON takes precedence for common fields
+        # Preserve branch from either product if it exists (not stored in XML/JSON typically)
+        branch = None
+        if hasattr(json_product, "branch") and json_product.branch:
+            branch = json_product.branch
+        elif hasattr(xml_product, "branch") and xml_product.branch:
+            branch = xml_product.branch
+
         return cls(
             name=xml_product.name,
             version=json_product.version or xml_product.version,
@@ -435,6 +456,7 @@ class ProductInstallable(InstallableBase):
             license=json_product.license,
             display=json_product.display,
             build_details=json_product.build_details,
+            branch=branch,
         )
 
     def to_xml(self) -> str:
@@ -503,6 +525,7 @@ class ProductInstallable(InstallableBase):
             "build_details": self.build_details,
             "provider_name_used": self.provider_name_used,
             "branch_used": self.branch_used,
+            "branch": self.branch,
         }
 
     def clone(self, path: Path, *, dependencies: bool = True) -> None:
@@ -516,8 +539,11 @@ class ProductInstallable(InstallableBase):
         # Ensure the base path exists
         path.mkdir(parents=True, exist_ok=True)
 
-        # Convert version to branch name for Git providers
-        branch = version_to_branch(self.version, env=self.env) if self.version else None
+        # Use specified branch if provided, otherwise convert version to branch name
+        # Store the calculated branch in self.branch so it's preserved and can be used by dependencies
+        if not self.branch and self.version:
+            self.branch = version_to_branch(self.version, env=self.env)
+        branch = self.branch
 
         if not dependencies:
             logger.warning("Cloning %s (branch: %s) to %s", self.name, branch, path)
@@ -602,11 +628,11 @@ class ProductInstallable(InstallableBase):
             True if clone was successful, False otherwise.
 
         """
-        dependency_branch = (
-            version_to_branch(product.version, env=product.env)
-            if product.version
-            else None
-        )
+        # Use specified branch if provided, otherwise convert version to branch name
+        # Store the calculated branch in product.branch so it's preserved
+        if not product.branch and product.version:
+            product.branch = version_to_branch(product.version, env=product.env)
+        dependency_branch = product.branch
         product_path = base_path / product.name
 
         try:
@@ -1409,16 +1435,32 @@ class ProductInstallable(InstallableBase):
                          If None, attempts to detect from path.
 
         """
+        logger.info("Installing product %s to %s", self.name, path)
         ensure_directory(path)
 
+        logger.info("Finding lock file in %s", path)
         lock_file, effective_installer_path = self._find_lock_file(path, installer_path)
 
-        products = []
-        if lock_file and lock_file.exists() and effective_installer_path:
-            products = self._load_products_from_lock(
-                lock_file, effective_installer_path, dependencies=dependencies
-            )
+        # Raise error if lock file is not found
+        if not lock_file or not lock_file.exists():
+            logger.error("Lock file not found at %s", lock_file)
+            msg = f"products.lock.json not found. Expected at: {lock_file or 'unknown location'}"
+            raise FileNotFoundError(msg)
 
+        if not effective_installer_path:
+            logger.error(
+                "Installer path could not be determined from lock file location"
+            )
+            msg = "Installer path could not be determined from lock file location"
+            raise ValueError(msg)
+
+        products = self._load_products_from_lock(
+            lock_file, effective_installer_path, dependencies=dependencies
+        )
+
+        logger.info("Loaded %d products from lock file", len(products))
+
+        # If loading from lock failed, try to ensure installer is complete
         if not products and effective_installer_path:
             products = self._ensure_installer_complete(
                 effective_installer_path, dependencies=dependencies

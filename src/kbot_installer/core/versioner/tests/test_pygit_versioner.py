@@ -573,8 +573,7 @@ class TestPygitVersioner:
             assert result is None
             mock_get_repo.assert_called_once_with("/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_success(self, versioner) -> None:
+    def test_check_remote_repository_exists_success(self, versioner) -> None:
         """Test check_remote_repository_exists with successful repository."""
         with (
             patch("tempfile.mkdtemp", return_value="/tmp/test"),
@@ -585,20 +584,19 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner.check_remote_repository_exists(
+            result = versioner.check_remote_repository_exists(
                 "https://github.com/test/repo.git"
             )
 
             assert result is True
             mock_init.assert_called_once_with("/tmp/test", bare=True)
-            mock_remote.fetch.assert_called_once_with()
+            mock_remote.ls_remotes.assert_called_once_with()
             mock_rmtree.assert_called_once_with(Path("/tmp/test"), ignore_errors=True)
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_failure(self, versioner) -> None:
+    def test_check_remote_repository_exists_failure(self, versioner) -> None:
         """Test check_remote_repository_exists with repository not found."""
         import pygit2
 
@@ -611,27 +609,24 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_repo.remotes.create.return_value = mock_remote
-            mock_remote.fetch.side_effect = pygit2.GitError("Repository not found")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = pygit2.GitError("Repository not found")
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner.check_remote_repository_exists(
+            result = versioner.check_remote_repository_exists(
                 "https://github.com/nonexistent/repo.git"
             )
 
             assert result is False
             mock_rmtree.assert_called_once_with(Path("/tmp/test"), ignore_errors=True)
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_handles_exception(
-        self, versioner
-    ) -> None:
+    def test_check_remote_repository_exists_handles_exception(self, versioner) -> None:
         """Test check_remote_repository_exists handles unexpected exceptions."""
         with (
             patch("tempfile.mkdtemp", side_effect=OSError("Permission denied")),
             patch("shutil.rmtree") as mock_rmtree,
         ):
-            result = await versioner.check_remote_repository_exists(
+            result = versioner.check_remote_repository_exists(
                 "https://github.com/test/repo.git"
             )
 
@@ -823,7 +818,7 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner._check_remote_repository_exists_with_fetch(
@@ -832,7 +827,7 @@ class TestPygitVersioner:
 
             assert result is True
             mock_init.assert_called_once_with("/tmp/test", bare=True)
-            mock_remote.fetch.assert_called_once_with()
+            mock_remote.ls_remotes.assert_called_once_with()
             mock_rmtree.assert_called_once_with(Path("/tmp/test"), ignore_errors=True)
 
     def test_check_remote_repository_exists_with_fetch_with_auth(
@@ -848,7 +843,11 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_auth = MagicMock()
+            mock_callbacks = MagicMock()
+            mock_auth.get_connector.return_value = mock_callbacks
+            versioner_with_auth._get_auth = MagicMock(return_value=mock_auth)
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner_with_auth._check_remote_repository_exists_with_fetch(
@@ -856,7 +855,7 @@ class TestPygitVersioner:
             )
 
             assert result is True
-            mock_remote.fetch.assert_called_once()
+            mock_remote.ls_remotes.assert_called_once_with(callbacks=mock_callbacks)
 
     def test_check_remote_repository_exists_with_fetch_failure(self, versioner) -> None:
         """Test _check_remote_repository_exists_with_fetch with repository failure."""
@@ -869,8 +868,8 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_remote.fetch.side_effect = pygit2.GitError("Repository not found")
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = pygit2.GitError("Repository not found")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner._check_remote_repository_exists_with_fetch(
@@ -893,8 +892,8 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_remote.fetch.side_effect = Exception("Unexpected error")
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = Exception("Unexpected error")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner._check_remote_repository_exists_with_fetch(
@@ -917,8 +916,8 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_remote.fetch.side_effect = pygit2.GitError("Repository not found")
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = pygit2.GitError("Repository not found")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner._check_remote_repository_exists_with_fetch(
@@ -941,8 +940,8 @@ class TestPygitVersioner:
         ):
             mock_repo = MagicMock()
             mock_remote = MagicMock()
-            mock_remote.fetch.side_effect = pygit2.GitError("Repository not found")
-            mock_repo.remotes.create.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = pygit2.GitError("Repository not found")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
             mock_repo_class.return_value = mock_repo
 
             result = versioner._check_remote_repository_exists_with_fetch(
@@ -1424,8 +1423,7 @@ class TestPygitVersioner:
             with pytest.raises(VersionerError, match="Failed to open repository"):
                 await versioner.select_branch("/path/to/repo", ["main"])
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_with_auth(
+    def test_check_remote_repository_exists_with_auth(
         self, versioner_with_auth
     ) -> None:
         """Test check_remote_repository_exists with authentication."""
@@ -1434,22 +1432,21 @@ class TestPygitVersioner:
         ) as mock_check:
             mock_check.return_value = True
 
-            result = await versioner_with_auth.check_remote_repository_exists(
+            result = versioner_with_auth.check_remote_repository_exists(
                 "https://github.com/test/repo"
             )
 
             assert result is True
             mock_check.assert_called_once_with("https://github.com/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_exception(self, versioner) -> None:
+    def test_check_remote_repository_exists_exception(self, versioner) -> None:
         """Test check_remote_repository_exists handles exceptions."""
         with patch.object(
             versioner, "_check_remote_repository_exists_with_fetch"
         ) as mock_check:
             mock_check.side_effect = Exception("Unexpected error")
 
-            result = await versioner.check_remote_repository_exists(
+            result = versioner.check_remote_repository_exists(
                 "https://github.com/test/repo"
             )
 
@@ -1483,8 +1480,8 @@ class TestPygitVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
             mock_remote = MagicMock()
-            mock_repo.remotes.create.return_value = mock_remote
-            mock_remote.fetch.side_effect = pygit2.GitError("Git error")
+            mock_repo.remotes.create_anonymous.return_value = mock_remote
+            mock_remote.ls_remotes.side_effect = pygit2.GitError("Git error")
             # rmtree with ignore_errors=True doesn't raise exceptions, so we don't mock side_effect
 
             result = versioner._check_remote_repository_exists_with_fetch(

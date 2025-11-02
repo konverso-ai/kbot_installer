@@ -19,6 +19,34 @@ from kbot_installer.core.provider.credential_manager import CredentialManager
 from kbot_installer.core.provider.factory import create_provider
 from kbot_installer.core.provider.provider_base import ProviderBase, ProviderError
 
+
+def _run_coroutine_safe(coro: object) -> object:
+    """Run a coroutine safely from a sync context.
+
+    Args:
+        coro: The coroutine to run.
+
+    Returns:
+        The result of the coroutine execution.
+
+    """
+    # Try to use asyncio.run() first (preferred method)
+    try:
+        # Check if there's already a running event loop
+        asyncio.get_running_loop()
+        # If we get here, a loop is already running
+        # Use a new event loop instead
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+    except RuntimeError:
+        # No running event loop - safe to use asyncio.run()
+        return asyncio.run(coro)
+
+
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -73,27 +101,52 @@ class SelectorProvider(ProviderBase):
             ProviderBase | None: The created provider instance with credentials, or None if credentials are missing.
 
         """
-        # Check if credentials are available for this provider
-        if not self.credential_manager.has_credentials(provider_name):
-            # No credentials available - return None silently to avoid logging
-            # provider names unnecessarily (security best practice)
-            return None
+        logger.info("Creating provider '%s' with credentials", provider_name)
 
         # Get provider configuration
+        logger.info("Getting provider configuration for '%s'", provider_name)
         provider_config = self.config.get_provider_config(provider_name)
         if not provider_config:
             logger.warning("No configuration found for provider: %s", provider_name)
+            return None
+
+        logger.info(
+            "Provider configuration found for '%s': %s", provider_name, provider_config
+        )
+
+        # For GitHub and Bitbucket, allow creation without credentials (for public repos)
+        # For Nexus, credentials are required
+        if provider_name not in [
+            "github",
+            "bitbucket",
+        ] and not self.credential_manager.has_credentials(provider_name):
+            logger.debug(
+                "Credentials required for provider '%s' but not available",
+                provider_name,
+            )
             return None
 
         params = provider_config.kwargs.copy()
 
         # Add authentication if available
         auth = self.credential_manager.get_auth_for_provider(provider_name)
+        logger.info("Authentication found for '%s': %s", provider_name, auth)
         if auth:
             params["auth"] = auth
+            logger.info(
+                "Authentication added to parameters for '%s': %s", provider_name, params
+            )
 
         try:
+            logger.info(
+                "Creating provider '%s' with parameters: %s", provider_name, params
+            )
             return create_provider(name=provider_name, **params)
+        except ProviderError as e:
+            logger.exception(
+                "Failed to create provider '%s': %s", provider_name, type(e).__name__
+            )
+            return None
         except Exception as e:
             # Log error without exposing sensitive information from stack trace
             # Using logger.error() instead of logger.exception() to prevent
@@ -291,22 +344,30 @@ class SelectorProvider(ProviderBase):
             ProviderError: If clone fails.
 
         """
-        # Check if it's async - handle both sync and async methods
+        # Check if the method itself is async before calling it
         clone_method = provider.clone_and_checkout
-        try:
-            # Try calling the method - if it returns a coroutine, run it
-            result = clone_method(repository_name, target_path, branch_to_try)
-            # Check if result is a coroutine (handle both real coroutines and AsyncMock results)
-            try:
-                is_coroutine = result is not None and inspect.iscoroutine(result)
-            except (AttributeError, TypeError):
-                # If inspect.iscoroutine fails, assume it's a coroutine if result is not None
-                is_coroutine = result is not None
+        is_async_method = inspect.iscoroutinefunction(clone_method)
 
-            if is_coroutine:
-                # It's async, run with asyncio
-                asyncio.run(result)
-            # If result is None or not a coroutine, assume it's sync and completed
+        logger.debug(
+            "clone_and_checkout is async: %s for provider %s",
+            is_async_method,
+            type(provider).__name__,
+        )
+
+        try:
+            if is_async_method:
+                # Method is async, call it and await the result
+                logger.debug("Calling async clone_and_checkout")
+                result = clone_method(repository_name, target_path, branch_to_try)
+                logger.debug("Got coroutine result, running with asyncio")
+                # Run the coroutine
+                _run_coroutine_safe(result)
+                logger.debug("Async clone completed")
+            else:
+                # Method is sync, call it directly
+                logger.debug("Calling sync clone_and_checkout")
+                clone_method(repository_name, target_path, branch_to_try)
+                logger.debug("Sync clone completed")
         except ProviderError:
             # Re-raise ProviderError as-is
             raise
@@ -488,7 +549,11 @@ class SelectorProvider(ProviderBase):
 
         results = []
         for provider_name in self.providers:
-            logger.info("Attempting to clone with provider: %s", provider_name)
+            logger.info(
+                "Attempting to clone repository '%s' with provider: %s",
+                repository_name,
+                provider_name,
+            )
 
             try:
                 provider = self._create_provider_with_credentials(provider_name)
@@ -517,7 +582,8 @@ class SelectorProvider(ProviderBase):
                 self.branch_used = branch_used
                 results.append((provider_name, "✅ SUCCESS", success_msg))
                 logger.info(
-                    "✅ Successfully cloned repository using provider: %s (branch: %s)",
+                    "✅ Successfully cloned repository '%s' using provider: %s (branch: %s)",
+                    repository_name,
                     provider_name,
                     branch_used,
                 )
@@ -578,7 +644,7 @@ class SelectorProvider(ProviderBase):
         """
         self._clone_with_providers(repository_name, target_path, branch)
 
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using the first available provider.
 
         Args:
@@ -593,15 +659,15 @@ class SelectorProvider(ProviderBase):
                 logger.info(
                     "Checking repository existence with provider: %s", provider_name
                 )
-                provider = self._create_provider(provider_name)
+                provider = self._create_provider_with_credentials(provider_name)
+                if not provider:
+                    continue
 
-                # Check if provider supports async check
-                if inspect.iscoroutinefunction(provider.check_remote_repository_exists):
-                    exists = await provider.check_remote_repository_exists(
-                        repository_url
-                    )
-                else:
-                    exists = provider.check_remote_repository_exists(repository_url)
+                exists = provider.check_remote_repository_exists(repository_url)
+
+                logger.info(
+                    "Repository exists with provider: %s: %s", provider_name, exists
+                )
 
                 if exists:
                     logger.info("Repository found with provider: %s", provider_name)
@@ -609,7 +675,7 @@ class SelectorProvider(ProviderBase):
 
             except Exception as e:
                 # Log only exception type to avoid exposing sensitive information
-                logger.warning(
+                logger.exception(
                     "Provider %s failed to check repository existence: %s",
                     provider_name,
                     type(e).__name__,

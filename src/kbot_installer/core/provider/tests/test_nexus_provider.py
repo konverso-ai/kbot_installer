@@ -204,13 +204,12 @@ class TestNexusProvider:
         # When None is specified, should use master as default
         assert provider.get_branch() == "master"
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_exception(self) -> None:
+    def test_check_remote_repository_exists_exception(self) -> None:
         """Test check_remote_repository_exists handles exceptions."""
         provider = NexusProvider("example.com", "test-repo")
 
         # Since _get_versioner might not exist or raise an exception, test the exception path
         # The method should return False when an exception occurs
-        result = await provider.check_remote_repository_exists("test-repo")
+        result = provider.check_remote_repository_exists("test-repo")
         # Should return False when versioner cannot be created or fails
         assert result is False

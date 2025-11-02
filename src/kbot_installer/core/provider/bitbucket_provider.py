@@ -77,7 +77,7 @@ class BitbucketProvider(GitMixin):
         # Use the parent clone_and_checkout method which handles authentication
         await super().clone_and_checkout(repository_url, target_path, branch)
 
-    async def check_remote_repository_exists(self, repository_name: str) -> bool:
+    def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on Bitbucket.
 
         Args:
@@ -95,7 +95,7 @@ class BitbucketProvider(GitMixin):
             )
             # Use the versioner to check if repository exists
             versioner = self._get_versioner()
-            return await versioner.check_remote_repository_exists(repository_url)
+            return versioner.check_remote_repository_exists(repository_url)
         except Exception:
             return False
 

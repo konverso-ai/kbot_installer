@@ -97,69 +97,46 @@ class TestGithubProvider:
             "https://github.com/test_account/test_repo.git", "/test/path", "develop"
         )
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_success(self) -> None:
+    def test_check_remote_repository_exists_success(self) -> None:
         """Test check_remote_repository_exists returns True when repository exists."""
         provider = GithubProvider("test_account")
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-
-            # Create an async mock for check_remote_repository_exists
-            async def async_check_remote_repository_exists(_url):
-                return True
-
-            mock_versioner.check_remote_repository_exists = (
-                async_check_remote_repository_exists
-            )
+            mock_versioner.check_remote_repository_exists.return_value = True
             mock_get_versioner.return_value = mock_versioner
 
-            result = await provider.check_remote_repository_exists("test_repo")
+            result = provider.check_remote_repository_exists("test_repo")
 
             assert result is True
             mock_get_versioner.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_failure(self) -> None:
+    def test_check_remote_repository_exists_failure(self) -> None:
         """Test check_remote_repository_exists returns False when repository doesn't exist."""
         provider = GithubProvider("test_account")
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-
-            # Create an async mock for check_remote_repository_exists
-            async def async_check_remote_repository_exists(_url):
-                return False
-
-            mock_versioner.check_remote_repository_exists = (
-                async_check_remote_repository_exists
-            )
+            mock_versioner.check_remote_repository_exists.return_value = False
             mock_get_versioner.return_value = mock_versioner
 
-            result = await provider.check_remote_repository_exists("test_repo")
+            result = provider.check_remote_repository_exists("test_repo")
 
             assert result is False
             mock_get_versioner.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_exception(self) -> None:
+    def test_check_remote_repository_exists_exception(self) -> None:
         """Test check_remote_repository_exists returns False when exception occurs."""
         provider = GithubProvider("test_account")
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-
-            # Create an async mock for check_remote_repository_exists that raises an exception
-            async def async_check_remote_repository_exists(_url):
-                error_msg = "Network error"
-                raise RuntimeError(error_msg)
-
-            mock_versioner.check_remote_repository_exists = (
-                async_check_remote_repository_exists
+            mock_versioner.check_remote_repository_exists.side_effect = RuntimeError(
+                "Network error"
             )
             mock_get_versioner.return_value = mock_versioner
 
-            result = await provider.check_remote_repository_exists("test_repo")
+            result = provider.check_remote_repository_exists("test_repo")
 
             assert result is False
             mock_get_versioner.assert_called_once()

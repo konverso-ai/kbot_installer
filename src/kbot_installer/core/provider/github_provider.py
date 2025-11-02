@@ -5,10 +5,13 @@ operations specific to GitHub repositories. It supports cloning repositories
 from GitHub using pygit2.
 """
 
+import logging
 from pathlib import Path
 
 from kbot_installer.core.auth.pygit_authentication import PyGitAuthenticationBase
 from kbot_installer.core.provider.git_mixin import GitMixin
+
+logger = logging.getLogger(__name__)
 
 
 class GithubProvider(GitMixin):
@@ -40,6 +43,7 @@ class GithubProvider(GitMixin):
                 If None, operations will use public access only.
 
         """
+        logger.info("Initializing GitHub provider with account name: %s", account_name)
         super().__init__()
         self.account_name = account_name
         self._auth = auth
@@ -75,7 +79,7 @@ class GithubProvider(GitMixin):
         # Use the parent clone_and_checkout method which handles authentication
         await super().clone_and_checkout(repository_url, target_path, branch)
 
-    async def check_remote_repository_exists(self, repository_name: str) -> bool:
+    def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on GitHub.
 
         Args:
@@ -93,7 +97,7 @@ class GithubProvider(GitMixin):
             )
             # Use the versioner to check if repository exists
             versioner = self._get_versioner()
-            return await versioner.check_remote_repository_exists(repository_url)
+            return versioner.check_remote_repository_exists(repository_url)
         except Exception:
             return False
 

@@ -518,7 +518,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Failed to apply stash: {e}"
             raise VersionerError(error_msg) from e
 
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using git ls-remote (most efficient).
 
         Args:
@@ -531,9 +531,7 @@ class GitPythonVersioner(StrReprMixin):
         try:
             # Use git ls-remote to check if repository exists
             # This is the most efficient way to check repository existence
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: git.cmd.Git().ls_remote(repository_url)
-            )
+            git.cmd.Git().ls_remote(repository_url)
         except GitCommandError:
             return False
         except Exception:

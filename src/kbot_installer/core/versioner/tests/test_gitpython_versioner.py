@@ -415,8 +415,7 @@ class TestGitPythonVersioner:
             with pytest.raises(VersionerError, match="Unexpected error during push"):
                 await versioner_without_auth.push("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_success(
+    def test_check_remote_repository_exists_success(
         self, versioner_without_auth
     ) -> None:
         """Test successful remote repository existence check."""
@@ -427,7 +426,7 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.return_value = "refs/heads/main"
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo.git"
             )
 
@@ -436,8 +435,7 @@ class TestGitPythonVersioner:
                 "https://github.com/test/repo.git"
             )
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_failure(
+    def test_check_remote_repository_exists_failure(
         self, versioner_without_auth
     ) -> None:
         """Test remote repository existence check with failure."""
@@ -448,14 +446,13 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.side_effect = Exception("Repository not found")
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo.git"
             )
 
             assert result is False
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_exception(
+    def test_check_remote_repository_exists_exception(
         self, versioner_without_auth
     ) -> None:
         """Test remote repository existence check with exception."""
@@ -466,7 +463,7 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.side_effect = Exception("Unexpected error")
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo.git"
             )
 
@@ -660,8 +657,7 @@ class TestGitPythonVersioner:
 
             assert result == "main"
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_with_path_object(
+    def test_check_remote_repository_exists_with_path_object(
         self, versioner_without_auth
     ) -> None:
         """Test check_remote_repository_exists with Path object."""
@@ -672,7 +668,7 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.return_value = "refs/heads/main"
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo"
             )
 
@@ -819,8 +815,7 @@ class TestGitPythonVersioner:
             with pytest.raises(VersionerError, match="Failed to push to main"):
                 await versioner_without_auth.push("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_with_git_command_error(
+    def test_check_remote_repository_exists_with_git_command_error(
         self, versioner_without_auth
     ) -> None:
         """Test check_remote_repository_exists with GitCommandError."""
@@ -831,14 +826,13 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.side_effect = GitCommandError("Repository not found")
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo"
             )
 
             assert result is False
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_with_general_exception(
+    def test_check_remote_repository_exists_with_general_exception(
         self, versioner_without_auth
     ) -> None:
         """Test check_remote_repository_exists with general exception."""
@@ -849,7 +843,7 @@ class TestGitPythonVersioner:
             mock_git_class.return_value = mock_git
             mock_git.ls_remote.side_effect = Exception("Unexpected error")
 
-            result = await versioner_without_auth.check_remote_repository_exists(
+            result = versioner_without_auth.check_remote_repository_exists(
                 "https://github.com/test/repo"
             )
 

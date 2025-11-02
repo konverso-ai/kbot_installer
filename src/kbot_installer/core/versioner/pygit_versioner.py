@@ -480,6 +480,7 @@ class PygitVersioner(StrReprMixin):
             bool: True if repository exists, False otherwise.
 
         """
+        logger.info("Checking if remote repository exists: %s", repository_url)
         temp_repo_path = None
         try:
             # Create a temporary directory for the repository
@@ -489,31 +490,35 @@ class PygitVersioner(StrReprMixin):
             # Initialize a bare repository
             pygit2.init_repository(str(temp_repo_path), bare=True)
             temp_repo = pygit2.Repository(str(temp_repo_path))
+            logger.info("Initialized temporary repository: %s", temp_repo_path)
 
             # Add the remote
-            remote = temp_repo.remotes.create("temp_remote", repository_url)
-
+            remote = temp_repo.remotes.create_anonymous(repository_url)
+            logger.info("Created anonymous remote: %s", remote)
             # Try to fetch from the remote with authentication if available
             auth = self._get_auth()
             if auth:
                 callbacks = auth.get_connector()
-                remote.fetch(callbacks=callbacks)
+                logger.info("Callbacks: %s", callbacks)
+                remote.ls_remotes(callbacks=callbacks)
             else:
-                remote.fetch()
-
+                logger.info("Fetching from remote repository: %s", repository_url)
+                remote.ls_remotes()
+            logger.info("Fetch succeeded for remote repository: %s", repository_url)
+            # If fetch succeeded, the repository exists
         except pygit2.GitError as e:
             logger.debug("Repository does not exist or is not accessible: %s", e)
             return False
         except Exception as e:
             logger.debug("Unexpected error checking repository existence: %s", e)
             return False
+        else:
+            # If fetch succeeded, the repository exists
+            return True
         finally:
             # Clean up temporary repository
             if temp_repo_path and temp_repo_path.exists():
                 shutil.rmtree(temp_repo_path, ignore_errors=True)
-
-        # If fetch succeeded, the repository exists
-        return True
 
     async def stash(
         self, repository_path: str | Path, message: str | None = None
@@ -622,7 +627,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to apply stash: {e}"
             raise VersionerError(error_msg) from e
 
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using Remote.fetch().
 
         This method creates a temporary remote and attempts to fetch references

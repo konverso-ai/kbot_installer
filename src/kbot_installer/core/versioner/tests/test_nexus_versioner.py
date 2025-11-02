@@ -242,41 +242,44 @@ class TestNexusVersioner:
             ):
                 await versioner.push(repo_path, "main")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_success(
+    def test_check_remote_repository_exists_success(
         self, versioner: NexusVersioner
     ) -> None:
         """Test check_remote_repository_exists with successful response."""
-        with patch.object(versioner, "_check_nexus_repository_exists") as mock_check:
+        with patch.object(
+            versioner, "_check_nexus_repository_exists_sync"
+        ) as mock_check:
             mock_check.return_value = True
 
-            result = await versioner.check_remote_repository_exists("test_repo")
+            result = versioner.check_remote_repository_exists("test_repo")
 
             assert result is True
             mock_check.assert_called_once_with("test_repo")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_failure(
+    def test_check_remote_repository_exists_failure(
         self, versioner: NexusVersioner
     ) -> None:
         """Test check_remote_repository_exists with failed response."""
-        with patch.object(versioner, "_check_nexus_repository_exists") as mock_check:
+        with patch.object(
+            versioner, "_check_nexus_repository_exists_sync"
+        ) as mock_check:
             mock_check.return_value = False
 
-            result = await versioner.check_remote_repository_exists("test_repo")
+            result = versioner.check_remote_repository_exists("test_repo")
 
             assert result is False
             mock_check.assert_called_once_with("test_repo")
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_handles_error(
+    def test_check_remote_repository_exists_handles_error(
         self, versioner: NexusVersioner
     ) -> None:
         """Test check_remote_repository_exists handles exceptions."""
-        with patch.object(versioner, "_check_nexus_repository_exists") as mock_check:
+        with patch.object(
+            versioner, "_check_nexus_repository_exists_sync"
+        ) as mock_check:
             mock_check.side_effect = Exception("API error")
 
-            result = await versioner.check_remote_repository_exists("test_repo")
+            result = versioner.check_remote_repository_exists("test_repo")
 
             assert result is False
 
@@ -287,7 +290,9 @@ class TestNexusVersioner:
             target_path = Path(temp_dir) / "test_repo"
 
             with (
-                patch.object(versioner, "_check_nexus_repository_exists") as mock_check,
+                patch.object(
+                    versioner, "_check_nexus_repository_exists_sync"
+                ) as mock_check,
                 patch(
                     "kbot_installer.core.versioner.nexus_versioner.optimized_download_and_extract"
                 ) as mock_download,
@@ -309,7 +314,7 @@ class TestNexusVersioner:
             target_path = Path(temp_dir) / "test_repo"
 
             with patch.object(
-                versioner, "_check_nexus_repository_exists"
+                versioner, "_check_nexus_repository_exists_sync"
             ) as mock_check:
                 mock_check.return_value = False
 
@@ -318,51 +323,48 @@ class TestNexusVersioner:
                 ):
                     await versioner._download_repository("test_repo", target_path)
 
-    @pytest.mark.asyncio
-    async def test_check_nexus_repository_exists_success(
+    def test_check_nexus_repository_exists_sync_success(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test _check_nexus_repository_exists with successful HEAD response."""
-        with patch("httpx.AsyncClient") as mock_client:
+        """Test _check_nexus_repository_exists_sync with successful HEAD response."""
+        with patch("httpx.Client") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 200
 
-            mock_client.return_value.__aenter__.return_value.head.return_value = (
+            mock_client.return_value.__enter__.return_value.head.return_value = (
                 mock_response
             )
 
-            result = await versioner._check_nexus_repository_exists("test_repo")
+            result = versioner._check_nexus_repository_exists_sync("test_repo")
 
             assert result is True
 
-    @pytest.mark.asyncio
-    async def test_check_nexus_repository_exists_not_found(
+    def test_check_nexus_repository_exists_sync_not_found(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test _check_nexus_repository_exists when repository not found."""
-        with patch("httpx.AsyncClient") as mock_client:
+        """Test _check_nexus_repository_exists_sync when repository not found."""
+        with patch("httpx.Client") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 404
 
-            mock_client.return_value.__aenter__.return_value.head.return_value = (
+            mock_client.return_value.__enter__.return_value.head.return_value = (
                 mock_response
             )
 
-            result = await versioner._check_nexus_repository_exists("test_repo")
+            result = versioner._check_nexus_repository_exists_sync("test_repo")
 
             assert result is False
 
-    @pytest.mark.asyncio
-    async def test_check_nexus_repository_exists_api_error(
+    def test_check_nexus_repository_exists_sync_api_error(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test _check_nexus_repository_exists handles connection errors."""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.head.side_effect = (
+        """Test _check_nexus_repository_exists_sync handles connection errors."""
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.return_value.head.side_effect = (
                 Exception("Connection error")
             )
 
-            result = await versioner._check_nexus_repository_exists("test_repo")
+            result = versioner._check_nexus_repository_exists_sync("test_repo")
 
             assert result is False
 
@@ -386,7 +388,7 @@ class TestNexusVersioner:
 
             with (
                 patch.object(
-                    versioner_with_auth, "_check_nexus_repository_exists"
+                    versioner_with_auth, "_check_nexus_repository_exists_sync"
                 ) as mock_check,
                 patch(
                     "kbot_installer.core.versioner.nexus_versioner.optimized_download_and_extract"
@@ -412,7 +414,9 @@ class TestNexusVersioner:
             target_path = Path(temp_dir) / "test_repo"
 
             with (
-                patch.object(versioner, "_check_nexus_repository_exists") as mock_check,
+                patch.object(
+                    versioner, "_check_nexus_repository_exists_sync"
+                ) as mock_check,
                 patch(
                     "kbot_installer.core.versioner.nexus_versioner.optimized_download_and_extract"
                 ) as mock_download,
@@ -425,16 +429,15 @@ class TestNexusVersioner:
                 ):
                     await versioner._download_repository("test_repo", target_path)
 
-    @pytest.mark.asyncio
-    async def test_check_nexus_repository_exists_with_auth(
+    def test_check_nexus_repository_exists_sync_with_auth(
         self, versioner_with_auth: NexusVersioner
     ) -> None:
-        """Test _check_nexus_repository_exists with authentication."""
-        with patch("httpx.AsyncClient") as mock_client:
+        """Test _check_nexus_repository_exists_sync with authentication."""
+        with patch("httpx.Client") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 200
 
-            mock_client.return_value.__aenter__.return_value.head.return_value = (
+            mock_client.return_value.__enter__.return_value.head.return_value = (
                 mock_response
             )
 
@@ -442,21 +445,20 @@ class TestNexusVersioner:
             mock_auth.get_auth.return_value = {"username": "test", "password": "test"}
             versioner_with_auth.auth = mock_auth
 
-            result = await versioner_with_auth._check_nexus_repository_exists(
+            result = versioner_with_auth._check_nexus_repository_exists_sync(
                 "test_repo"
             )
 
             assert result is True
 
-    @pytest.mark.asyncio
-    async def test_check_nexus_repository_exists_httpx_error(
+    def test_check_nexus_repository_exists_sync_httpx_error(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test _check_nexus_repository_exists handles httpx errors."""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.side_effect = Exception("HTTP error")
+        """Test _check_nexus_repository_exists_sync handles httpx errors."""
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__.side_effect = Exception("HTTP error")
 
-            result = await versioner._check_nexus_repository_exists("test_repo")
+            result = versioner._check_nexus_repository_exists_sync("test_repo")
 
             assert result is False
 
@@ -502,15 +504,16 @@ class TestNexusVersioner:
 
                 mock_download.assert_called_once_with("test_repo", target_path)
 
-    @pytest.mark.asyncio
-    async def test_check_remote_repository_exists_with_exception_in_check(
+    def test_check_remote_repository_exists_with_exception_in_check(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test check_remote_repository_exists when _check_nexus_repository_exists raises exception."""
-        with patch.object(versioner, "_check_nexus_repository_exists") as mock_check:
+        """Test check_remote_repository_exists when _check_nexus_repository_exists_sync raises exception."""
+        with patch.object(
+            versioner, "_check_nexus_repository_exists_sync"
+        ) as mock_check:
             mock_check.side_effect = Exception("Unexpected error")
 
-            result = await versioner.check_remote_repository_exists("test_repo")
+            result = versioner.check_remote_repository_exists("test_repo")
 
             assert result is False
 
@@ -523,7 +526,9 @@ class TestNexusVersioner:
             target_path = Path(temp_dir) / "nested" / "test_repo"
 
             with (
-                patch.object(versioner, "_check_nexus_repository_exists") as mock_check,
+                patch.object(
+                    versioner, "_check_nexus_repository_exists_sync"
+                ) as mock_check,
                 patch(
                     "kbot_installer.core.versioner.nexus_versioner.optimized_download_and_extract"
                 ) as mock_download,

@@ -12,6 +12,8 @@ from kbot_installer.core.provider.provider_base import ProviderBase, ProviderErr
 from kbot_installer.core.utils import (
     optimized_download_and_extract_ter,
 )
+from kbot_installer.core.versioner.factory import create_versioner
+from kbot_installer.core.versioner.versioner_base import VersionerBase, VersionerError
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +130,7 @@ class NexusProvider(ProviderBase):
             )
             raise ProviderError(error_msg) from e
 
-    async def check_remote_repository_exists(self, repository_name: str) -> bool:
+    def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on Nexus.
 
         Args:
@@ -138,11 +140,18 @@ class NexusProvider(ProviderBase):
             bool: True if repository exists, False otherwise.
 
         """
+        logger.info(
+            "Checking if remote repository exists on Nexus: %s", repository_name
+        )
         try:
             # Use the versioner to check if repository exists
             versioner = self._get_versioner()
-            return await versioner.check_remote_repository_exists(repository_name)
+            return versioner.check_remote_repository_exists(repository_name)
+        except VersionerError:
+            logger.exception("Error checking if repository exists on Nexus")
+            return False
         except Exception:
+            logger.exception("Unexpected error checking if repository exists on Nexus")
             return False
 
     def get_name(self) -> str:
@@ -162,3 +171,14 @@ class NexusProvider(ProviderBase):
 
         """
         return self.branch_used or self.branch
+
+    def _get_versioner(self) -> VersionerBase:
+        """Get the versioner for the provider.
+
+        Returns:
+            VersionerBase: The versioner for the provider.
+
+        """
+        return create_versioner(
+            "nexus", domain=self.domain, repository=self.repository, auth=self._auth
+        )

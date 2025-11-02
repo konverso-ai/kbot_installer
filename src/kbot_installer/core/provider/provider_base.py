@@ -43,7 +43,7 @@ class ProviderBase(ABC):
         """
 
     @abstractmethod
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists.
 
         Args:

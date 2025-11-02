@@ -332,6 +332,7 @@ class ProductCollection:
                 display=product_data.get("display"),
                 build_details=product_data.get("build_details"),
                 providers=product_data.get("providers"),
+                branch=product_data.get("branch"),
             )
             # Set dirname if provided in JSON
             if product_data.get("dirname"):

@@ -220,11 +220,21 @@ class TestInstallerService:
             mock_product.name = "test-product"
             mock_product.versions = ["1.0.0", "2.0.0"]
 
-            # Test and expect error - the actual error will be from the provider
-            with pytest.raises(
-                Exception, match="All providers failed"
-            ):  # ProviderError or similar
-                service._install_single_product(mock_product, "3.0.0")
+            # Mock clone_and_checkout to raise exception immediately
+            with (
+                patch(
+                    "kbot_installer.core.installer_service.version_to_branch",
+                    return_value="release-3.0.0",
+                ),
+                patch.object(
+                    service.selector_provider,
+                    "clone_and_checkout",
+                    side_effect=Exception("All providers failed"),
+                ),
+            ):
+                # Test and expect error - the actual error will be from the provider
+                with pytest.raises(Exception, match="All providers failed"):
+                    service._install_single_product(mock_product, "3.0.0")
 
     def test_installer_dir_property(self) -> None:
         """Test installer_dir property."""

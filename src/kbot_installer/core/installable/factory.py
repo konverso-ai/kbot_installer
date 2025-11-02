@@ -23,6 +23,7 @@ def create_installable(
     display: dict[str, dict[str, str]] | None = None,
     build_details: "BuildDetails | None" = None,
     providers: list[str] | None = None,
+    branch: str | None = None,
 ) -> InstallableBase:
     """Create an InstallableBase instance.
 
@@ -37,18 +38,23 @@ def create_installable(
         date: Build date.
         product_type: Product type (solution, framework, customer).
         docs: List of documentation references.
-        env: Environment (dev, prod).
+        env: Environment (dev, prod). If branch is specified, this is forced to "dev".
         parents: List of parent product names (dependencies).
         categories: List of product categories.
         license_info: License information.
         display: Multilingual display information.
         build_details: Detailed build information.
         providers: List of provider names.
+        branch: Specific branch to use. If provided, env is forced to "dev" and
+               this branch is used instead of calculating from version.
 
     Returns:
         InstallableBase instance.
 
     """
+    # If branch is specified, force env to "dev"
+    effective_env = "dev" if branch else env
+
     # Prepare kwargs for ProductInstallable constructor
     product_kwargs = {
         "name": name,
@@ -57,13 +63,14 @@ def create_installable(
         "date": date,
         "type": product_type,
         "docs": docs or [],
-        "env": env,
+        "env": effective_env,
         "parents": parents or [],
         "categories": categories or [],
         "license": license_info,
         "display": display,
         "build_details": build_details,
         "providers": providers or ["nexus", "github", "bitbucket"],
+        "branch": branch,
     }
 
     # Get the class using factory_class

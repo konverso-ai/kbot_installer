@@ -221,7 +221,7 @@ class NexusVersioner(StrReprMixin):
         )
         raise VersionerError(error_msg)
 
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using Nexus API.
 
         Args:
@@ -232,7 +232,34 @@ class NexusVersioner(StrReprMixin):
 
         """
         try:
-            return await self._check_nexus_repository_exists(repository_url)
+            return self._check_nexus_repository_exists_sync(repository_url)
+        except Exception:
+            return False
+
+    def _check_nexus_repository_exists_sync(self, repo_name: str) -> bool:
+        """Check if a repository exists in Nexus using HEAD request on the file (sync).
+
+        Args:
+            repo_name: Name of the repository to check.
+
+        Returns:
+            bool: True if repository exists, False otherwise.
+
+        """
+        logger.info("Checking if repository '%s' exists in Nexus", repo_name)
+        try:
+            # Build the direct file URL
+            file_url = (
+                f"https://{self.domain}/repository/{self.repository}/{repo_name}.tar.gz"
+            )
+
+            auth = self._get_auth()
+            auth_obj = auth.get_auth() if auth else None
+
+            with httpx.Client() as client:
+                response = client.head(file_url, auth=auth_obj)
+                return response.status_code == HTTP_OK
+
         except Exception:
             return False
 
@@ -248,7 +275,7 @@ class NexusVersioner(StrReprMixin):
 
         """
         # Check if repository exists
-        if not await self._check_nexus_repository_exists(repo_name):
+        if not self._check_nexus_repository_exists_sync(repo_name):
             error_msg = f"Repository '{repo_name}' not found in Nexus"
             raise VersionerError(error_msg)
 
@@ -282,32 +309,6 @@ class NexusVersioner(StrReprMixin):
         except Exception as e:
             error_msg = f"Failed to download repository '{repo_name}': {e}"
             raise VersionerError(error_msg) from e
-
-    async def _check_nexus_repository_exists(self, repo_name: str) -> bool:
-        """Check if a repository exists in Nexus using HEAD request on the file.
-
-        Args:
-            repo_name: Name of the repository to check.
-
-        Returns:
-            bool: True if repository exists, False otherwise.
-
-        """
-        try:
-            # Build the direct file URL
-            file_url = (
-                f"https://{self.domain}/repository/{self.repository}/{repo_name}.tar.gz"
-            )
-
-            auth = self._get_auth()
-            auth_obj = auth.get_auth() if auth else None
-
-            async with httpx.AsyncClient() as client:
-                response = await client.head(file_url, auth=auth_obj)
-                return response.status_code == HTTP_OK
-
-        except Exception:
-            return False
 
     async def stash(
         self, _repository_path: str | Path, _message: str | None = None

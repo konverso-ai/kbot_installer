@@ -1,8 +1,9 @@
 """Tests for Product install, pyproject_path, and get_kconf methods."""
 
+import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -202,23 +203,54 @@ class TestProductInstall:
 
             # Create pyproject.toml with work.init
             pyproject_file = product_dir / "pyproject.toml"
-            pyproject_file.write_text(
-                """[work.init]
+            pyproject_content = """[work.init]
 var = ["pkl", "storage"]
 logs = ["httpd"]
 """
-            )
+            pyproject_file.write_text(pyproject_content)
 
             workarea = Path(temp_dir) / "workarea"
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
+
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
 
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check directories were created
             assert (workarea / "var" / "pkl").exists()
@@ -249,12 +281,49 @@ core = ["RunBot.py", "Learn.py"]
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml and source files
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy core directory with files for work.copy test
+            installer_core_dir = installer_product_dir / "core"
+            installer_core_dir.mkdir()
+            (installer_core_dir / "RunBot.py").write_text("print('run')")
+            (installer_core_dir / "Learn.py").write_text("print('learn')")
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check files were copied
             assert (workarea / "core" / "RunBot.py").exists()
@@ -287,12 +356,49 @@ core = ["RunBot.py", "Learn.py"]
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml and source files
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy core/python directory with files for work.link test
+            installer_core_python_dir = installer_product_dir / "core" / "python"
+            installer_core_python_dir.mkdir(parents=True)
+            (installer_core_python_dir / "file1.py").write_text("print('file1')")
+            (installer_core_python_dir / "file2.py").write_text("print('file2')")
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check symlinks were created
             link1 = workarea / "core" / "python" / "file1.py"
@@ -300,7 +406,8 @@ core = ["RunBot.py", "Learn.py"]
 
             assert link1.is_symlink()
             assert link2.is_symlink()
-            assert link1.readlink().samefile(core_python_dir / "file1.py")
+            # Symlink should point to installer directory, not product_dir
+            assert link1.readlink().samefile(installer_core_python_dir / "file1.py")
 
     def test_install_work_link_external(self) -> None:
         """Test install with work.link.external section."""
@@ -329,20 +436,54 @@ core = ["RunBot.py", "Learn.py"]
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
             with patch("site.getsitepackages", return_value=[str(site_packages)]):
-                product.install(workarea, dependencies=False)
+                product.install(
+                    workarea, dependencies=False, installer_path=installer_dir
+                )
 
             # Check symlink was created
             link = workarea / "ui" / "web" / "static"
             assert link.is_symlink()
             assert link.readlink().samefile(static_dir)
 
-    def test_install_first_come_first_served(self) -> None:
+    def test_install_first_come_first_served(self) -> None:  # noqa: PLR0915
         """Test install with conflict resolution - first come first served."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Product1 (dependency, processed first)
@@ -375,9 +516,15 @@ core = ["RunBot.py", "Learn.py"]
 
             product1 = ProductInstallable(name="product1")
             product1.dirname = product1_dir
+            # Mock provider to avoid real clone calls
+            mock_provider1 = MagicMock()
+            product1.provider = mock_provider1
 
             product2 = ProductInstallable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
+            # Mock provider to avoid real clone calls
+            mock_provider2 = MagicMock()
+            product2.provider = mock_provider2
 
             # Mock get_dependencies to return in BFS order (product1 first, then product2)
             def mock_get_dependencies(*, base_path=None) -> ProductCollection:  # noqa: ARG001
@@ -385,13 +532,66 @@ core = ["RunBot.py", "Learn.py"]
 
             product2.get_dependencies = mock_get_dependencies
 
+            # Create products.lock.json for install method with valid product data
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Create product directories in installer for verification
+            installer_product1_dir = installer_dir / "product1"
+            installer_product1_dir.mkdir()
+            (installer_product1_dir / "description.xml").write_text(
+                '<product name="product1"/>'
+            )
+            installer_core1_dir = installer_product1_dir / "core" / "python"
+            installer_core1_dir.mkdir(parents=True)
+            (installer_core1_dir / "file.py").write_text("product1 content")
+            (installer_product1_dir / "pyproject.toml").write_text(
+                """[work.link]
+"core/python" = ["file.py"]
+"""
+            )
+
+            installer_product2_dir = installer_dir / "product2"
+            installer_product2_dir.mkdir()
+            (installer_product2_dir / "description.xml").write_text(
+                '<product name="product2"/>'
+            )
+            installer_core2_dir = installer_product2_dir / "core" / "python"
+            installer_core2_dir.mkdir(parents=True)
+            (installer_core2_dir / "file.py").write_text("product2 content")
+            (installer_product2_dir / "pyproject.toml").write_text(
+                """[work.link]
+"core/python" = ["file.py"]
+"""
+            )
+
+            # Create valid lock file with both products
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "product1",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    },
+                    {
+                        "name": "product2",
+                        "version": "",
+                        "type": "solution",
+                        "parents": ["product1"],
+                    },
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
             workarea = Path(temp_dir) / "workarea"
-            product2.install(workarea, dependencies=True)
+            product2.install(workarea, dependencies=True, installer_path=installer_dir)
 
             # Check that product1's file won (first processed)
             link = workarea / "core" / "python" / "file.py"
             assert link.is_symlink()
-            assert link.readlink().samefile(core1_dir / "file.py")
+            # Symlink should point to installer directory, not product_dir
+            assert link.readlink().samefile(installer_core1_dir / "file.py")
             assert link.read_text() == "product1 content"
 
     def test_install_work_ignore(self) -> None:
@@ -423,12 +623,51 @@ ui = ["static"]
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml and source files
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy ui directory with files for work.link test
+            installer_ui_dir = installer_product_dir / "ui"
+            installer_ui_dir.mkdir()
+            (installer_ui_dir / "static").mkdir()
+            (installer_ui_dir / "static" / "file.css").write_text("css")
+            (installer_ui_dir / "widget").mkdir()
+            (installer_ui_dir / "widget" / "file.js").write_text("js")
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check that ignored directory is not linked
             assert not (workarea / "ui" / "static").exists()
@@ -458,12 +697,49 @@ bin = []
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml and source files
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy bin directory with files for work.link test
+            installer_bin_dir = installer_product_dir / "bin"
+            installer_bin_dir.mkdir()
+            (installer_bin_dir / "script1.sh").write_text("script1")
+            (installer_bin_dir / "script2.sh").write_text("script2")
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check directory is linked
             assert (workarea / "bin").exists()
@@ -479,13 +755,40 @@ bin = []
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Create product directory in installer with description.xml (but no pyproject.toml)
+            (installer_dir / "test-product").mkdir()
+            (installer_dir / "test-product" / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
             # Should not raise error, just skip
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Workarea should exist but be empty
             assert workarea.exists()
@@ -504,13 +807,45 @@ bin = []
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Create product directory in installer with description.xml and pyproject.toml (but no work section)
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
             # Should not raise error, just skip
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Workarea should exist but be empty
             assert workarea.exists()
@@ -553,12 +888,54 @@ bin = ["*.sh"]
             product = ProductInstallable(name="test-product")
             product.dirname = product_dir
 
+            # Create products.lock.json for install method
+            installer_dir = Path(temp_dir) / "installer"
+            installer_dir.mkdir()
+            # Copy product to installer directory with pyproject.toml and source files
+            installer_product_dir = installer_dir / "test-product"
+            installer_product_dir.mkdir()
+            # Copy pyproject.toml to installer directory
+            (installer_product_dir / "pyproject.toml").write_text(
+                pyproject_file.read_text()
+            )
+            (installer_product_dir / "description.xml").write_text(
+                '<product name="test-product"/>'
+            )
+            # Copy source files to installer directory
+            installer_core_dir = installer_product_dir / "core"
+            installer_core_dir.mkdir()
+            installer_python_dir = installer_core_dir / "python"
+            installer_python_dir.mkdir()
+            (installer_python_dir / "module.py").write_text("module")
+            (installer_core_dir / "RunBot.py").write_text("run")
+            installer_bin_dir = installer_product_dir / "bin"
+            installer_bin_dir.mkdir()
+            (installer_bin_dir / "script.sh").write_text("script")
+
+            # Create valid lock file
+            lock_file = installer_dir / "products.lock.json"
+            lock_data = {
+                "products": [
+                    {
+                        "name": "test-product",
+                        "version": "",
+                        "type": "solution",
+                        "parents": [],
+                    }
+                ]
+            }
+            lock_file.write_text(json.dumps(lock_data))
+
+            # Mock provider to avoid real clone calls
+            mock_provider = MagicMock()
+            product.provider = mock_provider
+
             def mock_get_dependencies() -> ProductCollection:
                 return ProductCollection([product])
 
             product.get_dependencies = mock_get_dependencies
 
-            product.install(workarea, dependencies=False)
+            product.install(workarea, dependencies=False, installer_path=installer_dir)
 
             # Check init
             assert (workarea / "var" / "pkl").exists()
