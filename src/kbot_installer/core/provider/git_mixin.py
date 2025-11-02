@@ -31,6 +31,8 @@ class GitMixin(ProviderBase):
         """
         super().__init__(*args, **kwargs)
         self._versioner = None
+        # Store the branch that was successfully used
+        self.branch_used: str | None = None
 
     def _get_auth(self) -> object:
         """Get authentication object for the provider.
@@ -74,6 +76,8 @@ class GitMixin(ProviderBase):
             if branch:
                 try:
                     await versioner.checkout(target_path, branch)
+                    # Store the branch that was successfully used
+                    self.branch_used = branch
                 except VersionerError as e:
                     # Check if this is a branch not found error
                     if "not found" in str(e).lower() or "branch" in str(e).lower():
@@ -81,6 +85,10 @@ class GitMixin(ProviderBase):
                     else:
                         error_msg = f"Failed to checkout branch '{branch}' for repository '{repository_url}': {e}"
                     raise ProviderError(error_msg) from e
+            else:
+                # If no branch specified, use default branch (typically "main" or "master")
+                # We'll need to detect it, but for now store None
+                self.branch_used = None
         except VersionerError as e:
             # This is a clone error, not a checkout error
             error_msg = f"Failed to clone repository '{repository_url}': {e}"
@@ -88,3 +96,12 @@ class GitMixin(ProviderBase):
         except Exception as e:
             error_msg = f"Unexpected error: {e}"
             raise ProviderError(error_msg) from e
+
+    def get_branch(self) -> str:
+        """Get the branch of the provider.
+
+        Returns:
+            str: Branch of the provider. Returns empty string if no branch was used.
+
+        """
+        return self.branch_used or ""

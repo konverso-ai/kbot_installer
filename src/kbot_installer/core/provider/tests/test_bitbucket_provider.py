@@ -164,3 +164,51 @@ class TestBitbucketProvider:
         assert "Provider for Bitbucket repository operations" in docstring
         assert "account_name" in docstring
         assert "auth" in docstring
+
+    def test_get_branch_returns_empty_before_clone(self) -> None:
+        """Test get_branch returns empty string before clone."""
+        provider = BitbucketProvider("test_account")
+        # Before clone, branch_used is None, so should return empty string
+        assert provider.get_branch() == ""
+
+    @pytest.mark.asyncio
+    @patch(
+        "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
+    )
+    async def test_get_branch_returns_used_branch_after_clone(
+        self, mock_clone_and_checkout
+    ) -> None:
+        """Test get_branch returns the branch used during clone."""
+        provider = BitbucketProvider("test_account")
+
+        # Mock the parent clone to simulate setting branch_used
+        async def mock_clone(url, path, branch):
+            provider.branch_used = branch
+
+        mock_clone_and_checkout.side_effect = mock_clone
+
+        await provider.clone_and_checkout("test_repo", "/test/path", "develop")
+
+        # After clone with branch "develop", should return "develop"
+        assert provider.get_branch() == "develop"
+
+    @pytest.mark.asyncio
+    @patch(
+        "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
+    )
+    async def test_get_branch_returns_empty_when_no_branch(
+        self, mock_clone_and_checkout
+    ) -> None:
+        """Test get_branch returns empty string when no branch specified."""
+        provider = BitbucketProvider("test_account")
+
+        # Mock the parent clone to simulate setting branch_used to None
+        async def mock_clone(url, path, branch):
+            provider.branch_used = None
+
+        mock_clone_and_checkout.side_effect = mock_clone
+
+        await provider.clone_and_checkout("test_repo", "/test/path", None)
+
+        # When None is specified, should return empty string
+        assert provider.get_branch() == ""

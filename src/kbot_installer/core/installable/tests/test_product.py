@@ -407,7 +407,8 @@ class TestProduct:
         loaded_product = product._load_product_by_name("new-product")
 
         assert loaded_product.name == "new-product"
-        assert loaded_product.version == ""  # Default empty string
+        # Version inherits from parent product
+        assert loaded_product.version == "1.0.0"
 
     def test_update_from_product(self) -> None:
         """Test _update_from_product method."""
@@ -492,7 +493,11 @@ class TestProduct:
         product_d = ProductInstallable(name="product-d", version="1.0.0")
 
         # Mock the _load_product_by_name method to return our test products
-        def mock_load_product(name: str) -> ProductInstallable:
+        def mock_load_product(
+            name: str,
+            base_path=None,  # noqa: ARG001
+            default_version=None,  # noqa: ARG001
+        ) -> ProductInstallable:
             products = {
                 "product-b": product_b,
                 "product-c": product_c,
@@ -524,16 +529,27 @@ class TestProduct:
         mock_provider = Mock()
         product.provider = mock_provider
 
-        target_path = Path("/tmp/test-clone")
-        with patch.object(product, "load_from_installer_folder") as mock_load_folder:
-            product.clone(target_path, dependencies=False)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_path = Path(temp_dir)
+            product_path = base_path / "test-product"
+            # Create description.xml to simulate successful clone
+            product_path.mkdir(parents=True)
+            (product_path / "description.xml").write_text("<product></product>")
 
-            # Verify provider.clone_and_checkout was called
-            mock_provider.clone_and_checkout.assert_called_once_with(
-                target_path, "1.0.0"
-            )
-            # Verify load_from_installer_folder was called
-            mock_load_folder.assert_called_once_with(target_path)
+            with patch.object(
+                product, "load_from_installer_folder"
+            ) as mock_load_folder:
+                product.clone(base_path, dependencies=False)
+
+                # Verify provider.clone_and_checkout was called with product subdirectory
+                from kbot_installer.core.utils import version_to_branch
+
+                branch = version_to_branch("1.0.0")
+                mock_provider.clone_and_checkout.assert_called_once_with(
+                    product_path, branch, repository_name="test-product"
+                )
+                # Verify load_from_installer_folder was called
+                mock_load_folder.assert_called_once_with(product_path)
 
     def test_clone_with_dependencies(self) -> None:
         """Test clone method with dependencies."""
@@ -553,7 +569,7 @@ class TestProduct:
             product_b.provider = mock_provider_b
 
             # Mock _load_product_by_name to return product_b
-            def mock_load_product(name: str) -> ProductInstallable:
+            def mock_load_product(name: str, base_path=None) -> ProductInstallable:  # noqa: ARG001
                 if name == "product-b":
                     return product_b
                 return ProductInstallable(name=name)
@@ -561,7 +577,7 @@ class TestProduct:
             product_a._load_product_by_name = mock_load_product
 
             # Mock get_dependencies to return a collection
-            def mock_get_dependencies() -> ProductCollection:
+            def mock_get_dependencies(base_path=None) -> ProductCollection:  # noqa: ARG001
                 return ProductCollection([product_a, product_b])
 
             product_a.get_dependencies = mock_get_dependencies
@@ -572,14 +588,26 @@ class TestProduct:
                 patch.object(product_b, "load_from_installer_folder") as mock_load_b,
             ):
                 base_path = Path(temp_dir)
-                product_a.clone(base_path / "product-a", dependencies=True)
+                product_a_path = base_path / "product-a"
+                product_b_path = base_path / "product-b"
+                # Create description.xml files to simulate successful clone
+                product_a_path.mkdir(parents=True)
+                product_b_path.mkdir(parents=True)
+                (product_a_path / "description.xml").write_text("<product></product>")
+                (product_b_path / "description.xml").write_text("<product></product>")
 
-                # Verify both providers were called
+                product_a.clone(base_path, dependencies=True)
+
+                # Verify both providers were called (version converted to branch)
+                from kbot_installer.core.utils import version_to_branch
+
+                branch_a = version_to_branch("1.0.0")
+                branch_b = version_to_branch("1.0.0")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
-                    base_path / "product-a", "1.0.0"
+                    product_a_path, branch_a, repository_name="product-a"
                 )
                 mock_provider_b.clone_and_checkout.assert_called_once_with(
-                    base_path / "product-b", "1.0.0"
+                    product_b_path, branch_b, repository_name="product-b"
                 )
 
                 # Verify load_from_installer_folder was called for both
@@ -604,7 +632,7 @@ class TestProduct:
             product_b.provider = mock_provider_b
 
             # Mock _load_product_by_name
-            def mock_load_product(name: str) -> ProductInstallable:
+            def mock_load_product(name: str, base_path=None) -> ProductInstallable:  # noqa: ARG001
                 if name == "product-b":
                     return product_b
                 return ProductInstallable(name=name)
@@ -612,7 +640,7 @@ class TestProduct:
             product_a._load_product_by_name = mock_load_product
 
             # Create collection where product-a is first
-            def mock_get_dependencies() -> ProductCollection:
+            def mock_get_dependencies(base_path=None) -> ProductCollection:  # noqa: ARG001
                 return ProductCollection([product_a, product_b])
 
             product_a.get_dependencies = mock_get_dependencies
@@ -623,18 +651,28 @@ class TestProduct:
                 patch.object(product_b, "load_from_installer_folder") as mock_load_b,
             ):
                 base_path = Path(temp_dir)
-                clone_path = base_path / "product-a"
+                product_a_path = base_path / "product-a"
+                product_b_path = base_path / "product-b"
+                # Create description.xml files to simulate successful clone
+                product_a_path.mkdir(parents=True)
+                product_b_path.mkdir(parents=True)
+                (product_a_path / "description.xml").write_text("<product></product>")
+                (product_b_path / "description.xml").write_text("<product></product>")
 
-                product_a.clone(clone_path, dependencies=True)
+                product_a.clone(base_path, dependencies=True)
 
                 # When cloning product_a in collection, if name matches, use original path
                 # Otherwise use parent / product.name
+                from kbot_installer.core.utils import version_to_branch
+
+                branch_a = version_to_branch("1.0.0")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
-                    clone_path, "1.0.0"
+                    product_a_path, branch_a, repository_name="product-a"
                 )
                 # product-b should be cloned to base_path / "product-b"
+                branch_b = version_to_branch("1.0.0")
                 mock_provider_b.clone_and_checkout.assert_called_once_with(
-                    base_path / "product-b", "1.0.0"
+                    product_b_path, branch_b, repository_name="product-b"
                 )
 
                 assert mock_load_a.call_count == 1

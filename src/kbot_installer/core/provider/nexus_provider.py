@@ -32,6 +32,7 @@ class NexusProvider(ProviderBase):
 
     name = "nexus"
     base_url = "https://{domain}"
+    branch = "master"
 
     def __init__(
         self, domain: str, repository: str, auth: HttpAuthBase | None = None
@@ -49,6 +50,8 @@ class NexusProvider(ProviderBase):
         self.domain = domain
         self.repository = repository
         self._auth = auth
+        # Store the branch that was successfully used
+        self.branch_used: str | None = None
 
     def _get_auth(self) -> HttpAuthBase | None:
         """Get the HTTP authentication object for API requests.
@@ -101,7 +104,11 @@ class NexusProvider(ProviderBase):
             auth_obj = auth.get_auth() if auth else None
 
             # Build the correct Nexus URL
-            nexus_url = self._build_nexus_url(repository_name, branch)
+            branch_to_use = branch or "master"
+            nexus_url = self._build_nexus_url(repository_name, branch_to_use)
+
+            # Store the branch that was successfully used
+            self.branch_used = branch_to_use
 
             # Run streaming download and extract directly with the correct URL
             # Extract to parent directory so the tar.gz can create the repository folder
@@ -146,3 +153,12 @@ class NexusProvider(ProviderBase):
 
         """
         return self.name
+
+    def get_branch(self) -> str:
+        """Get the branch of the provider.
+
+        Returns:
+            str: Branch of the provider.
+
+        """
+        return self.branch_used or self.branch

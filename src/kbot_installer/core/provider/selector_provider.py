@@ -58,6 +58,8 @@ class SelectorProvider(ProviderBase):
         self.providers = providers
         self.config = config
         self.credential_manager = CredentialManager(config)
+        # Store the branch that was successfully used
+        self.branch_used: str | None = None
 
     def _create_provider_with_credentials(
         self, provider_name: str
@@ -236,6 +238,206 @@ class SelectorProvider(ProviderBase):
         """
         return f"SelectorProvider(providers={self.providers})"
 
+    def _get_branches_to_try(self, provider_name: str, branch: str | None) -> list[str]:
+        """Get list of branches to try for a provider.
+
+        Args:
+            provider_name: Name of the provider.
+            branch: Requested branch, or None for default.
+
+        Returns:
+            List of branches to try in order.
+
+        """
+        # Handle both ProvidersConfig objects and dict configs (for testing)
+        if hasattr(self.config, "get_provider_config"):
+            provider_config = self.config.get_provider_config(provider_name)
+        elif isinstance(self.config, dict):
+            # For dict configs (used in tests), just return the requested branch
+            return [branch] if branch else []
+        else:
+            return [branch] if branch else []
+
+        if not provider_config:
+            return [branch] if branch else []
+
+        # Check if provider_config has branches attribute (it should be a ProviderConfig)
+        if not hasattr(provider_config, "branches"):
+            return [branch] if branch else []
+
+        if branch:
+            # Try requested branch first, then fallbacks
+            return [branch, *provider_config.branches]
+
+        # No branch specified, use first fallback as default
+        return [provider_config.branches[0]] if provider_config.branches else []
+
+    def _try_clone_with_branch(
+        self,
+        provider: ProviderBase,
+        repository_name: str,
+        target_path: Path,
+        branch_to_try: str | None,
+    ) -> None:
+        """Attempt to clone with a specific branch.
+
+        Args:
+            provider: Provider instance to use.
+            repository_name: Name or URL of repository.
+            target_path: Local path where repository should be cloned.
+            branch_to_try: Branch to try, or None for default.
+
+        Raises:
+            ProviderError: If clone fails.
+
+        """
+        # Check if it's async - handle both sync and async methods
+        clone_method = provider.clone_and_checkout
+        try:
+            # Try calling the method - if it returns a coroutine, run it
+            result = clone_method(repository_name, target_path, branch_to_try)
+            # Check if result is a coroutine (handle both real coroutines and AsyncMock results)
+            try:
+                is_coroutine = result is not None and inspect.iscoroutine(result)
+            except (AttributeError, TypeError):
+                # If inspect.iscoroutine fails, assume it's a coroutine if result is not None
+                is_coroutine = result is not None
+
+            if is_coroutine:
+                # It's async, run with asyncio
+                asyncio.run(result)
+            # If result is None or not a coroutine, assume it's sync and completed
+        except ProviderError:
+            # Re-raise ProviderError as-is
+            raise
+        except Exception as e:
+            # Wrap other exceptions in ProviderError, preserving the original exception info
+            error_msg = f"Unexpected error during clone: {type(e).__name__}: {e}"
+            raise ProviderError(error_msg) from e
+
+    def _is_branch_not_found_error(self, error: ProviderError) -> bool:
+        """Check if error indicates branch/version not found.
+
+        Args:
+            error: ProviderError to check.
+
+        Returns:
+            True if error indicates branch not found.
+
+        """
+        error_str = str(error).lower()
+        return (
+            "not found" in error_str or "branch" in error_str or "version" in error_str
+        )
+
+    def _clone_with_provider_and_branches(
+        self,
+        provider: ProviderBase,
+        provider_name: str,
+        repository_name: str,
+        target_path: Path,
+        requested_branch: str | None,
+    ) -> tuple[str, str]:
+        """Clone repository with a provider, trying branches in fallback order.
+
+        Args:
+            provider: Provider instance to use.
+            provider_name: Name of the provider (for logging).
+            repository_name: Name or URL of repository.
+            target_path: Local path where repository should be cloned.
+            requested_branch: Requested branch, or None for default.
+
+        Returns:
+            Tuple of (branch_used, success_message).
+
+        Raises:
+            ProviderError: If all branches fail.
+
+        """
+        branches_to_try = self._get_branches_to_try(provider_name, requested_branch)
+
+        last_error = None
+        for branch_to_try in branches_to_try:
+            try:
+                self._try_clone_with_branch(
+                    provider, repository_name, target_path, branch_to_try
+                )
+                # Update provider name if get_name is available
+                try:
+                    if hasattr(provider, "get_name") and callable(getattr(provider, "get_name", None)):
+                        self.name = provider.get_name()
+                except Exception as e:
+                    # Log but ignore errors when getting provider name
+                    logger.debug("Failed to get provider name: %s", type(e).__name__)
+
+                # Build success message
+                if not requested_branch:
+                    msg = f"Repository cloned successfully (default branch: '{branch_to_try}')"
+                elif branch_to_try == requested_branch:
+                    msg = (
+                        f"Repository cloned successfully with branch '{branch_to_try}'"
+                    )
+                else:
+                    msg = (
+                        f"Repository cloned successfully with fallback branch '{branch_to_try}' "
+                        f"(requested branch '{requested_branch}' not found)"
+                    )
+
+                return branch_to_try, msg
+
+            except ProviderError as e:
+                last_error = e
+                # Try next branch if branch not found and not last branch
+                if (
+                    self._is_branch_not_found_error(e)
+                    and branch_to_try != branches_to_try[-1]
+                ):
+                    logger.debug(
+                        "Branch '%s' not found, trying fallback branch", branch_to_try
+                    )
+                    continue
+                # If last branch or not a branch error, fail
+                if branch_to_try == branches_to_try[
+                    -1
+                ] or not self._is_branch_not_found_error(e):
+                    raise
+
+        # All branches failed
+        if last_error:
+            raise last_error
+        error_msg = (
+            f"Failed to clone with any branch from fallback list: {branches_to_try}"
+        )
+        raise ProviderError(error_msg)
+
+    def _handle_provider_failure(
+        self, provider_name: str, error: Exception, results: list[tuple[str, str, str]]
+    ) -> None:
+        """Handle provider failure and add to results.
+
+        Args:
+            provider_name: Name of the provider that failed.
+            error: Exception that occurred.
+            results: List to append failure result to.
+
+        """
+        if isinstance(error, ProviderError):
+            cause = self._extract_clean_error_cause(str(error))
+            logger.debug(
+                "Provider '%s' failed with ProviderError: %s",
+                provider_name,
+                type(error).__name__,
+            )
+        else:
+            cause = f"Unexpected error: {type(error).__name__}"
+            logger.debug(
+                "Provider '%s' failed with unexpected error: %s",
+                provider_name,
+                type(error).__name__,
+            )
+
+        results.append((provider_name, "❌ FAILED", cause))
+
     def _clone_with_providers(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
@@ -253,19 +455,13 @@ class SelectorProvider(ProviderBase):
         target_path = Path(target_path)
         target_path.mkdir(parents=True, exist_ok=True)
 
-        # Tableau pour afficher les résultats
         results = []
-        success = False
-
         for provider_name in self.providers:
             logger.info("Attempting to clone with provider: %s", provider_name)
 
             try:
-                # Try to create provider with credentials
                 provider = self._create_provider_with_credentials(provider_name)
-
                 if provider is None:
-                    # Provider creation failed (no credentials or provider doesn't exist)
                     missing_creds = (
                         self.credential_manager.get_missing_credentials_info(
                             provider_name
@@ -283,77 +479,37 @@ class SelectorProvider(ProviderBase):
                     )
                     continue
 
-                # Try to clone the repository
-                logger.debug("Attempting clone with provider '%s'", provider_name)
-
-                # Handle both sync and async clone methods
-                if inspect.iscoroutinefunction(provider.clone_and_checkout):
-                    # Provider has async clone method
-                    asyncio.run(
-                        provider.clone_and_checkout(
-                            repository_name, target_path, branch
-                        )
-                    )
-                else:
-                    # Provider has sync clone method
-                    provider.clone_and_checkout(repository_name, target_path, branch)
-
-                # Update the name of the provider
-                self.name = provider.get_name()
-
-                # Success! Log and mark as successful
-                results.append(
-                    (provider_name, "✅ SUCCESS", "Repository cloned successfully")
+                branch_used, success_msg = self._clone_with_provider_and_branches(
+                    provider, provider_name, repository_name, target_path, branch
                 )
+                # Store the branch that was successfully used
+                self.branch_used = branch_used
+                results.append((provider_name, "✅ SUCCESS", success_msg))
                 logger.info(
-                    "✅ Successfully cloned repository using provider: %s",
+                    "✅ Successfully cloned repository using provider: %s (branch: %s)",
                     provider_name,
+                    branch_used,
                 )
-                success = True
-                break
+
             except ProviderError as e:
-                # Provider-specific error (e.g., repository not found, authentication failed)
-                cause = self._extract_clean_error_cause(str(e))
-                results.append((provider_name, "❌ FAILED", cause))
-                # Log only exception type to avoid exposing sensitive information
-                logger.debug(
-                    "Provider '%s' failed with ProviderError: %s",
-                    provider_name,
-                    type(e).__name__,
-                )
+                self._handle_provider_failure(provider_name, e, results)
                 continue
             except Exception as e:
-                # Unexpected error during provider creation or clone
-                cause = f"Unexpected error: {type(e).__name__}"
-                results.append((provider_name, "❌ FAILED", cause))
-                # Log only exception type to avoid exposing sensitive information
-                logger.debug(
-                    "Provider '%s' failed with unexpected error: %s",
-                    provider_name,
-                    type(e).__name__,
-                )
+                self._handle_provider_failure(provider_name, e, results)
                 continue
 
-        # If successful, return early
-        if success:
             return
 
-        # If we get here, no provider was able to clone the repository
-        # Afficher le tableau des résultats
+        # All providers failed
         self._print_clone_results_table(results)
-
-        # Create detailed error message with all provider failures
-        failed_providers = [result for result in results if result[1] == "❌ FAILED"]
+        failed_providers = [r for r in results if r[1] == "❌ FAILED"]
         if failed_providers:
-            error_details = []
-            for provider_name, _status, cause in failed_providers:
-                error_details.append(f"• {provider_name}: {cause}")
-
-            error_details_text = "\n".join(error_details)
-            error_msg = f"❌ All providers failed to clone repository '{repository_name}':\n{error_details_text}"
+            error_details = "\n".join(
+                f"• {name}: {cause}" for name, _status, cause in failed_providers
+            )
+            error_msg = f"❌ All providers failed to clone repository '{repository_name}':\n{error_details}"
         else:
             error_msg = f"❌ No provider could clone repository '{repository_name}'"
-
         raise ProviderError(error_msg)
 
     def _clone_by_url(
@@ -450,3 +606,12 @@ class SelectorProvider(ProviderBase):
 
         """
         return self.name
+
+    def get_branch(self) -> str:
+        """Get the branch of the provider.
+
+        Returns:
+            str: Branch of the provider.
+
+        """
+        return self.branch_used or ""

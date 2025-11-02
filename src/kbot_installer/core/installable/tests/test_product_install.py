@@ -380,7 +380,7 @@ core = ["RunBot.py", "Learn.py"]
             product2.dirname = product2_dir
 
             # Mock get_dependencies to return in BFS order (product1 first, then product2)
-            def mock_get_dependencies() -> ProductCollection:
+            def mock_get_dependencies(*, base_path=None) -> ProductCollection:  # noqa: ARG001
                 return ProductCollection([product1, product2])
 
             product2.get_dependencies = mock_get_dependencies

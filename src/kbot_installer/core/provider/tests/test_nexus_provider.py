@@ -170,6 +170,44 @@ class TestNexusProvider:
         provider = NexusProvider("example.com", "test-repo")
         assert provider.get_name() == "nexus"
 
+    def test_get_branch_returns_default_before_clone(self) -> None:
+        """Test get_branch returns default branch before clone."""
+        provider = NexusProvider("example.com", "test-repo")
+        # Before clone, branch_used is None, so should return default branch
+        assert provider.get_branch() == "master"
+
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
+    def test_get_branch_returns_used_branch_after_clone(
+        self, mock_extract
+    ) -> None:
+        """Test get_branch returns the branch used during clone."""
+        provider = NexusProvider("example.com", "test-repo")
+        mock_extract.return_value = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            provider.clone_and_checkout("test-repo", temp_dir, "develop")
+
+        # After clone with branch "develop", should return "develop"
+        assert provider.get_branch() == "develop"
+
+    @patch(
+        "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
+    )
+    def test_get_branch_returns_master_when_none_specified(
+        self, mock_extract
+    ) -> None:
+        """Test get_branch returns master when no branch specified."""
+        provider = NexusProvider("example.com", "test-repo")
+        mock_extract.return_value = None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            provider.clone_and_checkout("test-repo", temp_dir, None)
+
+        # When None is specified, should use master as default
+        assert provider.get_branch() == "master"
+
     @pytest.mark.asyncio
     async def test_check_remote_repository_exists_exception(self) -> None:
         """Test check_remote_repository_exists handles exceptions."""

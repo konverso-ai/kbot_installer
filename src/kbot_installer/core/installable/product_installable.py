@@ -5,6 +5,8 @@ import contextlib
 import fnmatch
 import importlib
 import json
+import logging
+import os
 import shutil
 import site
 import sys
@@ -18,7 +20,9 @@ from kbot_installer.core.installable.factory import create_installable
 from kbot_installer.core.installable.installable_base import InstallableBase
 from kbot_installer.core.installable.product_collection import ProductCollection
 from kbot_installer.core.provider import create_provider
-from kbot_installer.core.utils import ensure_directory
+from kbot_installer.core.utils import ensure_directory, version_to_branch
+
+logger = logging.getLogger(__name__)
 
 # Type alias for product configuration (INI-style: section -> option -> value)
 ProductConfig = dict[str, dict[str, str]]
@@ -79,6 +83,10 @@ class ProductInstallable(InstallableBase):
     )
     # Directory path where product is located
     dirname: Path | None = None
+    # Provider name that was successfully used during clone
+    provider_name_used: str | None = None
+    # Branch that was successfully used during clone
+    branch_used: str | None = None
 
     def __post_init__(self) -> None:
         """Initialize provider after instance creation."""
@@ -99,19 +107,49 @@ class ProductInstallable(InstallableBase):
             return []
         return [item.strip() for item in value.split(",") if item.strip()]
 
-    def _load_product_by_name(self, product_name: str) -> InstallableBase:
+    def _load_product_by_name(
+        self,
+        product_name: str,
+        base_path: Path | None = None,
+        default_version: str | None = None,
+    ) -> InstallableBase:
         """Load a product by its name.
 
         Args:
             product_name: Name of the product to load.
+            base_path: Optional base path where cloned products are located.
+                      If provided and product exists, load from cloned repo.
+            default_version: Optional default version to use if product doesn't have one.
+                           Typically the version of the parent product.
 
         Returns:
-            Product instance loaded from the provider.
+            Product instance loaded from the provider or cloned repo.
 
         """
-        # Create a minimal product instance with just the name using factory
-        # The provider will handle the actual loading
-        return create_installable(name=product_name)
+        # Use the same providers as the parent product to ensure consistency
+        providers = self.providers
+        # Use default_version if provided, otherwise use parent's version as fallback
+        version = default_version or self.version
+
+        # Try to load from cloned repository if base_path is provided
+        if base_path:
+            cloned_product_path = base_path / product_name
+            if (cloned_product_path / "description.xml").exists():
+                product = create_installable(
+                    name=product_name, providers=providers, version=version
+                )
+                product.load_from_installer_folder(cloned_product_path)
+                # If description.xml doesn't specify a version, keep the default version
+                if not product.version and version:
+                    product.version = version
+                return product
+
+        # Otherwise, create a minimal product instance with just the name using factory
+        # The provider will handle the actual loading when cloning
+        # Pass providers and version to ensure dependencies use the same providers and version as the main product
+        return create_installable(
+            name=product_name, providers=providers, version=version
+        )
 
     @classmethod
     def from_xml(cls, xml_content: str) -> InstallableBase:
@@ -146,7 +184,9 @@ class ProductInstallable(InstallableBase):
             msg = "Product name is required"
             raise ValueError(msg)
 
-        version = root.get("version", "")
+        # Get version - if attribute doesn't exist or is empty, use empty string
+        # This allows us to distinguish between "no version specified" vs "version explicitly set"
+        version = root.get("version") or ""
         build = root.get("build") or None
         date = root.get("date") or None
         product_type = root.get("type", "solution")
@@ -340,7 +380,12 @@ class ProductInstallable(InstallableBase):
             source_product: Product to copy data from.
 
         """
-        self.version = source_product.version
+        # Only update version if source has a non-empty version
+        # This preserves the version that was set before loading (e.g., inherited from parent)
+        if source_product.version:
+            self.version = source_product.version
+        # If source version is empty but we have a version, keep ours (inherited from parent)
+        # This happens when description.xml has version="" - we want to keep parent's version
         self.build = source_product.build
         self.date = source_product.date
         self.type = source_product.type
@@ -437,63 +482,126 @@ class ProductInstallable(InstallableBase):
         return ET.tostring(root, encoding="unicode")
 
     def to_json(self) -> str:
-        """Convert Product to JSON string.
+        """Convert Product to JSON dictionary.
 
         Returns:
-            JSON string representation.
+            JSON dictionary.
 
         """
         data = {
             "name": self.name,
             "version": self.version,
+            "build": self.build,
+            "date": self.date,
             "type": self.type,
             "parents": self.parents,
             "categories": self.categories,
-            "doc": ",".join(self.docs) if self.docs else "",
+            "doc": self.docs,
             "env": self.env,
+            "license": self.license,
+            "display": self.display,
+            "build_details": self.build_details,
+            "provider_name_used": self.provider_name_used,
+            "branch_used": self.branch_used,
         }
-
-        if self.build:
-            data["build"] = self.build
-        if self.date:
-            data["date"] = self.date
-        if self.license:
-            data["license"] = self.license
-        if self.display:
-            data["display"] = self.display
-        if self.build_details:
-            data["build"] = self.build_details
-
-        return json.dumps(data, indent=2, ensure_ascii=False)
+        return data
 
     def clone(self, path: Path, *, dependencies: bool = True) -> None:
         """Clone the product to the given path using breadth-first traversal.
 
         Args:
-            path: Path to clone the product to.
+            path: Path to the directory that will contain the cloned products.
             dependencies: Whether to clone dependencies.
 
         """
+        # Ensure the base path exists
+        path.mkdir(parents=True, exist_ok=True)
+
+        # Convert version to branch name for Git providers
+        branch = version_to_branch(self.version) if self.version else None
+
         if not dependencies:
-            self.provider.clone_and_checkout(path, self.version)
-            self.load_from_installer_folder(path)
+            logger.warning("Cloning %s (branch: %s) to %s", self.name, branch, path)
+            product_path = path / self.name
+            self.provider.clone_and_checkout(
+                product_path, branch, repository_name=self.name
+            )
+            # Store the provider and branch used (providers update these during clone)
+            self.provider_name_used = self.provider.get_name()
+            self.branch_used = self.provider.get_branch()
+            # Only load if description.xml exists (clone may have failed)
+            if (product_path / "description.xml").exists():
+                self.load_from_installer_folder(product_path)
+            # Export single product collection to lock file
+            collection = ProductCollection([self])
+            lock_file = path / "products.lock.json"
+            collection.export_to_json(str(lock_file))
+            logger.info("Exported product collection to %s", lock_file)
             return
 
-        # Use get_dependencies() to get BFS-ordered collection
-        collection = self.get_dependencies()
+        # First, clone the main product to get its dependencies
+        main_product_path = path / self.name
+        self.provider.clone_and_checkout(
+            main_product_path, branch, repository_name=self.name
+        )
+        # Store the provider and branch used (providers update these during clone)
+        self.provider_name_used = self.provider.get_name()
+        self.branch_used = self.provider.get_branch()
+        # Load the main product to get its parents (dependencies)
+        if (main_product_path / "description.xml").exists():
+            self.load_from_installer_folder(main_product_path)
 
-        # Clone all products in BFS order
+        # Now use get_dependencies() to get BFS-ordered collection
+        # This will discover all dependencies recursively
+        # Pass the base path so dependencies can be loaded from cloned repos if available
+        collection = self.get_dependencies(base_path=path)
+
+        # Clone all products in BFS order (main product is already cloned)
         for product in collection.products:
-            product_path = (
-                path.parent / product.name if product.name != self.name else path
-            )
-            product.provider.clone_and_checkout(product_path, product.version)
-            product.load_from_installer_folder(product_path)
+            # Skip if it's the main product (already cloned)
+            if product.name == self.name:
+                continue
 
-    def get_dependencies(self) -> ProductCollection:
+            # Convert version to branch name for each dependency
+            dependency_branch = (
+                version_to_branch(product.version) if product.version else None
+            )
+            product_path = path / product.name
+
+            try:
+                # Clone with branch fallback handled by selector_provider using config.branches
+                product.provider.clone_and_checkout(
+                    product_path, dependency_branch, repository_name=product.name
+                )
+                # Store the provider and branch used (providers update these during clone)
+                product.provider_name_used = product.provider.get_name()
+                product.branch_used = product.provider.get_branch()
+            except Exception:
+                # Clone failed - selector_provider already tried all fallback branches from config
+                logger.exception("Failed to clone %s", product.name)
+                # Continue with other dependencies even if one fails
+                continue
+
+            # Only load if description.xml exists (clone may have failed)
+            if (product_path / "description.xml").exists():
+                product.load_from_installer_folder(product_path)
+                # Ensure dirname is set after loading
+                if not product.dirname:
+                    product.dirname = product_path.resolve()
+
+        # Export collection to products.lock.json for install() to use later
+        lock_file = path / "products.lock.json"
+        collection.export_to_json(str(lock_file))
+        logger.info("Exported product collection to %s", lock_file)
+
+    def get_dependencies(self, base_path: Path | None = None) -> ProductCollection:
         """Get a ProductCollection containing this product and all its dependencies.
 
         Uses BFS traversal to collect all dependencies in the correct order.
+
+        Args:
+            base_path: Optional base path where cloned products are located.
+                      If provided, dependencies will be loaded from cloned repos if available.
 
         Returns:
             ProductCollection with BFS-ordered products.
@@ -501,7 +609,7 @@ class ProductInstallable(InstallableBase):
         """
         # Collect all products using BFS
         queue = deque([self])
-        processed = set()
+        processed = set[str]()
         collected_products = []
 
         while queue:
@@ -514,9 +622,14 @@ class ProductInstallable(InstallableBase):
             processed.add(current_product.name)
 
             # Add dependencies to queue
+            # Pass current product's version as default so dependencies inherit it
             for parent_name in current_product.parents:
                 if parent_name not in processed:
-                    parent_product = self._load_product_by_name(parent_name)
+                    parent_product = self._load_product_by_name(
+                        parent_name,
+                        base_path=base_path,
+                        default_version=current_product.version,
+                    )
                     queue.append(parent_product)
 
         # Create ProductCollection with collected products
@@ -837,7 +950,7 @@ class ProductInstallable(InstallableBase):
                     shutil.copy2(src_file, dest_file)
                     processed.add(dest_file.resolve())
 
-    def _handle_work_link(  # noqa: C901, PLR0912
+    def _handle_work_link(  # noqa: C901, PLR0912, PLR0915
         self,
         workarea_root: Path,
         product_dir: Path,
@@ -891,48 +1004,83 @@ class ProductInstallable(InstallableBase):
                     processed.add(dest_base.resolve())
                 continue
 
-            # Process patterns
+            # Process patterns - optimized to avoid rglob slowness
+            # Collect all files matching patterns in one pass
+            files_to_link: list[tuple[Path, Path]] = []  # (src_file, dest_file)
+            created_dirs: set[Path] = set()  # Cache created directories
+            resolved_src_cache: dict[Path, Path] = {}  # Cache resolve() calls
+
             for pattern in patterns:
-                # Use rglob to find matching files
                 if source_path.is_file():
-                    files = (
-                        [source_path]
-                        if fnmatch.fnmatch(source_path.name, pattern)
-                        else []
-                    )
-                else:
-                    files = list(source_path.rglob(pattern))
+                    if fnmatch.fnmatch(source_path.name, pattern):
+                        files_to_link.append(
+                            (source_path, dest_base / source_path.name)
+                        )
+                    continue
 
-                for src_file in files:
-                    # Check ignore patterns
+                # Optimized recursive file finding - walk once and filter
+                # This is much faster than rglob(pattern) which traverses everything
+                for root, dirs, filenames in os.walk(source_path):
+                    root_path = Path(root)
+                    # Check ignore patterns for directories early
                     if self._is_path_ignored(
-                        src_file, workarea_root, ignore_patterns, product_dir
+                        root_path, workarea_root, ignore_patterns, product_dir
                     ):
+                        # Remove ignored dirs from walk
+                        dirs[:] = []
                         continue
 
-                    # Calculate relative path from source_dir
-                    try:
-                        rel_path = src_file.relative_to(source_path)
-                    except ValueError:
-                        rel_path = Path(src_file.name)
+                    for filename in filenames:
+                        file_path = root_path / filename
+                        # Match pattern
+                        if not fnmatch.fnmatch(filename, pattern):
+                            continue
 
-                    dest_file = dest_base / rel_path
+                        # Check ignore patterns
+                        if self._is_path_ignored(
+                            file_path, workarea_root, ignore_patterns, product_dir
+                        ):
+                            continue
 
-                    if self._is_destination_taken(dest_file, processed):
-                        continue
+                        # Calculate relative path and destination
+                        try:
+                            rel_path = file_path.relative_to(source_path)
+                        except ValueError:
+                            rel_path = Path(filename)
 
-                    # Create symlink
-                    dest_file.parent.mkdir(parents=True, exist_ok=True)
-                    if dest_file.exists() and dest_file.is_symlink():
+                        dest_file = dest_base / rel_path
+
+                        # Check if destination is taken (early exit)
+                        if self._is_destination_taken(dest_file, processed):
+                            continue
+
+                        files_to_link.append((file_path, dest_file))
+
+            # Process all files in batch (already filtered and validated)
+            for src_file, dest_file in files_to_link:
+                # Ensure parent directory exists (cache to avoid repeated mkdir)
+                dest_parent = dest_file.parent
+                if dest_parent not in created_dirs:
+                    dest_parent.mkdir(parents=True, exist_ok=True)
+                    created_dirs.add(dest_parent)
+
+                # Check destination status (optimized)
+                if dest_file.exists():
+                    if dest_file.is_symlink():
                         dest_file.unlink()
-                    elif dest_file.exists():
+                    else:
                         # Already exists and not a symlink - skip
-                        processed.add(dest_file.resolve())
+                        dest_resolved = dest_file.resolve()
+                        processed.add(dest_resolved)
                         continue
 
-                    # Create symlink from source to destination
-                    dest_file.symlink_to(src_file.resolve())
-                    processed.add(dest_file.resolve())
+                # Cache resolve() calls
+                if src_file not in resolved_src_cache:
+                    resolved_src_cache[src_file] = src_file.resolve()
+
+                # Create symlink
+                dest_file.symlink_to(resolved_src_cache[src_file])
+                processed.add(dest_file.resolve())
 
     def _handle_work_link_external(
         self,
@@ -982,7 +1130,189 @@ class ProductInstallable(InstallableBase):
             dest_path.symlink_to(source_path.resolve())
             processed.add(dest_path.resolve())
 
-    def install(self, path: Path, *, dependencies: bool = True) -> None:  # noqa: C901, PLR0912
+    def _find_lock_file(
+        self, path: Path, installer_path: Path | None
+    ) -> tuple[Path | None, Path | None]:
+        """Find products.lock.json file in common locations.
+
+        Args:
+            path: Workarea path.
+            installer_path: Optional installer path.
+
+        Returns:
+            Tuple of (lock_file_path, effective_installer_path).
+
+        """
+        if installer_path:
+            return installer_path / "products.lock.json", installer_path
+
+        potential_lock = path / "products.lock.json"
+        if potential_lock.exists():
+            return potential_lock, path
+
+        parent_lock = path.parent / "products.lock.json"
+        if parent_lock.exists():
+            return parent_lock, path.parent
+
+        return None, None
+
+    def _verify_products_from_lock(
+        self, collection: ProductCollection, installer_path: Path
+    ) -> bool:
+        """Verify all products in collection exist in installer.
+
+        Args:
+            collection: Product collection from lock file.
+            installer_path: Path to installer directory.
+
+        Returns:
+            True if all products exist, False otherwise.
+
+        """
+        for product in collection.products:
+            if not product.dirname or not product.dirname.exists():
+                potential_dir = installer_path / product.name
+                if (potential_dir / "description.xml").exists():
+                    product.dirname = potential_dir.resolve()
+                else:
+                    logger.warning(
+                        "Product %s from lock file not found in installer at %s",
+                        product.name,
+                        potential_dir,
+                    )
+                    return False
+        return True
+
+    def _load_products_from_lock(
+        self, lock_file: Path, installer_path: Path, *, dependencies: bool
+    ) -> list[InstallableBase]:
+        """Load products from lock file.
+
+        Args:
+            lock_file: Path to products.lock.json.
+            installer_path: Path to installer directory.
+            dependencies: Whether to include dependencies.
+
+        Returns:
+            List of products, empty if lock file invalid.
+
+        """
+        try:
+            collection = ProductCollection.from_json(lock_file)
+            if not self._verify_products_from_lock(collection, installer_path):
+                logger.warning(
+                    "Installer incomplete, missing products. Will clone if needed."
+                )
+                return []
+
+            products = collection.products
+            if not dependencies:
+                products = [p for p in products if p.name == self.name]
+            logger.info("Installer already complete, using products.lock.json")
+        except (FileNotFoundError, ValueError) as e:
+            logger.warning("Failed to load products.lock.json: %s", e)
+            products = []
+        else:
+            return products
+        return []
+
+    def _ensure_installer_complete(
+        self,
+        installer_path: Path,
+        *,
+        dependencies: bool,
+    ) -> list[InstallableBase]:
+        """Ensure installer is complete, cloning if needed.
+
+        Args:
+            installer_path: Path to installer directory.
+            dependencies: Whether to clone dependencies.
+
+        Returns:
+            List of products from lock file after cloning.
+
+        """
+        logger.info("Installer not complete, cloning products to %s", installer_path)
+        self.clone(installer_path, dependencies=dependencies)
+
+        lock_file = installer_path / "products.lock.json"
+        if lock_file.exists():
+            return self._load_products_from_lock(
+                lock_file, installer_path, dependencies=dependencies
+            )
+        return []
+
+    def _process_product_work_config(
+        self,
+        product: InstallableBase,
+        workarea_root: Path,
+        processed: set[Path],
+    ) -> None:
+        """Process work configuration for a single product.
+
+        Args:
+            product: Product to process.
+            workarea_root: Root of workarea.
+            processed: Set of processed paths.
+
+        """
+        try:
+            pyproject_file = product.pyproject_path
+        except FileNotFoundError:
+            logger.warning("Product %s has no pyproject.toml", product.name)
+            return
+
+        try:
+            with pyproject_file.open("rb") as f:
+                pyproject_data = tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError):
+            logger.warning("Failed to load pyproject.toml for product %s", product.name)
+            return
+
+        work_config = pyproject_data.get("work", {})
+        if not work_config:
+            return
+
+        init_config = work_config.get("init", {})
+        copy_config = work_config.get("copy", {})
+        ignore_config = work_config.get("ignore", {})
+        link_config = work_config.get("link", {})
+        link_section = work_config.get("link", {})
+        link_external_config = (
+            link_section.get("external", {}) if isinstance(link_section, dict) else {}
+        )
+
+        if init_config:
+            logger.warning("Processing init section for product %s", product.name)
+            self._handle_work_init(workarea_root, init_config, processed)
+
+        if copy_config:
+            logger.warning("Processing copy section for product %s", product.name)
+            self._handle_work_copy(
+                workarea_root, product.dirname, copy_config, ignore_config, processed
+            )
+
+        if link_config:
+            logger.warning("Processing link section for product %s", product.name)
+            self._handle_work_link(
+                workarea_root, product.dirname, link_config, ignore_config, processed
+            )
+
+        if link_external_config:
+            logger.warning(
+                "Processing link.external section for product %s", product.name
+            )
+            self._handle_work_link_external(
+                workarea_root, link_external_config, processed
+            )
+
+    def install(
+        self,
+        path: Path,
+        *,
+        dependencies: bool = True,
+        installer_path: Path | None = None,
+    ) -> None:
         """Install the product into the workarea.
 
         Extracts the [work] section from pyproject.toml for this product and all
@@ -993,69 +1323,44 @@ class ProductInstallable(InstallableBase):
         Args:
             path: Path to install the product to (workarea root).
             dependencies: Whether to install dependencies.
+            installer_path: Path where products are cloned (should contain products.lock.json).
+                         If None, attempts to detect from path.
 
         """
         ensure_directory(path)
 
-        # Get products to process (BFS order)
-        if dependencies:
-            collection = self.get_dependencies()
-            products = collection.products
-        else:
-            products = [self]
+        lock_file, effective_installer_path = self._find_lock_file(path, installer_path)
 
-        # Track processed destinations (first-come-first-served)
+        products = []
+        if lock_file and lock_file.exists() and effective_installer_path:
+            products = self._load_products_from_lock(
+                lock_file, effective_installer_path, dependencies=dependencies
+            )
+
+        if not products and effective_installer_path:
+            products = self._ensure_installer_complete(
+                effective_installer_path, dependencies=dependencies
+            )
+
+        if not products:
+            if dependencies:
+                collection = self.get_dependencies(base_path=effective_installer_path)
+                products = collection.products
+            else:
+                products = [self]
+
+        logger.warning(
+            "Products to process: %s", [product.dirname for product in products]
+        )
         processed: set[Path] = set()
 
-        # Process each product in BFS order
         for product in products:
+            logger.warning("Processing product %s", product.name)
             if not product.dirname:
+                logger.warning("Product %s has no dirname", product.name)
                 continue
 
-            try:
-                pyproject_file = product.pyproject_path
-            except FileNotFoundError:
-                # Skip products without pyproject.toml
-                continue
-
-            # Load pyproject.toml
-            try:
-                with pyproject_file.open("rb") as f:
-                    pyproject_data = tomllib.load(f)
-            except (OSError, tomllib.TOMLDecodeError):
-                continue
-
-            work_config = pyproject_data.get("work", {})
-            if not work_config:
-                continue
-
-            # Extract sections
-            init_config = work_config.get("init", {})
-            copy_config = work_config.get("copy", {})
-            ignore_config = work_config.get("ignore", {})
-            link_config = work_config.get("link", {})
-            link_section = work_config.get("link", {})
-            if isinstance(link_section, dict):
-                link_external_config = link_section.get("external", {})
-            else:
-                link_external_config = {}
-
-            # Process in order: init, copy, link, link.external
-            if init_config:
-                self._handle_work_init(path, init_config, processed)
-
-            if copy_config:
-                self._handle_work_copy(
-                    path, product.dirname, copy_config, ignore_config, processed
-                )
-
-            if link_config:
-                self._handle_work_link(
-                    path, product.dirname, link_config, ignore_config, processed
-                )
-
-            if link_external_config:
-                self._handle_work_link_external(path, link_external_config, processed)
+            self._process_product_work_config(product, path, processed)
 
     def update(self, path: Path, *, dependencies: bool = True) -> None:
         """Update the product in the workarea.

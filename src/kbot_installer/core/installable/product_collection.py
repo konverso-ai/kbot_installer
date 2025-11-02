@@ -287,25 +287,69 @@ class ProductCollection:
         """
         data = {
             "products": [
-                {
-                    "name": p.name,
-                    "version": p.version,
-                    "type": p.type,
-                    "parents": p.parents,
-                    "categories": p.categories,
-                    "build": p.build,
-                    "date": p.date,
-                    "license": p.license,
-                    "display": p.display,
-                    "build_details": p.build_details,
-                }
+                p.to_json()
                 for p in self.products
             ]
         }
 
-        Path(file_path).write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        with Path(file_path).open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, file_path: str | Path) -> "ProductCollection":
+        """Load collection from JSON file (e.g., products.lock.json).
+
+        Args:
+            file_path: Path to JSON file.
+
+        Returns:
+            ProductCollection instance with loaded products.
+
+        Raises:
+            FileNotFoundError: If JSON file doesn't exist.
+            ValueError: If JSON is invalid.
+
+        """
+        file_path = Path(file_path)
+        if not file_path.exists():
+            msg = f"JSON file not found: {file_path}"
+            raise FileNotFoundError(msg)
+
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            msg = f"Invalid JSON in {file_path}: {e}"
+            raise ValueError(msg) from e
+
+        if "products" not in data:
+            msg = f"Invalid format: missing 'products' key in {file_path}"
+            raise ValueError(msg)
+
+        products = []
+        for product_data in data["products"]:
+            product = create_installable(
+                name=product_data["name"],
+                version=product_data.get("version", ""),
+                product_type=product_data.get("type", "solution"),
+                parents=product_data.get("parents", []),
+                categories=product_data.get("categories", []),
+                license_info=product_data.get("license"),
+                display=product_data.get("display"),
+                build_details=product_data.get("build_details"),
+                providers=product_data.get("providers"),
+            )
+            # Set dirname if provided in JSON
+            if product_data.get("dirname"):
+                product.dirname = Path(product_data["dirname"])
+            # Set provider_name_used if provided in JSON
+            if product_data.get("provider_name_used"):
+                product.provider_name_used = product_data["provider_name_used"]
+            # Set branch_used if provided in JSON
+            if product_data.get("branch_used"):
+                product.branch_used = product_data["branch_used"]
+            products.append(product)
+
+        return cls(products)
 
     def export_to_xml(self, file_path: str) -> None:
         """Export collection to XML file.

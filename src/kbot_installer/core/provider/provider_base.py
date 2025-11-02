@@ -62,3 +62,12 @@ class ProviderBase(ABC):
             str: Name of the provider.
 
         """
+
+    @abstractmethod
+    def get_branch(self) -> str:
+        """Get the branch of the provider.
+
+        Returns:
+            str: Branch of the provider.
+
+        """

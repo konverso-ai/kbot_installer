@@ -34,16 +34,19 @@ class TestSelectorProviderErrorDetails:
                         "Version 'release-2021.03-dev' not found for repository 'test-repo'. Available versions: dev, master, release-2025.03"
                     )
                 )
+                mock_nexus.get_name.return_value = "nexus"
 
                 mock_github = MagicMock()
                 mock_github.clone_and_checkout = AsyncMock(
                     side_effect=ProviderError("Repository 'test-repo' not found")
                 )
+                mock_github.get_name.return_value = "github"
 
                 mock_bitbucket = MagicMock()
                 mock_bitbucket.clone_and_checkout = AsyncMock(
                     side_effect=ProviderError("Authentication failed")
                 )
+                mock_bitbucket.get_name.return_value = "bitbucket"
 
                 # Configure mock to return different providers
                 def create_provider_side_effect(provider_name):
@@ -111,6 +114,7 @@ class TestSelectorProviderErrorDetails:
                                 "Repository 'test-repo' not found"
                             )
                         )
+                        mock_bitbucket.get_name.return_value = "bitbucket"
                         return mock_bitbucket
                     # nexus and github have no credentials
                     return None
@@ -158,16 +162,19 @@ class TestSelectorProviderErrorDetails:
                         "Version 'release-2021.03-dev' not found for repository 'test-repo'. Available versions: dev, master, release-2025.03"
                     )
                 )
+                mock_nexus.get_name.return_value = "nexus"
 
                 mock_github = MagicMock()
                 mock_github.clone_and_checkout = AsyncMock(
                     side_effect=ProviderError("Repository 'test-repo' not found")
                 )
+                mock_github.get_name.return_value = "github"
 
                 mock_bitbucket = MagicMock()
                 mock_bitbucket.clone_and_checkout = AsyncMock(
                     side_effect=ProviderError("Authentication failed")
                 )
+                mock_bitbucket.get_name.return_value = "bitbucket"
 
                 # Configure mock to return different providers
                 def create_provider_side_effect(provider_name):
@@ -218,6 +225,7 @@ class TestSelectorProviderErrorDetails:
                 # Create a mock provider that succeeds
                 mock_nexus = MagicMock()
                 mock_nexus.clone_and_checkout = AsyncMock(return_value=None)  # Success
+                mock_nexus.get_name.return_value = "nexus"
 
                 # Only return nexus provider, others should not be called
                 def create_provider_side_effect(provider_name):
