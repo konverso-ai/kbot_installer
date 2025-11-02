@@ -15,7 +15,7 @@ exclude = [
     "nexus.py",
     "kbot.py",
     "setup_workarea.py",
-    "gitpassword.py"
+    "gitpassword.py",
 ]
 
 output-format = "grouped"
