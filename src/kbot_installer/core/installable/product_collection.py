@@ -285,12 +285,7 @@ class ProductCollection:
             file_path: Path to output JSON file.
 
         """
-        data = {
-            "products": [
-                p.to_json()
-                for p in self.products
-            ]
-        }
+        data = {"products": [p.to_json() for p in self.products]}
 
         with Path(file_path).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)

@@ -330,6 +330,66 @@ class SelectorProvider(ProviderBase):
             "not found" in error_str or "branch" in error_str or "version" in error_str
         )
 
+    def _update_provider_name(self, provider: ProviderBase) -> None:
+        """Update provider name if get_name is available.
+
+        Args:
+            provider: Provider instance to get name from.
+
+        """
+        try:
+            if hasattr(provider, "get_name") and callable(
+                getattr(provider, "get_name", None)
+            ):
+                self.name = provider.get_name()
+        except Exception as e:
+            # Log but ignore errors when getting provider name
+            logger.debug("Failed to get provider name: %s", type(e).__name__)
+
+    def _build_success_message(
+        self, branch_to_try: str, requested_branch: str | None
+    ) -> str:
+        """Build success message for successful clone.
+
+        Args:
+            branch_to_try: Branch that was successfully used.
+            requested_branch: Originally requested branch.
+
+        Returns:
+            Success message string.
+
+        """
+        if not requested_branch:
+            return f"Repository cloned successfully (default branch: '{branch_to_try}')"
+        if branch_to_try == requested_branch:
+            return f"Repository cloned successfully with branch '{branch_to_try}'"
+        return (
+            f"Repository cloned successfully with fallback branch '{branch_to_try}' "
+            f"(requested branch '{requested_branch}' not found)"
+        )
+
+    def _handle_clone_error(
+        self, error: ProviderError, branch_to_try: str, branches_to_try: list[str]
+    ) -> bool:
+        """Handle clone error, determine if should try next branch.
+
+        Args:
+            error: The ProviderError that occurred.
+            branch_to_try: Current branch being tried.
+            branches_to_try: List of all branches to try.
+
+        Returns:
+            True if should continue with next branch, False if should raise.
+
+        """
+        if (
+            self._is_branch_not_found_error(error)
+            and branch_to_try != branches_to_try[-1]
+        ):
+            logger.debug("Branch '%s' not found, trying fallback branch", branch_to_try)
+            return True
+        return False
+
     def _clone_with_provider_and_branches(
         self,
         provider: ProviderBase,
@@ -362,45 +422,16 @@ class SelectorProvider(ProviderBase):
                 self._try_clone_with_branch(
                     provider, repository_name, target_path, branch_to_try
                 )
-                # Update provider name if get_name is available
-                try:
-                    if hasattr(provider, "get_name") and callable(getattr(provider, "get_name", None)):
-                        self.name = provider.get_name()
-                except Exception as e:
-                    # Log but ignore errors when getting provider name
-                    logger.debug("Failed to get provider name: %s", type(e).__name__)
-
-                # Build success message
-                if not requested_branch:
-                    msg = f"Repository cloned successfully (default branch: '{branch_to_try}')"
-                elif branch_to_try == requested_branch:
-                    msg = (
-                        f"Repository cloned successfully with branch '{branch_to_try}'"
-                    )
-                else:
-                    msg = (
-                        f"Repository cloned successfully with fallback branch '{branch_to_try}' "
-                        f"(requested branch '{requested_branch}' not found)"
-                    )
-
-                return branch_to_try, msg
+                self._update_provider_name(provider)
 
             except ProviderError as e:
                 last_error = e
-                # Try next branch if branch not found and not last branch
-                if (
-                    self._is_branch_not_found_error(e)
-                    and branch_to_try != branches_to_try[-1]
-                ):
-                    logger.debug(
-                        "Branch '%s' not found, trying fallback branch", branch_to_try
-                    )
+                if self._handle_clone_error(e, branch_to_try, branches_to_try):
                     continue
-                # If last branch or not a branch error, fail
-                if branch_to_try == branches_to_try[
-                    -1
-                ] or not self._is_branch_not_found_error(e):
-                    raise
+                raise
+            else:
+                msg = self._build_success_message(branch_to_try, requested_branch)
+                return branch_to_try, msg
 
         # All branches failed
         if last_error:

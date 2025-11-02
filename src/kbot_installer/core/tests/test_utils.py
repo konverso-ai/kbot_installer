@@ -34,13 +34,19 @@ class TestVersionToBranch:
 
     def test_version_to_branch_release_version(self) -> None:
         """Test version_to_branch with release version."""
-        result = version_to_branch("2025.03")
+        result = version_to_branch("2025.03", env="prod")
         assert result == "release-2025.03"
+        # With dev env (default), should add -dev suffix
+        result_dev = version_to_branch("2025.03", env="dev")
+        assert result_dev == "release-2025.03-dev"
 
     def test_version_to_branch_release_version_with_dash(self) -> None:
         """Test version_to_branch with release version containing dashes."""
-        result = version_to_branch("2025.03.1")
+        result = version_to_branch("2025.03.1", env="prod")
         assert result == "release-2025.03.1"
+        # With dev env (default), should add -dev suffix
+        result_dev = version_to_branch("2025.03.1", env="dev")
+        assert result_dev == "release-2025.03.1-dev"
 
     def test_version_to_branch_dev_suffix(self) -> None:
         """Test version_to_branch with dev suffix."""
@@ -54,18 +60,24 @@ class TestVersionToBranch:
 
     def test_version_to_branch_empty_string(self) -> None:
         """Test version_to_branch with empty string."""
-        result = version_to_branch("")
+        result = version_to_branch("", env="prod")
         assert result == "release-"
+        result_dev = version_to_branch("", env="dev")
+        assert result_dev == "release--dev"
 
     def test_version_to_branch_special_characters(self) -> None:
         """Test version_to_branch with special characters."""
-        result = version_to_branch("v1.0.0")
+        result = version_to_branch("v1.0.0", env="prod")
         assert result == "release-v1.0.0"
+        result_dev = version_to_branch("v1.0.0", env="dev")
+        assert result_dev == "release-v1.0.0-dev"
 
     def test_version_to_branch_numeric_only(self) -> None:
         """Test version_to_branch with numeric only version."""
-        result = version_to_branch("123")
+        result = version_to_branch("123", env="prod")
         assert result == "release-123"
+        result_dev = version_to_branch("123", env="dev")
+        assert result_dev == "release-123-dev"
 
 
 class TestEnsureDirectory:

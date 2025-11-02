@@ -10,29 +10,32 @@ from pathlib import Path
 from queue import Queue
 from tempfile import SpooledTemporaryFile
 from threading import Event, Thread
-
-import requests
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
 
-def version_to_branch(version: str) -> str:
+def version_to_branch(version: str, env: Literal["dev", "prod"] = "dev") -> str:
     """Convert a version string to a Git branch name.
 
     Args:
         version: Version string (e.g., '2025.03', 'dev', 'master', '2025.03-dev').
+        env: Environment type ('dev' or 'prod'). Defaults to 'dev'.
+            Determines whether to add '-dev' suffix to release branches.
 
     Returns:
         Git branch name corresponding to the version.
 
     Examples:
-        >>> version_to_branch("dev")
+        >>> version_to_branch("dev", "dev")
         "dev"
-        >>> version_to_branch("master")
+        >>> version_to_branch("master", "dev")
         "master"
-        >>> version_to_branch("2025.03")
+        >>> version_to_branch("2025.03", "dev")
+        "release-2025.03-dev"
+        >>> version_to_branch("2025.03", "prod")
         "release-2025.03"
-        >>> version_to_branch("2025.03-dev")
+        >>> version_to_branch("2025.03-dev", "dev")
         "release-2025.03-dev"
 
     """
@@ -44,8 +47,11 @@ def version_to_branch(version: str) -> str:
         # 2025.03-dev → release-2025.03-dev
         base_version = version[:-4]  # Remove "-dev"
         return f"release-{base_version}-dev"
-    # 2025.03 → release-2025.03
-    return f"release-{version}"
+    if env == "dev":
+        return f"release-{version}-dev"
+    if env == "prod":
+        return f"release-{version}"
+    return None
 
 
 def ensure_directory(path: str | Path) -> Path:
@@ -361,6 +367,7 @@ def needs_update(dest_path: Path, source_path: Path) -> bool:
         return True
 
     return current_target != expected_target
+
 
 def symlink_file(source_path: Path, dest_path: Path) -> None:
     """Create a symlink from the source path to the destination path.

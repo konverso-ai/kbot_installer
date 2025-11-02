@@ -456,13 +456,14 @@ class TestSelectorProvider:
         # Simulate branch fallback by tracking clone calls
         clone_calls = []
 
-        async def mock_clone(repo, path, branch):
+        async def mock_clone(_repo, _path, branch):
             clone_calls.append(branch)
             # First call fails (branch not found), second succeeds with fallback
             if len(clone_calls) == 1:
                 from kbot_installer.core.provider.provider_base import ProviderError
 
-                raise ProviderError("Branch not found")
+                error_msg = "Branch not found"
+                raise ProviderError(error_msg)
 
         mock_provider.clone_and_checkout = mock_clone
         mock_create.return_value = mock_provider
@@ -476,7 +477,9 @@ class TestSelectorProvider:
 
             # Mock config to provide fallback branches
             with patch.object(
-                SelectorProvider, "_get_branches_to_try", return_value=["main", "master"]
+                SelectorProvider,
+                "_get_branches_to_try",
+                return_value=["main", "master"],
             ):
                 selector = SelectorProvider(["github"])
                 # This will try main first, then fallback to master

@@ -488,7 +488,7 @@ class ProductInstallable(InstallableBase):
             JSON dictionary.
 
         """
-        data = {
+        return {
             "name": self.name,
             "version": self.version,
             "build": self.build,
@@ -496,7 +496,7 @@ class ProductInstallable(InstallableBase):
             "type": self.type,
             "parents": self.parents,
             "categories": self.categories,
-            "doc": self.docs,
+            "doc": ",".join(self.docs) if self.docs else None,
             "env": self.env,
             "license": self.license,
             "display": self.display,
@@ -504,7 +504,6 @@ class ProductInstallable(InstallableBase):
             "provider_name_used": self.provider_name_used,
             "branch_used": self.branch_used,
         }
-        return data
 
     def clone(self, path: Path, *, dependencies: bool = True) -> None:
         """Clone the product to the given path using breadth-first traversal.
@@ -518,7 +517,7 @@ class ProductInstallable(InstallableBase):
         path.mkdir(parents=True, exist_ok=True)
 
         # Convert version to branch name for Git providers
-        branch = version_to_branch(self.version) if self.version else None
+        branch = version_to_branch(self.version, env=self.env) if self.version else None
 
         if not dependencies:
             logger.warning("Cloning %s (branch: %s) to %s", self.name, branch, path)
@@ -550,49 +549,132 @@ class ProductInstallable(InstallableBase):
         # Load the main product to get its parents (dependencies)
         if (main_product_path / "description.xml").exists():
             self.load_from_installer_folder(main_product_path)
+            # Ensure dirname is set after loading
+            if not self.dirname:
+                self.dirname = main_product_path.resolve()
 
-        # Now use get_dependencies() to get BFS-ordered collection
-        # This will discover all dependencies recursively
-        # Pass the base path so dependencies can be loaded from cloned repos if available
+        # Use iterative BFS approach: clone products progressively and discover
+        # new dependencies as we load each cloned product's description.xml
+        # This ensures we discover all transitive dependencies even if intermediate
+        # products weren't known initially
+        processed = set()
+        queue = deque([self])
+
+        while queue:
+            current_product = queue.popleft()
+
+            # Skip if already processed (can happen if product appears in multiple dependency chains)
+            if current_product.name in processed:
+                continue
+
+            # Clone current product if not already cloned (main product is already cloned)
+            if current_product.name != self.name and not self._clone_dependency_product(
+                current_product, path, processed
+            ):
+                continue
+
+            # Mark as processed
+            processed.add(current_product.name)
+
+            # Discover new dependencies from the (now loaded) current product
+            self._discover_and_queue_parents(current_product, queue, processed, path)
+
+        # Now get the final collection with all discovered products
+        # All products are now cloned, so get_dependencies will load them all properly
         collection = self.get_dependencies(base_path=path)
-
-        # Clone all products in BFS order (main product is already cloned)
-        for product in collection.products:
-            # Skip if it's the main product (already cloned)
-            if product.name == self.name:
-                continue
-
-            # Convert version to branch name for each dependency
-            dependency_branch = (
-                version_to_branch(product.version) if product.version else None
-            )
-            product_path = path / product.name
-
-            try:
-                # Clone with branch fallback handled by selector_provider using config.branches
-                product.provider.clone_and_checkout(
-                    product_path, dependency_branch, repository_name=product.name
-                )
-                # Store the provider and branch used (providers update these during clone)
-                product.provider_name_used = product.provider.get_name()
-                product.branch_used = product.provider.get_branch()
-            except Exception:
-                # Clone failed - selector_provider already tried all fallback branches from config
-                logger.exception("Failed to clone %s", product.name)
-                # Continue with other dependencies even if one fails
-                continue
-
-            # Only load if description.xml exists (clone may have failed)
-            if (product_path / "description.xml").exists():
-                product.load_from_installer_folder(product_path)
-                # Ensure dirname is set after loading
-                if not product.dirname:
-                    product.dirname = product_path.resolve()
 
         # Export collection to products.lock.json for install() to use later
         lock_file = path / "products.lock.json"
         collection.export_to_json(str(lock_file))
         logger.info("Exported product collection to %s", lock_file)
+
+    def _clone_dependency_product(
+        self, product: InstallableBase, base_path: Path, processed: set[str]
+    ) -> bool:
+        """Clone a dependency product.
+
+        Args:
+            product: Product to clone.
+            base_path: Base path for cloning.
+            processed: Set of processed product names.
+
+        Returns:
+            True if clone was successful, False otherwise.
+
+        """
+        dependency_branch = (
+            version_to_branch(product.version, env=product.env)
+            if product.version
+            else None
+        )
+        product_path = base_path / product.name
+
+        try:
+            # Clone with branch fallback handled by selector_provider using config.branches
+            product.provider.clone_and_checkout(
+                product_path,
+                dependency_branch,
+                repository_name=product.name,
+            )
+            # Store the provider and branch used (providers update these during clone)
+            product.provider_name_used = product.provider.get_name()
+            product.branch_used = product.provider.get_branch()
+        except Exception:
+            # Clone failed - selector_provider already tried all fallback branches from config
+            logger.exception("Failed to clone %s", product.name)
+            # Mark as processed even if clone failed to avoid infinite loop
+            processed.add(product.name)
+            # Continue with other dependencies even if one fails
+            return False
+
+        # Only load if description.xml exists (clone may have failed)
+        if (product_path / "description.xml").exists():
+            product.load_from_installer_folder(product_path)
+            # Ensure dirname is set after loading
+            if not product.dirname:
+                product.dirname = product_path.resolve()
+        return True
+
+    def _discover_and_queue_parents(
+        self,
+        current_product: InstallableBase,
+        queue: deque,
+        processed: set[str],
+        base_path: Path,
+    ) -> None:
+        """Discover and queue parent products for cloning.
+
+        Args:
+            current_product: Current product being processed.
+            queue: Queue of products to process.
+            processed: Set of processed product names.
+            base_path: Base path where products are cloned.
+
+        """
+        # Process parents if:
+        # 1. Product is the main product (already cloned and loaded), or
+        # 2. Product was successfully cloned and loaded (has dirname and description.xml)
+        should_process_parents = False
+        if current_product.name == self.name:
+            # Main product: should have been loaded already
+            should_process_parents = True
+        elif (
+            current_product.dirname
+            and (current_product.dirname / "description.xml").exists()
+        ):
+            # Cloned product: verify it was successfully loaded
+            should_process_parents = True
+
+        if should_process_parents:
+            for parent_name in current_product.parents:
+                if parent_name not in processed:
+                    # Load parent product - try from cloned repo first, otherwise create minimal instance
+                    parent_product = self._load_product_by_name(
+                        parent_name,
+                        base_path=base_path,
+                        default_version=current_product.version,
+                    )
+                    queue.append(parent_product)
 
     def get_dependencies(self, base_path: Path | None = None) -> ProductCollection:
         """Get a ProductCollection containing this product and all its dependencies.

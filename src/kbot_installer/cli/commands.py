@@ -1,16 +1,14 @@
 """Commandes CLI pour kbot-installer."""
 
-import logging
 from pathlib import Path
 
 import click
 
 from kbot_installer.core.installer_service import InstallerService
+from kbot_installer.core.logging_config import setup_logging
 
-# Configurer le niveau de log pour réduire les messages verbeux
-logging.basicConfig(
-    level=logging.WARNING, format="%(levelname)s: %(name)s: %(message)s"
-)
+# Setup logging from configuration file
+setup_logging()
 
 
 def _parse_providers(uses: str | None) -> list[str] | None:

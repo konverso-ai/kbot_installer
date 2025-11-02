@@ -186,7 +186,7 @@ class TestGithubProvider:
         provider = GithubProvider("test_account")
 
         # Mock the parent clone to simulate setting branch_used
-        async def mock_clone(url, path, branch):
+        async def mock_clone(_url, _path, branch):
             provider.branch_used = branch
 
         mock_clone_and_checkout.side_effect = mock_clone
@@ -205,7 +205,7 @@ class TestGithubProvider:
         provider = GithubProvider("test_account")
 
         # Mock the parent clone to simulate setting branch_used to None
-        async def mock_clone(url, path, branch):
+        async def mock_clone(_url, _path, _branch):
             provider.branch_used = None
 
         mock_clone_and_checkout.side_effect = mock_clone

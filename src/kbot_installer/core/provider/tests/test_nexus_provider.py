@@ -179,9 +179,7 @@ class TestNexusProvider:
     @patch(
         "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
     )
-    def test_get_branch_returns_used_branch_after_clone(
-        self, mock_extract
-    ) -> None:
+    def test_get_branch_returns_used_branch_after_clone(self, mock_extract) -> None:
         """Test get_branch returns the branch used during clone."""
         provider = NexusProvider("example.com", "test-repo")
         mock_extract.return_value = None
@@ -195,9 +193,7 @@ class TestNexusProvider:
     @patch(
         "kbot_installer.core.provider.nexus_provider.optimized_download_and_extract_ter"
     )
-    def test_get_branch_returns_master_when_none_specified(
-        self, mock_extract
-    ) -> None:
+    def test_get_branch_returns_master_when_none_specified(self, mock_extract) -> None:
         """Test get_branch returns master when no branch specified."""
         provider = NexusProvider("example.com", "test-repo")
         mock_extract.return_value = None

@@ -1,13 +1,11 @@
 """Tests for Product class."""
 
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
 
 from kbot_installer.core.installable import create_installable
-from kbot_installer.core.installable.product_collection import ProductCollection
 from kbot_installer.core.installable.product_installable import ProductInstallable
 
 
@@ -347,8 +345,7 @@ class TestProduct:
             license="kbot-included",
         )
 
-        json_str = product.to_json()
-        data = json.loads(json_str)
+        data = product.to_json()
 
         assert data["name"] == "jira"
         assert data["version"] == "2025.02"
@@ -527,6 +524,8 @@ class TestProduct:
 
         product = ProductInstallable(name="test-product", version="1.0.0")
         mock_provider = Mock()
+        mock_provider.get_name.return_value = "nexus"
+        mock_provider.get_branch.return_value = "master"
         product.provider = mock_provider
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -544,7 +543,7 @@ class TestProduct:
                 # Verify provider.clone_and_checkout was called with product subdirectory
                 from kbot_installer.core.utils import version_to_branch
 
-                branch = version_to_branch("1.0.0")
+                branch = version_to_branch("1.0.0", env="dev")
                 mock_provider.clone_and_checkout.assert_called_once_with(
                     product_path, branch, repository_name="test-product"
                 )
@@ -564,23 +563,25 @@ class TestProduct:
 
             # Mock providers
             mock_provider_a = Mock()
+            mock_provider_a.get_name.return_value = "nexus"
+            mock_provider_a.get_branch.return_value = "master"
             mock_provider_b = Mock()
+            mock_provider_b.get_name.return_value = "github"
+            mock_provider_b.get_branch.return_value = "main"
             product_a.provider = mock_provider_a
             product_b.provider = mock_provider_b
 
             # Mock _load_product_by_name to return product_b
-            def mock_load_product(name: str, base_path=None) -> ProductInstallable:  # noqa: ARG001
+            def mock_load_product(
+                name: str,
+                base_path=None,  # noqa: ARG001
+                default_version=None,  # noqa: ARG001
+            ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
                 return ProductInstallable(name=name)
 
             product_a._load_product_by_name = mock_load_product
-
-            # Mock get_dependencies to return a collection
-            def mock_get_dependencies(base_path=None) -> ProductCollection:  # noqa: ARG001
-                return ProductCollection([product_a, product_b])
-
-            product_a.get_dependencies = mock_get_dependencies
 
             # Mock load_from_installer_folder
             with (
@@ -601,8 +602,8 @@ class TestProduct:
                 # Verify both providers were called (version converted to branch)
                 from kbot_installer.core.utils import version_to_branch
 
-                branch_a = version_to_branch("1.0.0")
-                branch_b = version_to_branch("1.0.0")
+                branch_a = version_to_branch("1.0.0", env="dev")
+                branch_b = version_to_branch("1.0.0", env="dev")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
                     product_a_path, branch_a, repository_name="product-a"
                 )
@@ -627,23 +628,25 @@ class TestProduct:
 
             # Mock providers
             mock_provider_a = Mock()
+            mock_provider_a.get_name.return_value = "nexus"
+            mock_provider_a.get_branch.return_value = "master"
             mock_provider_b = Mock()
+            mock_provider_b.get_name.return_value = "github"
+            mock_provider_b.get_branch.return_value = "main"
             product_a.provider = mock_provider_a
             product_b.provider = mock_provider_b
 
             # Mock _load_product_by_name
-            def mock_load_product(name: str, base_path=None) -> ProductInstallable:  # noqa: ARG001
+            def mock_load_product(
+                name: str,
+                base_path=None,  # noqa: ARG001
+                default_version=None,  # noqa: ARG001
+            ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
                 return ProductInstallable(name=name)
 
             product_a._load_product_by_name = mock_load_product
-
-            # Create collection where product-a is first
-            def mock_get_dependencies(base_path=None) -> ProductCollection:  # noqa: ARG001
-                return ProductCollection([product_a, product_b])
-
-            product_a.get_dependencies = mock_get_dependencies
 
             # Mock load_from_installer_folder
             with (
@@ -665,12 +668,12 @@ class TestProduct:
                 # Otherwise use parent / product.name
                 from kbot_installer.core.utils import version_to_branch
 
-                branch_a = version_to_branch("1.0.0")
+                branch_a = version_to_branch("1.0.0", env="dev")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
                     product_a_path, branch_a, repository_name="product-a"
                 )
                 # product-b should be cloned to base_path / "product-b"
-                branch_b = version_to_branch("1.0.0")
+                branch_b = version_to_branch("1.0.0", env="dev")
                 mock_provider_b.clone_and_checkout.assert_called_once_with(
                     product_b_path, branch_b, repository_name="product-b"
                 )
