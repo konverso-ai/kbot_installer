@@ -778,6 +778,9 @@ class Installer:
 
 
     def _InitializeDatabaseFromScratch(self):
+        pg_dir = os.environ['PG_DIR']
+        pg_bin = os.path.join(pg_dir, 'bin')
+        pg_psql = os.path.join(pg_bin, 'psql')
         print("=> Initializing database tables...")
         for product in reversed(self.products):
             sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
