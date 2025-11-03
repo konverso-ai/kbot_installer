@@ -75,7 +75,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to open repository at {repository_path}: {e}"
             raise VersionerError(error_msg) from e
 
-    async def add(
+    def add(
         self,
         repository_path: str | Path,
         files: list[str] | None = None,
@@ -107,7 +107,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to add files to repository: {e}"
             raise VersionerError(error_msg) from e
 
-    async def pull(self, repository_path: str | Path, branch: str) -> None:
+    def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository using pygit2.
 
         Args:
@@ -163,7 +163,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to pull from remote repository: {e}"
             raise VersionerError(error_msg) from e
 
-    async def commit(self, repository_path: str | Path, message: str) -> None:
+    def commit(self, repository_path: str | Path, message: str) -> None:
         """Commit staged changes using pygit2.
 
         Args:
@@ -209,7 +209,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to commit changes: {e}"
             raise VersionerError(error_msg) from e
 
-    async def push(self, repository_path: str | Path, branch: str) -> None:
+    def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository using pygit2.
 
         Args:
@@ -252,7 +252,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to push to remote repository: {e}"
             raise VersionerError(error_msg) from e
 
-    async def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(self, repository_url: str, target_path: str | Path) -> None:
         """Clone a repository using pygit2.
 
         Args:
@@ -386,7 +386,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to checkout local branch '{branch}': {e}"
             raise VersionerError(error_msg) from e
 
-    async def checkout(self, repository_path: str | Path, branch: str) -> None:
+    def checkout(self, repository_path: str | Path, branch: str) -> None:
         """Checkout a specific branch in the repository using pygit2.
 
         Args:
@@ -419,7 +419,7 @@ class PygitVersioner(StrReprMixin):
             error_msg = f"Failed to checkout branch '{branch}': {e}"
             raise VersionerError(error_msg) from e
 
-    async def select_branch(
+    def select_branch(
         self, repository_path: str | Path, branches: list[str]
     ) -> str | None:
         """Select the first available branch from a list of branches.
@@ -442,7 +442,7 @@ class PygitVersioner(StrReprMixin):
         Example:
             >>> versioner = PygitVersioner()
             >>> branches = ["main", "master", "develop", "dev"]
-            >>> selected = await versioner.select_branch("/path/to/repo", branches)
+            >>> selected = versioner.select_branch("/path/to/repo", branches)
             >>> print(f"Selected branch: {selected}")
             Selected branch: main
 
@@ -520,9 +520,7 @@ class PygitVersioner(StrReprMixin):
             if temp_repo_path and temp_repo_path.exists():
                 shutil.rmtree(temp_repo_path, ignore_errors=True)
 
-    async def stash(
-        self, repository_path: str | Path, message: str | None = None
-    ) -> bool:
+    def stash(self, repository_path: str | Path, message: str | None = None) -> bool:
         """Stash current changes in the repository using pygit2.
 
         Args:
@@ -558,7 +556,7 @@ class PygitVersioner(StrReprMixin):
         # Return True after successful stash operation
         return True
 
-    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
+    def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first using pygit2.
 
         This method performs a safe pull by:
@@ -578,15 +576,15 @@ class PygitVersioner(StrReprMixin):
             repo = self._get_repository(repository_path)
 
             # Step 1: Stash local changes if any exist
-            await self.stash(repository_path, "Safe pull stash")
+            self.stash(repository_path, "Safe pull stash")
 
             try:
                 # Step 2: Pull latest changes
-                await self.pull(repository_path, branch)
+                self.pull(repository_path, branch)
             except Exception:
                 # If pull fails, try to restore stash
                 try:
-                    await self._apply_stash(repo)
+                    self._apply_stash(repo)
                 except Exception as restore_error:
                     logger.warning(
                         "Failed to restore stash after pull failure: %s",
@@ -595,13 +593,13 @@ class PygitVersioner(StrReprMixin):
                 raise
 
             # Step 3: Apply stashed changes back
-            await self._apply_stash(repo)
+            self._apply_stash(repo)
 
         except pygit2.GitError as e:
             error_msg = f"Failed to perform safe pull: {e}"
             raise VersionerError(error_msg) from e
 
-    async def _apply_stash(self, repo: pygit2.Repository) -> None:
+    def _apply_stash(self, repo: pygit2.Repository) -> None:
         """Apply the most recent stash to the repository.
 
         Args:

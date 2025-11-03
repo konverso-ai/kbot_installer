@@ -561,7 +561,7 @@ class ProductInstallable(InstallableBase):
             collection = ProductCollection([self])
             lock_file = path / "products.lock.json"
             collection.export_to_json(str(lock_file))
-            logger.info("Exported product collection to %s", lock_file)
+            logger.debug("Exported product collection to %s", lock_file)
             return
 
         # First, clone the main product to get its dependencies
@@ -612,7 +612,7 @@ class ProductInstallable(InstallableBase):
         # Export collection to products.lock.json for install() to use later
         lock_file = path / "products.lock.json"
         collection.export_to_json(str(lock_file))
-        logger.info("Exported product collection to %s", lock_file)
+        logger.debug("Exported product collection to %s", lock_file)
 
     def _clone_dependency_product(
         self, product: InstallableBase, base_path: Path, processed: set[str]
@@ -1316,7 +1316,7 @@ class ProductInstallable(InstallableBase):
             products = collection.products
             if not dependencies:
                 products = [p for p in products if p.name == self.name]
-            logger.info("Installer already complete, using products.lock.json")
+            logger.debug("Installer already complete, using products.lock.json")
         except (FileNotFoundError, ValueError) as e:
             logger.warning("Failed to load products.lock.json: %s", e)
             products = []
@@ -1340,7 +1340,7 @@ class ProductInstallable(InstallableBase):
             List of products from lock file after cloning.
 
         """
-        logger.info("Installer not complete, cloning products to %s", installer_path)
+        logger.debug("Installer not complete, cloning products to %s", installer_path)
         self.clone(installer_path, dependencies=dependencies)
 
         lock_file = installer_path / "products.lock.json"
@@ -1435,10 +1435,10 @@ class ProductInstallable(InstallableBase):
                          If None, attempts to detect from path.
 
         """
-        logger.info("Installing product %s to %s", self.name, path)
+        logger.debug("Installing product %s to %s", self.name, path)
         ensure_directory(path)
 
-        logger.info("Finding lock file in %s", path)
+        logger.debug("Finding lock file in %s", path)
         lock_file, effective_installer_path = self._find_lock_file(path, installer_path)
 
         # Raise error if lock file is not found
@@ -1458,7 +1458,7 @@ class ProductInstallable(InstallableBase):
             lock_file, effective_installer_path, dependencies=dependencies
         )
 
-        logger.info("Loaded %d products from lock file", len(products))
+        logger.debug("Loaded %d products from lock file", len(products))
 
         # If loading from lock failed, try to ensure installer is complete
         if not products and effective_installer_path:

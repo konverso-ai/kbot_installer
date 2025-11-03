@@ -4,7 +4,6 @@ This module provides a concrete implementation of VersionerBase using GitPython
 for all git operations including clone, checkout, add, pull, commit, and push.
 """
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -27,7 +26,7 @@ class GitPythonVersioner(StrReprMixin):
 
     This class provides a concrete implementation of VersionerBase using GitPython
     for all git operations. It supports authentication and handles all git commands
-    asynchronously.
+    synchronously.
 
     Attributes:
         name (str): Name of the versioner ("gitpython").
@@ -57,7 +56,7 @@ class GitPythonVersioner(StrReprMixin):
         """
         return self._auth
 
-    async def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(self, repository_url: str, target_path: str | Path) -> None:
         """Clone a repository to the specified path.
 
         Args:
@@ -78,11 +77,8 @@ class GitPythonVersioner(StrReprMixin):
             if self._auth:
                 clone_options["env"] = self._auth.get_git_env()
 
-            # Run clone in executor to avoid blocking
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: Repo.clone_from(repository_url, target_path, **clone_options),
-            )
+            # Clone repository directly
+            Repo.clone_from(repository_url, target_path, **clone_options)
 
         except GitCommandError as e:
             error_msg = f"Failed to clone repository {repository_url}: {e}"
@@ -134,7 +130,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Version '{branch}' not found"
         return VersionerError(error_msg)
 
-    async def _checkout_local_branch(self, repo: Repo, branch: str) -> None:
+    def _checkout_local_branch(self, repo: Repo, branch: str) -> None:
         """Checkout an existing local branch.
 
         Args:
@@ -142,11 +138,9 @@ class GitPythonVersioner(StrReprMixin):
             branch: Branch name to checkout.
 
         """
-        await asyncio.get_event_loop().run_in_executor(
-            None, lambda: repo.git.checkout(branch)
-        )
+        repo.git.checkout(branch)
 
-    async def _checkout_remote_branch(self, repo: Repo, branch: str) -> None:
+    def _checkout_remote_branch(self, repo: Repo, branch: str) -> None:
         """Checkout a remote branch by creating a local tracking branch.
 
         Args:
@@ -158,10 +152,7 @@ class GitPythonVersioner(StrReprMixin):
 
         """
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: repo.git.checkout("-b", branch, f"origin/{branch}"),
-            )
+            repo.git.checkout("-b", branch, f"origin/{branch}")
         except GitCommandError:
             # Remote branch doesn't exist, get available branches for better error message
             available_branches = self._get_available_branches(repo)
@@ -169,7 +160,7 @@ class GitPythonVersioner(StrReprMixin):
                 branch, available_branches
             ) from None
 
-    async def checkout(self, repository_path: str | Path, branch: str) -> None:
+    def checkout(self, repository_path: str | Path, branch: str) -> None:
         """Checkout a specific branch in the repository.
 
         Args:
@@ -186,9 +177,9 @@ class GitPythonVersioner(StrReprMixin):
 
             # Check if branch exists locally
             if branch in [ref.name for ref in repo.branches]:
-                await self._checkout_local_branch(repo, branch)
+                self._checkout_local_branch(repo, branch)
             else:
-                await self._checkout_remote_branch(repo, branch)
+                self._checkout_remote_branch(repo, branch)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -200,7 +191,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during checkout: {e}"
             raise VersionerError(error_msg) from e
 
-    async def select_branch(
+    def select_branch(
         self, repository_path: str | Path, branches: list[str]
     ) -> str | None:
         """Select the first available branch from a list of branches.
@@ -224,7 +215,7 @@ class GitPythonVersioner(StrReprMixin):
         try:
             for branch in branches:
                 try:
-                    await self.checkout(repository_path, branch)
+                    self.checkout(repository_path, branch)
                 except VersionerError:
                     # Continue to next branch if this one fails
                     continue
@@ -237,7 +228,7 @@ class GitPythonVersioner(StrReprMixin):
 
         return None
 
-    async def add(
+    def add(
         self,
         repository_path: str | Path,
         files: list[str] | None = None,
@@ -258,15 +249,11 @@ class GitPythonVersioner(StrReprMixin):
 
             if files is None:
                 # Add all changes
-                await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: repo.git.add(".")
-                )
+                repo.git.add(".")
             else:
                 # Add specific files
                 for file_path in files:
-                    await asyncio.get_event_loop().run_in_executor(
-                        None, lambda f=file_path: repo.git.add(f)
-                    )
+                    repo.git.add(file_path)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -278,7 +265,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during add: {e}"
             raise VersionerError(error_msg) from e
 
-    async def pull(self, repository_path: str | Path, branch: str) -> None:
+    def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         Args:
@@ -300,10 +287,8 @@ class GitPythonVersioner(StrReprMixin):
             if self._auth:
                 pull_options["env"] = self._auth.get_git_env()
 
-            # Run pull in executor
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: repo.git.pull("origin", branch, **pull_options)
-            )
+            # Run pull directly
+            repo.git.pull("origin", branch, **pull_options)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -315,7 +300,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during pull: {e}"
             raise VersionerError(error_msg) from e
 
-    async def commit(self, repository_path: str | Path, message: str) -> None:
+    def commit(self, repository_path: str | Path, message: str) -> None:
         """Commit staged changes.
 
         Args:
@@ -342,10 +327,8 @@ class GitPythonVersioner(StrReprMixin):
             if self._auth:
                 commit_options["env"] = self._auth.get_git_env()
 
-            # Run commit in executor
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: repo.git.commit(**commit_options)
-            )
+            # Run commit directly
+            repo.git.commit(**commit_options)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -357,7 +340,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during commit: {e}"
             raise VersionerError(error_msg) from e
 
-    async def push(self, repository_path: str | Path, branch: str) -> None:
+    def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository.
 
         Args:
@@ -379,10 +362,8 @@ class GitPythonVersioner(StrReprMixin):
             if self._auth:
                 push_options["env"] = self._auth.get_git_env()
 
-            # Run push in executor
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: repo.git.push("origin", branch, **push_options)
-            )
+            # Run push directly
+            repo.git.push("origin", branch, **push_options)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -394,9 +375,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during push: {e}"
             raise VersionerError(error_msg) from e
 
-    async def stash(
-        self, repository_path: str | Path, message: str | None = None
-    ) -> bool:
+    def stash(self, repository_path: str | Path, message: str | None = None) -> bool:
         """Stash current changes in the repository using GitPython.
 
         Args:
@@ -427,10 +406,8 @@ class GitPythonVersioner(StrReprMixin):
             if self._auth:
                 stash_options["env"] = self._auth.get_git_env()
 
-            # Run stash in executor
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: repo.git.stash("push", **stash_options)
-            )
+            # Run stash directly
+            repo.git.stash("push", **stash_options)
             return True  # noqa: TRY300
 
         except InvalidGitRepositoryError as e:
@@ -443,7 +420,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during stash: {e}"
             raise VersionerError(error_msg) from e
 
-    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
+    def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first using GitPython.
 
         This method performs a safe pull by:
@@ -464,15 +441,15 @@ class GitPythonVersioner(StrReprMixin):
             repo = Repo(repository_path)
 
             # Step 1: Stash local changes if any exist
-            await self.stash(repository_path, "Safe pull stash")
+            self.stash(repository_path, "Safe pull stash")
 
             try:
                 # Step 2: Pull latest changes
-                await self.pull(repository_path, branch)
+                self.pull(repository_path, branch)
             except Exception:
                 # If pull fails, try to restore stash
                 try:
-                    await self._apply_stash(repo)
+                    self._apply_stash(repo)
                 except Exception as restore_error:
                     logger.warning(
                         "Failed to restore stash after pull failure: %s", restore_error
@@ -480,7 +457,7 @@ class GitPythonVersioner(StrReprMixin):
                 raise
 
             # Step 3: Apply stashed changes back
-            await self._apply_stash(repo)
+            self._apply_stash(repo)
 
         except InvalidGitRepositoryError as e:
             error_msg = f"Invalid git repository at {repository_path}: {e}"
@@ -492,7 +469,7 @@ class GitPythonVersioner(StrReprMixin):
             error_msg = f"Unexpected error during safe pull: {e}"
             raise VersionerError(error_msg) from e
 
-    async def _apply_stash(self, repo: Repo) -> None:
+    def _apply_stash(self, repo: Repo) -> None:
         """Apply the most recent stash to the repository.
 
         Args:
@@ -510,9 +487,7 @@ class GitPythonVersioner(StrReprMixin):
                 return
 
             # Apply the most recent stash (stash@{0})
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: repo.git.stash("apply", "stash@{0}")
-            )
+            repo.git.stash("apply", "stash@{0}")
 
         except GitCommandError as e:
             error_msg = f"Failed to apply stash: {e}"

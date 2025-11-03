@@ -41,7 +41,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(self, repository_url: str, target_path: str | Path) -> None:
         """Clone a repository to the specified path.
 
         Args:
@@ -54,7 +54,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def checkout(self, repository_path: str | Path, branch: str) -> None:
+    def checkout(self, repository_path: str | Path, branch: str) -> None:
         """Checkout a specific branch in the repository.
 
         Args:
@@ -67,7 +67,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def select_branch(
+    def select_branch(
         self, repository_path: str | Path, branches: list[str]
     ) -> str | None:
         """Select the first available branch from a list of branches.
@@ -90,7 +90,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def add(
+    def add(
         self,
         repository_path: str | Path,
         files: list[str] | None = None,
@@ -107,7 +107,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def pull(self, repository_path: str | Path, branch: str) -> None:
+    def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         Args:
@@ -120,7 +120,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def commit(self, repository_path: str | Path, message: str) -> None:
+    def commit(self, repository_path: str | Path, message: str) -> None:
         """Commit staged changes.
 
         Args:
@@ -133,7 +133,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def push(self, repository_path: str | Path, branch: str) -> None:
+    def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository.
 
         Args:
@@ -146,9 +146,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def stash(
-        self, repository_path: str | Path, message: str | None = None
-    ) -> bool:
+    def stash(self, repository_path: str | Path, message: str | None = None) -> bool:
         """Stash current changes in the repository.
 
         Args:
@@ -164,7 +162,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    async def safe_pull(self, repository_path: str | Path, branch: str) -> None:
+    def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first.
 
         This method performs a safe pull by:

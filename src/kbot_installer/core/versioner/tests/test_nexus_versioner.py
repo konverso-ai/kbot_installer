@@ -56,8 +56,7 @@ class TestNexusVersioner:
         """Test _get_auth method with authentication."""
         assert versioner_with_auth._get_auth() is versioner_with_auth.auth
 
-    @pytest.mark.asyncio
-    async def test_clone_success(self, versioner: NexusVersioner) -> None:
+    def test_clone_success(self, versioner: NexusVersioner) -> None:
         """Test successful clone operation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = Path(temp_dir) / "test_repo"
@@ -65,14 +64,11 @@ class TestNexusVersioner:
             with patch.object(versioner, "_download_repository") as mock_download:
                 mock_download.return_value = None
 
-                await versioner.clone("test_repo", target_path)
+                versioner.clone("test_repo", target_path)
 
                 mock_download.assert_called_once_with("test_repo", target_path)
 
-    @pytest.mark.asyncio
-    async def test_clone_handles_download_error(
-        self, versioner: NexusVersioner
-    ) -> None:
+    def test_clone_handles_download_error(self, versioner: NexusVersioner) -> None:
         """Test clone handles download error."""
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = Path(temp_dir) / "test_repo"
@@ -81,10 +77,9 @@ class TestNexusVersioner:
                 mock_download.side_effect = Exception("Download failed")
 
                 with pytest.raises(VersionerError, match="Failed to clone repository"):
-                    await versioner.clone("test_repo", target_path)
+                    versioner.clone("test_repo", target_path)
 
-    @pytest.mark.asyncio
-    async def test_checkout_not_supported(self, versioner: NexusVersioner) -> None:
+    def test_checkout_not_supported(self, versioner: NexusVersioner) -> None:
         """Test checkout raises error as not supported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
@@ -92,10 +87,9 @@ class TestNexusVersioner:
             with pytest.raises(
                 VersionerError, match="Checkout not supported for Nexus repositories"
             ):
-                await versioner.checkout(repo_path, "main")
+                versioner.checkout(repo_path, "main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_not_supported(self, versioner: NexusVersioner) -> None:
+    def test_select_branch_not_supported(self, versioner: NexusVersioner) -> None:
         """Test select_branch raises error as not supported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
@@ -104,10 +98,9 @@ class TestNexusVersioner:
                 VersionerError,
                 match="Branch selection not supported for Nexus repositories",
             ):
-                await versioner.select_branch(repo_path, ["main", "master"])
+                versioner.select_branch(repo_path, ["main", "master"])
 
-    @pytest.mark.asyncio
-    async def test_add_not_supported(self, versioner: NexusVersioner) -> None:
+    def test_add_not_supported(self, versioner: NexusVersioner) -> None:
         """Test add raises error as not supported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
@@ -116,62 +109,57 @@ class TestNexusVersioner:
                 VersionerError,
                 match="Git operations not supported for Nexus repositories",
             ):
-                await versioner.add(repo_path, ["file.txt"])
+                versioner.add(repo_path, ["file.txt"])
 
-    @pytest.mark.asyncio
-    async def test_pull_equivalent_to_clone(self, versioner: NexusVersioner) -> None:
+    def test_pull_equivalent_to_clone(self, versioner: NexusVersioner) -> None:
         """Test pull is equivalent to clone for Nexus repositories."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
 
             # Mock the clone method to avoid actual download
             with patch.object(versioner, "clone") as mock_clone:
-                await versioner.pull(repo_path, "main")
+                versioner.pull(repo_path, "main")
 
                 # Verify clone was called with the correct arguments
                 mock_clone.assert_called_once_with("test_repo", repo_path)
 
-    @pytest.mark.asyncio
-    async def test_pull_with_different_branch(self, versioner: NexusVersioner) -> None:
+    def test_pull_with_different_branch(self, versioner: NexusVersioner) -> None:
         """Test pull ignores branch parameter for Nexus repositories."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "my_repo"
 
             # Mock the clone method to avoid actual download
             with patch.object(versioner, "clone") as mock_clone:
-                await versioner.pull(repo_path, "develop")
+                versioner.pull(repo_path, "develop")
 
                 # Verify clone was called with the correct arguments (branch ignored)
                 mock_clone.assert_called_once_with("my_repo", repo_path)
 
-    @pytest.mark.asyncio
-    async def test_pull_with_string_path(self, versioner: NexusVersioner) -> None:
+    def test_pull_with_string_path(self, versioner: NexusVersioner) -> None:
         """Test pull works with string path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = str(Path(temp_dir) / "string_repo")
 
             # Mock the clone method to avoid actual download
             with patch.object(versioner, "clone") as mock_clone:
-                await versioner.pull(repo_path, "main")
+                versioner.pull(repo_path, "main")
 
                 # Verify clone was called with the correct arguments
                 mock_clone.assert_called_once_with("string_repo", repo_path)
 
-    @pytest.mark.asyncio
-    async def test_pull_with_nested_path(self, versioner: NexusVersioner) -> None:
+    def test_pull_with_nested_path(self, versioner: NexusVersioner) -> None:
         """Test pull extracts repository name from nested path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "nested" / "deep" / "repository_name"
 
             # Mock the clone method to avoid actual download
             with patch.object(versioner, "clone") as mock_clone:
-                await versioner.pull(repo_path, "main")
+                versioner.pull(repo_path, "main")
 
                 # Verify clone was called with the correct repository name
                 mock_clone.assert_called_once_with("repository_name", repo_path)
 
-    @pytest.mark.asyncio
-    async def test_pull_clone_failure(self, versioner: NexusVersioner) -> None:
+    def test_pull_clone_failure(self, versioner: NexusVersioner) -> None:
         """Test pull handles clone failure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "failing_repo"
@@ -183,23 +171,21 @@ class TestNexusVersioner:
                 with pytest.raises(
                     VersionerError, match="Failed to pull latest changes"
                 ):
-                    await versioner.pull(repo_path, "main")
+                    versioner.pull(repo_path, "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_with_auth(self, versioner_with_auth: NexusVersioner) -> None:
+    def test_pull_with_auth(self, versioner_with_auth: NexusVersioner) -> None:
         """Test pull works with authentication."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "auth_repo"
 
             # Mock the clone method to avoid actual download
             with patch.object(versioner_with_auth, "clone") as mock_clone:
-                await versioner_with_auth.pull(repo_path, "main")
+                versioner_with_auth.pull(repo_path, "main")
 
                 # Verify clone was called with the correct arguments
                 mock_clone.assert_called_once_with("auth_repo", repo_path)
 
-    @pytest.mark.asyncio
-    async def test_pull_logs_success_message(self, versioner: NexusVersioner) -> None:
+    def test_pull_logs_success_message(self, versioner: NexusVersioner) -> None:
         """Test pull logs success message."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "logged_repo"
@@ -209,7 +195,7 @@ class TestNexusVersioner:
                 with patch(
                     "kbot_installer.core.versioner.nexus_versioner.logger"
                 ) as mock_logger:
-                    await versioner.pull(repo_path, "main")
+                    versioner.pull(repo_path, "main")
 
                     # Verify success message was logged
                     mock_logger.info.assert_called_once_with(
@@ -218,8 +204,7 @@ class TestNexusVersioner:
                         repo_path,
                     )
 
-    @pytest.mark.asyncio
-    async def test_commit_not_supported(self, versioner: NexusVersioner) -> None:
+    def test_commit_not_supported(self, versioner: NexusVersioner) -> None:
         """Test commit raises error as not supported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
@@ -228,10 +213,9 @@ class TestNexusVersioner:
                 VersionerError,
                 match="Git operations not supported for Nexus repositories",
             ):
-                await versioner.commit(repo_path, "Test commit")
+                versioner.commit(repo_path, "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_not_supported(self, versioner: NexusVersioner) -> None:
+    def test_push_not_supported(self, versioner: NexusVersioner) -> None:
         """Test push raises error as not supported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "test_repo"
@@ -240,7 +224,7 @@ class TestNexusVersioner:
                 VersionerError,
                 match="Git operations not supported for Nexus repositories",
             ):
-                await versioner.push(repo_path, "main")
+                versioner.push(repo_path, "main")
 
     def test_check_remote_repository_exists_success(
         self, versioner: NexusVersioner
@@ -283,8 +267,7 @@ class TestNexusVersioner:
 
             assert result is False
 
-    @pytest.mark.asyncio
-    async def test_download_repository_success(self, versioner: NexusVersioner) -> None:
+    def test_download_repository_success(self, versioner: NexusVersioner) -> None:
         """Test _download_repository successful download."""
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = Path(temp_dir) / "test_repo"
@@ -300,15 +283,12 @@ class TestNexusVersioner:
                 mock_check.return_value = True
                 mock_download.return_value = None
 
-                await versioner._download_repository("test_repo", target_path)
+                versioner._download_repository("test_repo", target_path)
 
                 mock_check.assert_called_once_with("test_repo")
                 mock_download.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_download_repository_not_found(
-        self, versioner: NexusVersioner
-    ) -> None:
+    def test_download_repository_not_found(self, versioner: NexusVersioner) -> None:
         """Test _download_repository when repository not found."""
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = Path(temp_dir) / "test_repo"
@@ -321,7 +301,7 @@ class TestNexusVersioner:
                 with pytest.raises(
                     VersionerError, match="Repository 'test_repo' not found in Nexus"
                 ):
-                    await versioner._download_repository("test_repo", target_path)
+                    versioner._download_repository("test_repo", target_path)
 
     def test_check_nexus_repository_exists_sync_success(
         self, versioner: NexusVersioner
@@ -378,8 +358,7 @@ class TestNexusVersioner:
         expected = "NexusVersioner(name='nexus', base_url='https://konverso.ai')"
         assert repr(versioner) == expected
 
-    @pytest.mark.asyncio
-    async def test_download_repository_with_auth(
+    def test_download_repository_with_auth(
         self, versioner_with_auth: NexusVersioner
     ) -> None:
         """Test _download_repository with authentication."""
@@ -400,13 +379,12 @@ class TestNexusVersioner:
                 mock_auth.get_auth.return_value = ("test", "test")
                 versioner_with_auth.auth = mock_auth
 
-                await versioner_with_auth._download_repository("test_repo", target_path)
+                versioner_with_auth._download_repository("test_repo", target_path)
 
                 mock_check.assert_called_once_with("test_repo")
                 mock_download.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_download_repository_download_error(
+    def test_download_repository_download_error(
         self, versioner: NexusVersioner
     ) -> None:
         """Test _download_repository handles download error."""
@@ -427,7 +405,7 @@ class TestNexusVersioner:
                 with pytest.raises(
                     VersionerError, match="Failed to download repository"
                 ):
-                    await versioner._download_repository("test_repo", target_path)
+                    versioner._download_repository("test_repo", target_path)
 
     def test_check_nexus_repository_exists_sync_with_auth(
         self, versioner_with_auth: NexusVersioner
@@ -491,8 +469,7 @@ class TestNexusVersioner:
         assert versioner.base_url == "https://test.com"
         assert versioner.auth is mock_auth
 
-    @pytest.mark.asyncio
-    async def test_clone_with_path_object(self, versioner: NexusVersioner) -> None:
+    def test_clone_with_path_object(self, versioner: NexusVersioner) -> None:
         """Test clone with Path object."""
         with tempfile.TemporaryDirectory() as temp_dir:
             target_path = Path(temp_dir) / "test_repo"
@@ -500,7 +477,7 @@ class TestNexusVersioner:
             with patch.object(versioner, "_download_repository") as mock_download:
                 mock_download.return_value = None
 
-                await versioner.clone("test_repo", target_path)
+                versioner.clone("test_repo", target_path)
 
                 mock_download.assert_called_once_with("test_repo", target_path)
 
@@ -517,8 +494,7 @@ class TestNexusVersioner:
 
             assert result is False
 
-    @pytest.mark.asyncio
-    async def test_download_repository_creates_parent_directory(
+    def test_download_repository_creates_parent_directory(
         self, versioner: NexusVersioner
     ) -> None:
         """Test _download_repository creates parent directory."""
@@ -537,6 +513,6 @@ class TestNexusVersioner:
                 mock_check.return_value = True
                 mock_download.return_value = None
 
-                await versioner._download_repository("test_repo", target_path)
+                versioner._download_repository("test_repo", target_path)
 
                 mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)

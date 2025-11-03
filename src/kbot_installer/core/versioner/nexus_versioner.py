@@ -4,7 +4,6 @@ This module implements the NexusVersioner class that handles repository
 operations using the Nexus API for downloading repositories as tar.gz archives.
 """
 
-import asyncio
 import logging
 from pathlib import Path
 
@@ -66,7 +65,7 @@ class NexusVersioner(StrReprMixin):
         """
         return self.auth
 
-    async def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(self, repository_url: str, target_path: str | Path) -> None:
         """Clone a repository from Nexus to the specified path.
 
         Args:
@@ -80,7 +79,7 @@ class NexusVersioner(StrReprMixin):
         target_path = Path(target_path)
 
         try:
-            await self._download_repository(repository_url, target_path)
+            self._download_repository(repository_url, target_path)
             logger.info(
                 "Successfully cloned repository '%s' to %s", repository_url, target_path
             )
@@ -88,7 +87,7 @@ class NexusVersioner(StrReprMixin):
             error_msg = f"Failed to clone repository '{repository_url}': {e}"
             raise VersionerError(error_msg) from e
 
-    async def checkout(self, _repository_path: str | Path, _branch: str) -> None:
+    def checkout(self, _repository_path: str | Path, _branch: str) -> None:
         """Checkout a specific branch in the repository.
 
         Note: Checkout is not supported for Nexus repositories as they are
@@ -105,7 +104,7 @@ class NexusVersioner(StrReprMixin):
         error_msg = "Checkout not supported for Nexus repositories (static archives)"
         raise VersionerError(error_msg)
 
-    async def select_branch(
+    def select_branch(
         self, _repository_path: str | Path, _branches: list[str]
     ) -> str | None:
         """Select the first available branch from a list of branches.
@@ -129,7 +128,7 @@ class NexusVersioner(StrReprMixin):
         )
         raise VersionerError(error_msg)
 
-    async def add(
+    def add(
         self,
         _repository_path: str | Path,
         _files: list[str] | None = None,
@@ -152,7 +151,7 @@ class NexusVersioner(StrReprMixin):
         )
         raise VersionerError(error_msg)
 
-    async def pull(self, repository_path: str | Path, _branch: str) -> None:
+    def pull(self, repository_path: str | Path, _branch: str) -> None:
         """Pull latest changes from the remote repository.
 
         For Nexus repositories, this is equivalent to cloning the latest version
@@ -173,7 +172,7 @@ class NexusVersioner(StrReprMixin):
             repo_name = repo_path.name
 
             # Clone the latest version to the same location
-            await self.clone(repo_name, repository_path)
+            self.clone(repo_name, repository_path)
             logger.info(
                 "Successfully pulled latest version of repository '%s' to %s",
                 repo_name,
@@ -183,7 +182,7 @@ class NexusVersioner(StrReprMixin):
             error_msg = f"Failed to pull latest changes: {e}"
             raise VersionerError(error_msg) from e
 
-    async def commit(self, _repository_path: str | Path, _message: str) -> None:
+    def commit(self, _repository_path: str | Path, _message: str) -> None:
         """Commit staged changes.
 
         Note: Git operations are not supported for Nexus repositories as they are
@@ -202,7 +201,7 @@ class NexusVersioner(StrReprMixin):
         )
         raise VersionerError(error_msg)
 
-    async def push(self, _repository_path: str | Path, _branch: str) -> None:
+    def push(self, _repository_path: str | Path, _branch: str) -> None:
         """Push commits to the remote repository.
 
         Note: Git operations are not supported for Nexus repositories as they are
@@ -263,7 +262,7 @@ class NexusVersioner(StrReprMixin):
         except Exception:
             return False
 
-    async def _download_repository(self, repo_name: str, target_path: Path) -> None:
+    def _download_repository(self, repo_name: str, target_path: Path) -> None:
         """Download a repository from Nexus.
 
         Args:
@@ -297,10 +296,8 @@ class NexusVersioner(StrReprMixin):
             auth = self._get_auth()
             auth_obj = auth.get_auth() if auth else None
 
-            # Run optimized download and extract in a thread to avoid blocking the event loop
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                optimized_download_and_extract,
+            # Run optimized download and extract directly
+            optimized_download_and_extract(
                 file_info.url,
                 target_path.parent,
                 auth_obj,
@@ -310,9 +307,7 @@ class NexusVersioner(StrReprMixin):
             error_msg = f"Failed to download repository '{repo_name}': {e}"
             raise VersionerError(error_msg) from e
 
-    async def stash(
-        self, _repository_path: str | Path, _message: str | None = None
-    ) -> bool:
+    def stash(self, _repository_path: str | Path, _message: str | None = None) -> bool:
         """Stash is not supported for Nexus versioner.
 
         Args:
@@ -326,7 +321,7 @@ class NexusVersioner(StrReprMixin):
         # Stash is not supported for Nexus repositories (static archives)
         return False
 
-    async def safe_pull(self, repository_path: str | Path, _branch: str) -> None:
+    def safe_pull(self, repository_path: str | Path, _branch: str) -> None:
         """Safe pull for Nexus versioner - performs a regular pull.
 
         For Nexus repositories, safe_pull is equivalent to a regular pull
@@ -339,7 +334,7 @@ class NexusVersioner(StrReprMixin):
         """
         # For Nexus repositories, safe_pull is equivalent to regular pull
         # since there are no local changes to manage
-        await self.pull(repository_path, _branch)
+        self.pull(repository_path, _branch)
 
     def __str__(self) -> str:
         """Return string representation of the versioner.

@@ -1,7 +1,6 @@
 """Tests for GitPython versioner module."""
 
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -83,15 +82,14 @@ class TestGitPythonVersioner:
         versioner = GitPythonVersioner()
         assert isinstance(versioner, VersionerBase)
 
-    @pytest.mark.asyncio
-    async def test_clone_success(self, versioner_without_auth) -> None:
+    def test_clone_success(self, versioner_without_auth) -> None:
         """Test successful clone operation."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo.clone_from"
         ) as mock_clone:
             mock_clone.return_value = MagicMock()
 
-            await versioner_without_auth.clone(
+            versioner_without_auth.clone(
                 "https://github.com/test/repo.git", "/tmp/test"
             )
 
@@ -99,25 +97,21 @@ class TestGitPythonVersioner:
                 "https://github.com/test/repo.git", Path("/tmp/test")
             )
 
-    @pytest.mark.asyncio
-    async def test_clone_with_auth(self, versioner_with_auth, mock_auth) -> None:
+    def test_clone_with_auth(self, versioner_with_auth, mock_auth) -> None:
         """Test clone operation with authentication."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo.clone_from"
         ) as mock_clone:
             mock_clone.return_value = MagicMock()
 
-            await versioner_with_auth.clone(
-                "https://github.com/test/repo.git", "/tmp/test"
-            )
+            versioner_with_auth.clone("https://github.com/test/repo.git", "/tmp/test")
 
             expected_env = mock_auth.get_git_env()
             mock_clone.assert_called_once_with(
                 "https://github.com/test/repo.git", Path("/tmp/test"), env=expected_env
             )
 
-    @pytest.mark.asyncio
-    async def test_clone_unexpected_error(self, versioner_without_auth) -> None:
+    def test_clone_unexpected_error(self, versioner_without_auth) -> None:
         """Test clone operation with unexpected error."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo.clone_from"
@@ -125,12 +119,11 @@ class TestGitPythonVersioner:
             mock_clone.side_effect = Exception("Unexpected error")
 
             with pytest.raises(VersionerError, match="Unexpected error during clone"):
-                await versioner_without_auth.clone(
+                versioner_without_auth.clone(
                     "https://github.com/test/repo.git", "/tmp/test"
                 )
 
-    @pytest.mark.asyncio
-    async def test_checkout_remote_branch_success(self, versioner_without_auth) -> None:
+    def test_checkout_remote_branch_success(self, versioner_without_auth) -> None:
         """Test checkout of remote branch."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -139,14 +132,13 @@ class TestGitPythonVersioner:
             mock_repo.branches = [MagicMock(name="main")]  # Only main exists locally
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.checkout("/tmp/test", "feature")
+            versioner_without_auth.checkout("/tmp/test", "feature")
 
             mock_repo.git.checkout.assert_called_once_with(
                 "-b", "feature", "origin/feature"
             )
 
-    @pytest.mark.asyncio
-    async def test_checkout_invalid_repository(self, versioner_without_auth) -> None:
+    def test_checkout_invalid_repository(self, versioner_without_auth) -> None:
         """Test checkout with invalid repository."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -156,12 +148,9 @@ class TestGitPythonVersioner:
             with pytest.raises(
                 VersionerError, match="Unexpected error during checkout"
             ):
-                await versioner_without_auth.checkout("/tmp/test", "main")
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_success_first_branch(
-        self, versioner_without_auth
-    ) -> None:
+    def test_select_branch_success_first_branch(self, versioner_without_auth) -> None:
         """Test select_branch with successful first branch."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -170,7 +159,7 @@ class TestGitPythonVersioner:
             mock_repo.branches = [MagicMock(name="main"), MagicMock(name="develop")]
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner_without_auth.select_branch(
+            result = versioner_without_auth.select_branch(
                 "/tmp/test", ["main", "develop"]
             )
 
@@ -178,10 +167,7 @@ class TestGitPythonVersioner:
             # The actual implementation tries to checkout remote branch first
             mock_repo.git.checkout.assert_called_once_with("-b", "main", "origin/main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_success_second_branch(
-        self, versioner_without_auth
-    ) -> None:
+    def test_select_branch_success_second_branch(self, versioner_without_auth) -> None:
         """Test select_branch with successful second branch."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -192,15 +178,14 @@ class TestGitPythonVersioner:
             mock_repo.git.checkout.side_effect = [Exception("Error"), None]
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner_without_auth.select_branch(
+            result = versioner_without_auth.select_branch(
                 "/tmp/test", ["nonexistent", "main"]
             )
 
             assert result == "main"
             assert mock_repo.git.checkout.call_count == 2
 
-    @pytest.mark.asyncio
-    async def test_select_branch_no_success(self, versioner_without_auth) -> None:
+    def test_select_branch_no_success(self, versioner_without_auth) -> None:
         """Test select_branch with no successful branches."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -210,22 +195,20 @@ class TestGitPythonVersioner:
             mock_repo.git.checkout.side_effect = Exception("Error")
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner_without_auth.select_branch(
+            result = versioner_without_auth.select_branch(
                 "/tmp/test", ["nonexistent1", "nonexistent2"]
             )
 
             assert result is None
             assert mock_repo.git.checkout.call_count == 2
 
-    @pytest.mark.asyncio
-    async def test_select_branch_empty_branches(self, versioner_without_auth) -> None:
+    def test_select_branch_empty_branches(self, versioner_without_auth) -> None:
         """Test select_branch with empty branch list."""
-        result = await versioner_without_auth.select_branch("/tmp/test", [])
+        result = versioner_without_auth.select_branch("/tmp/test", [])
 
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_select_branch_unexpected_error(self, versioner_without_auth) -> None:
+    def test_select_branch_unexpected_error(self, versioner_without_auth) -> None:
         """Test select_branch with unexpected error."""
         # Mock checkout to raise a non-VersionerError exception
         with patch.object(
@@ -236,10 +219,9 @@ class TestGitPythonVersioner:
             with pytest.raises(
                 VersionerError, match="Unexpected error during branch selection"
             ):
-                await versioner_without_auth.select_branch("/tmp/test", ["main"])
+                versioner_without_auth.select_branch("/tmp/test", ["main"])
 
-    @pytest.mark.asyncio
-    async def test_add_all_files(self, versioner_without_auth) -> None:
+    def test_add_all_files(self, versioner_without_auth) -> None:
         """Test add operation with all files."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -247,12 +229,11 @@ class TestGitPythonVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.add("/tmp/test")
+            versioner_without_auth.add("/tmp/test")
 
             mock_repo.git.add.assert_called_once_with(".")
 
-    @pytest.mark.asyncio
-    async def test_add_specific_files(self, versioner_without_auth) -> None:
+    def test_add_specific_files(self, versioner_without_auth) -> None:
         """Test add operation with specific files."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -261,14 +242,13 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
 
             files = ["file1.txt", "file2.txt"]
-            await versioner_without_auth.add("/tmp/test", files)
+            versioner_without_auth.add("/tmp/test", files)
 
             assert mock_repo.git.add.call_count == 2
             mock_repo.git.add.assert_any_call("file1.txt")
             mock_repo.git.add.assert_any_call("file2.txt")
 
-    @pytest.mark.asyncio
-    async def test_add_invalid_repository(self, versioner_without_auth) -> None:
+    def test_add_invalid_repository(self, versioner_without_auth) -> None:
         """Test add operation with invalid repository."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -276,10 +256,9 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during add"):
-                await versioner_without_auth.add("/tmp/test")
+                versioner_without_auth.add("/tmp/test")
 
-    @pytest.mark.asyncio
-    async def test_pull_success(self, versioner_without_auth) -> None:
+    def test_pull_success(self, versioner_without_auth) -> None:
         """Test successful pull operation."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -287,12 +266,11 @@ class TestGitPythonVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.pull("/tmp/test", "main")
+            versioner_without_auth.pull("/tmp/test", "main")
 
             mock_repo.git.pull.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_with_auth(self, versioner_with_auth, mock_auth) -> None:
+    def test_pull_with_auth(self, versioner_with_auth, mock_auth) -> None:
         """Test pull operation with authentication."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -300,15 +278,14 @@ class TestGitPythonVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
 
-            await versioner_with_auth.pull("/tmp/test", "develop")
+            versioner_with_auth.pull("/tmp/test", "develop")
 
             expected_env = mock_auth.get_git_env()
             mock_repo.git.pull.assert_called_once_with(
                 "origin", "develop", env=expected_env
             )
 
-    @pytest.mark.asyncio
-    async def test_pull_invalid_repository(self, versioner_without_auth) -> None:
+    def test_pull_invalid_repository(self, versioner_without_auth) -> None:
         """Test pull operation with invalid repository."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -316,10 +293,9 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during pull"):
-                await versioner_without_auth.pull("/tmp/test", "main")
+                versioner_without_auth.pull("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_staged_changes(self, versioner_without_auth) -> None:
+    def test_commit_with_staged_changes(self, versioner_without_auth) -> None:
         """Test commit operation with staged changes."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -328,12 +304,11 @@ class TestGitPythonVersioner:
             mock_repo.index.diff.return_value = [MagicMock()]  # Has staged changes
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.commit("/tmp/test", "Test commit")
+            versioner_without_auth.commit("/tmp/test", "Test commit")
 
             mock_repo.git.commit.assert_called_once_with(m="Test commit")
 
-    @pytest.mark.asyncio
-    async def test_commit_without_staged_changes(self, versioner_without_auth) -> None:
+    def test_commit_without_staged_changes(self, versioner_without_auth) -> None:
         """Test commit operation without staged changes."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -342,13 +317,12 @@ class TestGitPythonVersioner:
             mock_repo.index.diff.return_value = []  # No staged changes
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.commit("/tmp/test", "Test commit")
+            versioner_without_auth.commit("/tmp/test", "Test commit")
 
             # Should not call git.commit when there are no staged changes
             mock_repo.git.commit.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_commit_with_auth(self, versioner_with_auth, mock_auth) -> None:
+    def test_commit_with_auth(self, versioner_with_auth, mock_auth) -> None:
         """Test commit operation with authentication."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -357,15 +331,14 @@ class TestGitPythonVersioner:
             mock_repo.index.diff.return_value = [MagicMock()]  # Has staged changes
             mock_repo_class.return_value = mock_repo
 
-            await versioner_with_auth.commit("/tmp/test", "Test commit")
+            versioner_with_auth.commit("/tmp/test", "Test commit")
 
             expected_env = mock_auth.get_git_env()
             mock_repo.git.commit.assert_called_once_with(
                 m="Test commit", env=expected_env
             )
 
-    @pytest.mark.asyncio
-    async def test_commit_invalid_repository(self, versioner_without_auth) -> None:
+    def test_commit_invalid_repository(self, versioner_without_auth) -> None:
         """Test commit operation with invalid repository."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -373,10 +346,9 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during commit"):
-                await versioner_without_auth.commit("/tmp/test", "Test commit")
+                versioner_without_auth.commit("/tmp/test", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_success(self, versioner_without_auth) -> None:
+    def test_push_success(self, versioner_without_auth) -> None:
         """Test successful push operation."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -384,12 +356,11 @@ class TestGitPythonVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
 
-            await versioner_without_auth.push("/tmp/test", "main")
+            versioner_without_auth.push("/tmp/test", "main")
 
             mock_repo.git.push.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_push_with_auth(self, versioner_with_auth, mock_auth) -> None:
+    def test_push_with_auth(self, versioner_with_auth, mock_auth) -> None:
         """Test push operation with authentication."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -397,15 +368,14 @@ class TestGitPythonVersioner:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
 
-            await versioner_with_auth.push("/tmp/test", "develop")
+            versioner_with_auth.push("/tmp/test", "develop")
 
             expected_env = mock_auth.get_git_env()
             mock_repo.git.push.assert_called_once_with(
                 "origin", "develop", env=expected_env
             )
 
-    @pytest.mark.asyncio
-    async def test_push_invalid_repository(self, versioner_without_auth) -> None:
+    def test_push_invalid_repository(self, versioner_without_auth) -> None:
         """Test push operation with invalid repository."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -413,7 +383,7 @@ class TestGitPythonVersioner:
             mock_repo_class.side_effect = Exception("Not a git repository")
 
             with pytest.raises(VersionerError, match="Unexpected error during push"):
-                await versioner_without_auth.push("/tmp/test", "main")
+                versioner_without_auth.push("/tmp/test", "main")
 
     def test_check_remote_repository_exists_success(
         self, versioner_without_auth
@@ -539,36 +509,33 @@ class TestGitPythonVersioner:
         env = versioner._get_auth().get_git_env()
         assert env == {"GIT_USERNAME": "test", "GIT_PASSWORD": "test"}
 
-    @pytest.mark.asyncio
-    async def test_clone_with_path_object(self, versioner_without_auth) -> None:
+    def test_clone_with_path_object(self, versioner_without_auth) -> None:
         """Test clone with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
         ) as mock_repo_class:
             mock_repo_class.clone_from.return_value = None
 
-            await versioner_without_auth.clone(
+            versioner_without_auth.clone(
                 "https://github.com/test/repo", Path("/tmp/test_target")
             )
 
             mock_repo_class.clone_from.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_clone_with_string_path(self, versioner_without_auth) -> None:
+    def test_clone_with_string_path(self, versioner_without_auth) -> None:
         """Test clone with string path."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
         ) as mock_repo_class:
             mock_repo_class.clone_from.return_value = None
 
-            await versioner_without_auth.clone(
+            versioner_without_auth.clone(
                 "https://github.com/test/repo", "/tmp/test_target"
             )
 
             mock_repo_class.clone_from.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_checkout_with_path_object(self, versioner_without_auth) -> None:
+    def test_checkout_with_path_object(self, versioner_without_auth) -> None:
         """Test checkout with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -578,13 +545,12 @@ class TestGitPythonVersioner:
             mock_repo.branches = [MagicMock(name="main")]
             mock_repo.git.checkout.return_value = None
 
-            await versioner_without_auth.checkout(Path("/tmp/test"), "main")
+            versioner_without_auth.checkout(Path("/tmp/test"), "main")
 
             # The actual implementation tries to checkout remote branch first
             mock_repo.git.checkout.assert_called_once_with("-b", "main", "origin/main")
 
-    @pytest.mark.asyncio
-    async def test_add_with_path_object(self, versioner_without_auth) -> None:
+    def test_add_with_path_object(self, versioner_without_auth) -> None:
         """Test add with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -593,12 +559,11 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.git.add.return_value = None
 
-            await versioner_without_auth.add(Path("/tmp/test"), ["file1.txt"])
+            versioner_without_auth.add(Path("/tmp/test"), ["file1.txt"])
 
             mock_repo.git.add.assert_called_once_with("file1.txt")
 
-    @pytest.mark.asyncio
-    async def test_pull_with_path_object(self, versioner_without_auth) -> None:
+    def test_pull_with_path_object(self, versioner_without_auth) -> None:
         """Test pull with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -607,12 +572,11 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.git.pull.return_value = None
 
-            await versioner_without_auth.pull(Path("/tmp/test"), "main")
+            versioner_without_auth.pull(Path("/tmp/test"), "main")
 
             mock_repo.git.pull.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_path_object(self, versioner_without_auth) -> None:
+    def test_commit_with_path_object(self, versioner_without_auth) -> None:
         """Test commit with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -622,12 +586,11 @@ class TestGitPythonVersioner:
             mock_repo.index.diff.return_value = [MagicMock()]  # Has staged changes
             mock_repo.git.commit.return_value = None
 
-            await versioner_without_auth.commit(Path("/tmp/test"), "Test commit")
+            versioner_without_auth.commit(Path("/tmp/test"), "Test commit")
 
             mock_repo.git.commit.assert_called_once_with(m="Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_with_path_object(self, versioner_without_auth) -> None:
+    def test_push_with_path_object(self, versioner_without_auth) -> None:
         """Test push with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -636,12 +599,11 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.git.push.return_value = None
 
-            await versioner_without_auth.push(Path("/tmp/test"), "main")
+            versioner_without_auth.push(Path("/tmp/test"), "main")
 
             mock_repo.git.push.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_with_path_object(self, versioner_without_auth) -> None:
+    def test_select_branch_with_path_object(self, versioner_without_auth) -> None:
         """Test select_branch with Path object."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -651,9 +613,7 @@ class TestGitPythonVersioner:
             mock_repo.branches = [MagicMock(name="main")]
             mock_repo.git.checkout.return_value = None
 
-            result = await versioner_without_auth.select_branch(
-                Path("/tmp/test"), ["main"]
-            )
+            result = versioner_without_auth.select_branch(Path("/tmp/test"), ["main"])
 
             assert result == "main"
 
@@ -675,25 +635,21 @@ class TestGitPythonVersioner:
             assert result is True
             mock_git.ls_remote.assert_called_once_with("https://github.com/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_clone_with_empty_options(self, versioner_without_auth) -> None:
+    def test_clone_with_empty_options(self, versioner_without_auth) -> None:
         """Test clone with empty options."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
         ) as mock_repo_class:
             mock_repo_class.clone_from.return_value = None
 
-            await versioner_without_auth.clone(
-                "https://github.com/test/repo", "/tmp/test"
-            )
+            versioner_without_auth.clone("https://github.com/test/repo", "/tmp/test")
 
             # Should call clone_from with Path object and empty options
             mock_repo_class.clone_from.assert_called_once_with(
                 "https://github.com/test/repo", Path("/tmp/test")
             )
 
-    @pytest.mark.asyncio
-    async def test_pull_with_empty_options(self, versioner_without_auth) -> None:
+    def test_pull_with_empty_options(self, versioner_without_auth) -> None:
         """Test pull with empty options."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -702,13 +658,12 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.git.pull.return_value = None
 
-            await versioner_without_auth.pull("/tmp/test", "main")
+            versioner_without_auth.pull("/tmp/test", "main")
 
             # Should call pull with empty options
             mock_repo.git.pull.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_empty_options(self, versioner_without_auth) -> None:
+    def test_commit_with_empty_options(self, versioner_without_auth) -> None:
         """Test commit with empty options."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -718,13 +673,12 @@ class TestGitPythonVersioner:
             mock_repo.index.diff.return_value = [MagicMock()]  # Has staged changes
             mock_repo.git.commit.return_value = None
 
-            await versioner_without_auth.commit("/tmp/test", "Test commit")
+            versioner_without_auth.commit("/tmp/test", "Test commit")
 
             # Should call commit with empty options
             mock_repo.git.commit.assert_called_once_with(m="Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_with_empty_options(self, versioner_without_auth) -> None:
+    def test_push_with_empty_options(self, versioner_without_auth) -> None:
         """Test push with empty options."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -733,13 +687,12 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.git.push.return_value = None
 
-            await versioner_without_auth.push("/tmp/test", "main")
+            versioner_without_auth.push("/tmp/test", "main")
 
             # Should call push with empty options
             mock_repo.git.push.assert_called_once_with("origin", "main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_remote_branch_with_git_error_during_checkout(
+    def test_checkout_remote_branch_with_git_error_during_checkout(
         self, versioner_without_auth
     ) -> None:
         """Test checkout remote branch when git checkout fails."""
@@ -754,10 +707,9 @@ class TestGitPythonVersioner:
             with pytest.raises(
                 VersionerError, match="Unexpected error during checkout"
             ):
-                await versioner_without_auth.checkout("/tmp/test", "main")
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_add_with_git_error_during_add(self, versioner_without_auth) -> None:
+    def test_add_with_git_error_during_add(self, versioner_without_auth) -> None:
         """Test add when git add fails."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -767,12 +719,9 @@ class TestGitPythonVersioner:
             mock_repo.git.add.side_effect = GitCommandError("Add failed")
 
             with pytest.raises(VersionerError, match="Failed to add files"):
-                await versioner_without_auth.add("/tmp/test", ["file1.txt"])
+                versioner_without_auth.add("/tmp/test", ["file1.txt"])
 
-    @pytest.mark.asyncio
-    async def test_pull_with_git_error_during_pull(
-        self, versioner_without_auth
-    ) -> None:
+    def test_pull_with_git_error_during_pull(self, versioner_without_auth) -> None:
         """Test pull when git pull fails."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -782,12 +731,9 @@ class TestGitPythonVersioner:
             mock_repo.git.pull.side_effect = GitCommandError("Pull failed")
 
             with pytest.raises(VersionerError, match="Failed to pull from main"):
-                await versioner_without_auth.pull("/tmp/test", "main")
+                versioner_without_auth.pull("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_git_error_during_commit(
-        self, versioner_without_auth
-    ) -> None:
+    def test_commit_with_git_error_during_commit(self, versioner_without_auth) -> None:
         """Test commit when git commit fails."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -798,12 +744,9 @@ class TestGitPythonVersioner:
             mock_repo.git.commit.side_effect = GitCommandError("Commit failed")
 
             with pytest.raises(VersionerError, match="Failed to commit changes"):
-                await versioner_without_auth.commit("/tmp/test", "Test commit")
+                versioner_without_auth.commit("/tmp/test", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_with_git_error_during_push(
-        self, versioner_without_auth
-    ) -> None:
+    def test_push_with_git_error_during_push(self, versioner_without_auth) -> None:
         """Test push when git push fails."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
@@ -813,7 +756,7 @@ class TestGitPythonVersioner:
             mock_repo.git.push.side_effect = GitCommandError("Push failed")
 
             with pytest.raises(VersionerError, match="Failed to push to main"):
-                await versioner_without_auth.push("/tmp/test", "main")
+                versioner_without_auth.push("/tmp/test", "main")
 
     def test_check_remote_repository_exists_with_git_command_error(
         self, versioner_without_auth
@@ -887,8 +830,7 @@ class TestGitPythonVersioner:
         """Test _auth attribute with object."""
         assert versioner_with_auth._auth is not None
 
-    @pytest.mark.asyncio
-    async def test_clone_with_invalid_git_repository_error(
+    def test_clone_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test clone with InvalidGitRepositoryError."""
@@ -900,12 +842,11 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Unexpected error during clone"):
-                await versioner_without_auth.clone(
+                versioner_without_auth.clone(
                     "https://github.com/test/repo", "/tmp/test"
                 )
 
-    @pytest.mark.asyncio
-    async def test_checkout_with_invalid_git_repository_error(
+    def test_checkout_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test checkout with InvalidGitRepositoryError."""
@@ -917,10 +858,9 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Invalid git repository at"):
-                await versioner_without_auth.checkout("/tmp/test", "main")
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_add_with_invalid_git_repository_error(
+    def test_add_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test add with InvalidGitRepositoryError."""
@@ -932,10 +872,9 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Invalid git repository at"):
-                await versioner_without_auth.add("/tmp/test", ["file1.txt"])
+                versioner_without_auth.add("/tmp/test", ["file1.txt"])
 
-    @pytest.mark.asyncio
-    async def test_pull_with_invalid_git_repository_error(
+    def test_pull_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test pull with InvalidGitRepositoryError."""
@@ -947,10 +886,9 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Invalid git repository at"):
-                await versioner_without_auth.pull("/tmp/test", "main")
+                versioner_without_auth.pull("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_invalid_git_repository_error(
+    def test_commit_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test commit with InvalidGitRepositoryError."""
@@ -962,10 +900,9 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Invalid git repository at"):
-                await versioner_without_auth.commit("/tmp/test", "Test commit")
+                versioner_without_auth.commit("/tmp/test", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_with_invalid_git_repository_error(
+    def test_push_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test push with InvalidGitRepositoryError."""
@@ -977,10 +914,9 @@ class TestGitPythonVersioner:
             )
 
             with pytest.raises(VersionerError, match="Invalid git repository at"):
-                await versioner_without_auth.push("/tmp/test", "main")
+                versioner_without_auth.push("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_with_invalid_git_repository_error(
+    def test_select_branch_with_invalid_git_repository_error(
         self, versioner_without_auth
     ) -> None:
         """Test select_branch with InvalidGitRepositoryError."""
@@ -993,11 +929,10 @@ class TestGitPythonVersioner:
 
             # select_branch catches VersionerError from checkout and continues to next branch
             # If all branches fail, it returns None
-            result = await versioner_without_auth.select_branch("/tmp/test", ["main"])
+            result = versioner_without_auth.select_branch("/tmp/test", ["main"])
             assert result is None
 
-    @pytest.mark.asyncio
-    async def test_clone_with_git_command_error(self, versioner_without_auth) -> None:
+    def test_clone_with_git_command_error(self, versioner_without_auth) -> None:
         """Test clone with GitCommandError."""
         with patch("asyncio.get_event_loop") as mock_loop:
             mock_executor = MagicMock()
@@ -1005,12 +940,11 @@ class TestGitPythonVersioner:
             mock_loop.return_value.run_in_executor = mock_executor
 
             with pytest.raises(VersionerError, match="Failed to clone repository"):
-                await versioner_without_auth.clone(
+                versioner_without_auth.clone(
                     "https://github.com/test/repo", "/tmp/test"
                 )
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_not_found_fallback_error(
+    def test_checkout_branch_not_found_fallback_error(
         self, versioner_without_auth
     ) -> None:
         """Test checkout when branch not found and fallback error occurs."""
@@ -1018,46 +952,45 @@ class TestGitPythonVersioner:
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
         ) as mock_repo_class:
             mock_repo = MagicMock()
-            mock_repo.branches = [MagicMock(name="develop")]
+            mock_branch = MagicMock()
+            mock_branch.name = "develop"
+            mock_repo.branches = [mock_branch]
             mock_repo.remote.side_effect = Exception("Remote error")
             mock_repo_class.return_value = mock_repo
 
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_executor = MagicMock()
-                mock_executor.side_effect = GitCommandError(
-                    "checkout", "Branch not found"
-                )
-                mock_loop.return_value.run_in_executor = mock_executor
+            # Mock checkout to raise GitCommandError directly
+            mock_repo.git.checkout.side_effect = GitCommandError(
+                "checkout", "Branch not found"
+            )
 
-                with pytest.raises(VersionerError, match="Version 'main' not found"):
-                    await versioner_without_auth.checkout("/tmp/test", "main")
+            with pytest.raises(VersionerError, match="Version 'main' not found"):
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_git_command_error_catch(
-        self, versioner_without_auth
-    ) -> None:
+    def test_checkout_git_command_error_catch(self, versioner_without_auth) -> None:
         """Test checkout with GitCommandError caught in outer try-catch."""
         with patch(
             "kbot_installer.core.versioner.gitpython_versioner.Repo"
         ) as mock_repo_class:
             mock_repo = MagicMock()
-            mock_repo.branches = [MagicMock(name="develop")]
+            mock_branch = MagicMock()
+            mock_branch.name = "develop"
+            mock_repo.branches = [mock_branch]
             mock_repo_class.return_value = mock_repo
 
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_executor = MagicMock()
-                mock_executor.side_effect = GitCommandError(
-                    "checkout", "Branch not found"
-                )
-                mock_loop.return_value.run_in_executor = mock_executor
+            # Mock checkout to raise GitCommandError during local branch checkout
+            def mock_checkout(*args: object, **_kwargs: object) -> object:
+                if args == ("develop",):
+                    command = "checkout"
+                    error_msg = "Branch not found"
+                    raise GitCommandError(command, error_msg)
+                return None
 
-                with pytest.raises(
-                    VersionerError, match="Unexpected error during checkout"
-                ):
-                    await versioner_without_auth.checkout("/tmp/test", "main")
+            mock_repo.git.checkout.side_effect = mock_checkout
 
-    @pytest.mark.asyncio
-    async def test_checkout_existing_local_branch(self, versioner_without_auth) -> None:
+            with pytest.raises(VersionerError, match="Failed to checkout branch"):
+                versioner_without_auth.checkout("/tmp/test", "develop")
+
+    def test_checkout_existing_local_branch(self, versioner_without_auth) -> None:
         """Test checkout of existing local branch."""
         with (
             patch(
@@ -1069,20 +1002,14 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.branches = [MagicMock(name="main"), MagicMock(name="develop")]
 
-            # Mock run_in_executor to return a coroutine
-            async def mock_run_in_executor(_executor, func):
-                return func()  # Execute the function synchronously
-
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
-
-            await versioner_without_auth.checkout("/tmp/test", "main")
+            # Mock checkout directly - no longer uses run_in_executor
+            versioner_without_auth.checkout("/tmp/test", "main")
 
             # Should call checkout on the existing local branch
             # Note: The actual code tries remote branch first, so we expect that call
             mock_repo.git.checkout.assert_called_with("-b", "main", "origin/main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_not_found_with_exception_during_branch_listing(
+    def test_checkout_branch_not_found_with_exception_during_branch_listing(
         self, versioner_without_auth
     ) -> None:
         """Test checkout when branch not found and exception occurs during branch listing."""
@@ -1091,149 +1018,108 @@ class TestGitPythonVersioner:
         ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
-            mock_repo.branches = [MagicMock(name="develop")]
+            mock_branch = MagicMock()
+            mock_branch.name = "develop"
+            mock_repo.branches = [mock_branch]
             mock_repo.remote.side_effect = Exception(
                 "Remote error"
             )  # Simulate error in remote().refs
 
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_executor = MagicMock()
-                mock_executor.side_effect = GitCommandError(
-                    "checkout", "Branch not found"
-                )
-                mock_loop.return_value.run_in_executor = mock_executor
+            # Mock checkout to raise GitCommandError directly
+            mock_repo.git.checkout.side_effect = GitCommandError(
+                "checkout", "Branch not found"
+            )
 
-                with pytest.raises(VersionerError, match="Version 'main' not found"):
-                    await versioner_without_auth.checkout("/tmp/test", "main")
+            with pytest.raises(VersionerError, match="Version 'main' not found"):
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_git_command_error(self, versioner_without_auth) -> None:
+    def test_checkout_git_command_error(self, versioner_without_auth) -> None:
         """Test checkout with GitCommandError."""
-        with (
-            patch(
-                "kbot_installer.core.versioner.gitpython_versioner.Repo"
-            ) as mock_repo_class,
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
+        with patch(
+            "kbot_installer.core.versioner.gitpython_versioner.Repo"
+        ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo_class.return_value = mock_repo
-            mock_repo.branches = [MagicMock(name="develop")]
+            mock_branch = MagicMock()
+            mock_branch.name = "develop"
+            mock_repo.branches = [mock_branch]
 
-            # Mock run_in_executor to raise GitCommandError
-            error_msg = "Branch not found"
-            command = "checkout"
+            # Mock checkout to raise GitCommandError directly
+            mock_repo.git.checkout.side_effect = GitCommandError(
+                "checkout", "Branch not found"
+            )
 
-            async def mock_run_in_executor(_executor, _func):
-                raise GitCommandError(command, error_msg)
+            # The error is transformed to a more informative message in _checkout_remote_branch
+            # which gets caught in the outer except Exception block
+            with pytest.raises(VersionerError, match="Version 'main' not found"):
+                versioner_without_auth.checkout("/tmp/test", "main")
 
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
-
-            with pytest.raises(
-                VersionerError, match="Unexpected error during checkout"
-            ):
-                await versioner_without_auth.checkout("/tmp/test", "main")
-
-    @pytest.mark.asyncio
-    async def test_stash_no_changes(self, versioner_without_auth) -> None:
+    def test_stash_no_changes(self, versioner_without_auth) -> None:
         """Test stash when there are no changes to stash."""
-        with (
-            patch(
-                "kbot_installer.core.versioner.gitpython_versioner.Repo"
-            ) as mock_repo_class,
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
+        with patch(
+            "kbot_installer.core.versioner.gitpython_versioner.Repo"
+        ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo.is_dirty.return_value = False  # No changes
             mock_repo_class.return_value = mock_repo
 
             # Should return False and not call stash
-            result = await versioner_without_auth.stash("/path/to/repo", "Test message")
+            result = versioner_without_auth.stash("/path/to/repo", "Test message")
 
             assert result is False
             mock_repo.is_dirty.assert_called_once()
-            mock_loop.return_value.run_in_executor.assert_not_called()
+            mock_repo.git.stash.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_stash_with_changes(self, versioner_without_auth) -> None:
+    def test_stash_with_changes(self, versioner_without_auth) -> None:
         """Test stash when there are changes to stash."""
-        with (
-            patch(
-                "kbot_installer.core.versioner.gitpython_versioner.Repo"
-            ) as mock_repo_class,
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
+        with patch(
+            "kbot_installer.core.versioner.gitpython_versioner.Repo"
+        ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo.is_dirty.return_value = True  # Has changes
             mock_repo_class.return_value = mock_repo
 
-            # Mock run_in_executor to return a coroutine
-            mock_run_in_executor = MagicMock()
-
-            async def mock_executor(*_args: Any, **_kwargs: Any):  # noqa: ANN401
-                return None
-
-            mock_run_in_executor.return_value = mock_executor()
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
-
-            result = await versioner_without_auth.stash("/path/to/repo", "Test message")
+            # Stash is now called directly
+            result = versioner_without_auth.stash("/path/to/repo", "Test message")
 
             assert result is True
             mock_repo.is_dirty.assert_called_once()
-            mock_run_in_executor.assert_called_once()
+            mock_repo.git.stash.assert_called_once_with("push", m="Test message")
 
-    @pytest.mark.asyncio
-    async def test_stash_with_default_message(self, versioner_without_auth) -> None:
+    def test_stash_with_default_message(self, versioner_without_auth) -> None:
         """Test stash with default message when none provided."""
-        with (
-            patch(
-                "kbot_installer.core.versioner.gitpython_versioner.Repo"
-            ) as mock_repo_class,
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
+        with patch(
+            "kbot_installer.core.versioner.gitpython_versioner.Repo"
+        ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo.is_dirty.return_value = True  # Has changes
             mock_repo_class.return_value = mock_repo
 
-            # Mock run_in_executor to return a coroutine
-            mock_run_in_executor = MagicMock()
-
-            async def mock_executor(*_args: Any, **_kwargs: Any):  # noqa: ANN401
-                return None
-
-            mock_run_in_executor.return_value = mock_executor()
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
-
-            result = await versioner_without_auth.stash("/path/to/repo")
+            # Stash is now called directly with default message
+            result = versioner_without_auth.stash("/path/to/repo")
 
             assert result is True
             mock_repo.is_dirty.assert_called_once()
-            mock_run_in_executor.assert_called_once()
+            mock_repo.git.stash.assert_called_once_with(
+                "push", m="Auto-stash by versioner"
+            )
 
-    @pytest.mark.asyncio
-    async def test_stash_git_command_error(self, versioner_without_auth) -> None:
+    def test_stash_git_command_error(self, versioner_without_auth) -> None:
         """Test stash handles GitCommandError."""
-        with (
-            patch(
-                "kbot_installer.core.versioner.gitpython_versioner.Repo"
-            ) as mock_repo_class,
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
+        with patch(
+            "kbot_installer.core.versioner.gitpython_versioner.Repo"
+        ) as mock_repo_class:
             mock_repo = MagicMock()
             mock_repo.is_dirty.return_value = True  # Has changes
             mock_repo_class.return_value = mock_repo
 
-            async def mock_run_in_executor(_executor, _func):
-                error_msg = "Stash failed"
-                command = "stash"
-                raise GitCommandError(command, error_msg)
-
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
+            # Mock stash to raise GitCommandError directly
+            mock_repo.git.stash.side_effect = GitCommandError("stash", "Stash failed")
 
             with pytest.raises(VersionerError, match="Failed to stash changes"):
-                await versioner_without_auth.stash("/path/to/repo", "Test message")
+                versioner_without_auth.stash("/path/to/repo", "Test message")
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_no_changes(self, versioner_without_auth) -> None:
+    def test_safe_pull_no_changes(self, versioner_without_auth) -> None:
         """Test safe_pull when there are no local changes."""
         with (
             patch(
@@ -1246,13 +1132,12 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_stash.return_value = False  # No stash created
 
-            await versioner_without_auth.safe_pull("/path/to/repo", "main")
+            versioner_without_auth.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with(Path("/path/to/repo"), "Safe pull stash")
             mock_pull.assert_called_once_with(Path("/path/to/repo"), "main")
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_with_changes(self, versioner_without_auth) -> None:
+    def test_safe_pull_with_changes(self, versioner_without_auth) -> None:
         """Test safe_pull when there are local changes."""
         with (
             patch(
@@ -1266,14 +1151,13 @@ class TestGitPythonVersioner:
             mock_repo_class.return_value = mock_repo
             mock_stash.return_value = True  # Stash was created
 
-            await versioner_without_auth.safe_pull("/path/to/repo", "main")
+            versioner_without_auth.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with(Path("/path/to/repo"), "Safe pull stash")
             mock_pull.assert_called_once_with(Path("/path/to/repo"), "main")
             mock_apply_stash.assert_called_once_with(mock_repo)
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_pull_failure_with_stash_restore(
+    def test_safe_pull_pull_failure_with_stash_restore(
         self, versioner_without_auth
     ) -> None:
         """Test safe_pull when pull fails and stash is restored."""
@@ -1291,58 +1175,48 @@ class TestGitPythonVersioner:
             mock_pull.side_effect = VersionerError("Pull failed")
 
             with pytest.raises(VersionerError, match="Pull failed"):
-                await versioner_without_auth.safe_pull("/path/to/repo", "main")
+                versioner_without_auth.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with(Path("/path/to/repo"), "Safe pull stash")
             mock_pull.assert_called_once_with(Path("/path/to/repo"), "main")
             # Should try to restore stash after pull failure
             mock_apply_stash.assert_called_once_with(mock_repo)
 
-    @pytest.mark.asyncio
-    async def test_apply_stash_no_stashes(self, versioner_without_auth) -> None:
+    def test_apply_stash_no_stashes(self, versioner_without_auth) -> None:
         """Test _apply_stash when there are no stashes."""
         mock_repo = MagicMock()
         mock_repo.git.stash.return_value = ""  # No stashes
 
-        # Should not raise an error and should not call run_in_executor
-        await versioner_without_auth._apply_stash(mock_repo)
+        # Should not raise an error
+        versioner_without_auth._apply_stash(mock_repo)
 
         mock_repo.git.stash.assert_called_once_with("list")
 
-    @pytest.mark.asyncio
-    async def test_apply_stash_with_stashes(self, versioner_without_auth) -> None:
+    def test_apply_stash_with_stashes(self, versioner_without_auth) -> None:
         """Test _apply_stash when there are stashes."""
-        with patch("asyncio.get_event_loop") as mock_loop:
-            mock_repo = MagicMock()
-            mock_repo.git.stash.return_value = "stash@{0}: Test stash"  # Has stashes
+        mock_repo = MagicMock()
+        mock_repo.git.stash.return_value = "stash@{0}: Test stash"  # Has stashes
 
-            # Mock run_in_executor to return a coroutine
-            mock_run_in_executor = MagicMock()
+        # Apply stash is now called directly
+        versioner_without_auth._apply_stash(mock_repo)
 
-            async def mock_executor(*_args: Any, **_kwargs: Any):  # noqa: ANN401
-                return None
+        mock_repo.git.stash.assert_any_call("list")
+        mock_repo.git.stash.assert_any_call("apply", "stash@{0}")
 
-            mock_run_in_executor.return_value = mock_executor()
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
-
-            await versioner_without_auth._apply_stash(mock_repo)
-
-            mock_repo.git.stash.assert_called_with("list")
-            mock_run_in_executor.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_apply_stash_git_command_error(self, versioner_without_auth) -> None:
+    def test_apply_stash_git_command_error(self, versioner_without_auth) -> None:
         """Test _apply_stash handles GitCommandError."""
-        with patch("asyncio.get_event_loop") as mock_loop:
-            mock_repo = MagicMock()
-            mock_repo.git.stash.return_value = "stash@{0}: Test stash"  # Has stashes
+        mock_repo = MagicMock()
+        mock_repo.git.stash.return_value = "stash@{0}: Test stash"  # Has stashes
 
-            async def mock_run_in_executor(_executor, _func):
-                error_msg = "Apply failed"
+        # Mock apply to raise GitCommandError directly
+        def mock_apply(*args: tuple[str, ...], **_kwargs: object) -> str:
+            if args == ("apply", "stash@{0}"):
                 command = "stash"
+                error_msg = "Apply failed"
                 raise GitCommandError(command, error_msg)
+            return "stash@{0}: Test stash"
 
-            mock_loop.return_value.run_in_executor = mock_run_in_executor
+        mock_repo.git.stash.side_effect = mock_apply
 
-            with pytest.raises(VersionerError, match="Failed to apply stash"):
-                await versioner_without_auth._apply_stash(mock_repo)
+        with pytest.raises(VersionerError, match="Failed to apply stash"):
+            versioner_without_auth._apply_stash(mock_repo)

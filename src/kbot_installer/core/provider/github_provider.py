@@ -43,7 +43,7 @@ class GithubProvider(GitMixin):
                 If None, operations will use public access only.
 
         """
-        logger.info("Initializing GitHub provider with account name: %s", account_name)
+        logger.debug("Initializing GitHub provider with account name: %s", account_name)
         super().__init__()
         self.account_name = account_name
         self._auth = auth
@@ -57,7 +57,7 @@ class GithubProvider(GitMixin):
         """
         return self._auth
 
-    async def clone_and_checkout(
+    def clone_and_checkout(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
         """Clone a repository from GitHub and optionally checkout a branch.
@@ -77,7 +77,7 @@ class GithubProvider(GitMixin):
             repository_name=repository_name,
         )
         # Use the parent clone_and_checkout method which handles authentication
-        await super().clone_and_checkout(repository_url, target_path, branch)
+        super().clone_and_checkout(repository_url, target_path, branch)
 
     def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on GitHub.

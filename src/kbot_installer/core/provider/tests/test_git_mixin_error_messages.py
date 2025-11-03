@@ -1,6 +1,6 @@
 """Tests for GitMixin error message improvements."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,8 +12,7 @@ from kbot_installer.core.versioner.versioner_base import VersionerError
 class TestGitMixinErrorMessages:
     """Test cases for improved error messages in GitMixin."""
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_branch_not_found_error(self) -> None:
+    def test_clone_and_checkout_branch_not_found_error(self) -> None:
         """Test that branch not found errors are properly distinguished."""
 
         # Create a concrete implementation of GitMixin
@@ -31,8 +30,8 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = AsyncMock()
-        mock_versioner.checkout = AsyncMock()
+        mock_versioner.clone = MagicMock()
+        mock_versioner.checkout = MagicMock()
 
         # Mock checkout to raise a branch not found error
         mock_versioner.checkout.side_effect = VersionerError(
@@ -41,7 +40,7 @@ class TestGitMixinErrorMessages:
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
             with pytest.raises(ProviderError) as exc_info:
-                await provider.clone_and_checkout(
+                provider.clone_and_checkout(
                     "test-repo", "/tmp/test", "release-2021.03-dev"
                 )
 
@@ -51,8 +50,7 @@ class TestGitMixinErrorMessages:
             assert "test-repo" in error_msg
             assert "Available versions" in error_msg
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_generic_checkout_error(self) -> None:
+    def test_clone_and_checkout_generic_checkout_error(self) -> None:
         """Test that generic checkout errors are handled properly."""
 
         # Create a concrete implementation of GitMixin
@@ -70,8 +68,8 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = AsyncMock()
-        mock_versioner.checkout = AsyncMock()
+        mock_versioner.clone = MagicMock()
+        mock_versioner.checkout = MagicMock()
 
         # Mock checkout to raise a generic checkout error
         mock_versioner.checkout.side_effect = VersionerError(
@@ -80,7 +78,7 @@ class TestGitMixinErrorMessages:
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
             with pytest.raises(ProviderError) as exc_info:
-                await provider.clone_and_checkout(
+                provider.clone_and_checkout(
                     "test-repo", "/tmp/test", "release-2021.03-dev"
                 )
 
@@ -89,8 +87,7 @@ class TestGitMixinErrorMessages:
             assert "Failed to checkout branch 'release-2021.03-dev'" in error_msg
             assert "test-repo" in error_msg
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_clone_error(self) -> None:
+    def test_clone_and_checkout_clone_error(self) -> None:
         """Test that clone errors are handled properly."""
 
         # Create a concrete implementation of GitMixin
@@ -108,14 +105,14 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = AsyncMock()
+        mock_versioner.clone = MagicMock()
 
         # Mock clone to raise an error
         mock_versioner.clone.side_effect = VersionerError("Repository not found")
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
             with pytest.raises(ProviderError) as exc_info:
-                await provider.clone_and_checkout(
+                provider.clone_and_checkout(
                     "test-repo", "/tmp/test", "release-2021.03-dev"
                 )
 
@@ -123,8 +120,7 @@ class TestGitMixinErrorMessages:
             error_msg = str(exc_info.value)
             assert "Failed to clone repository 'test-repo'" in error_msg
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_success(self) -> None:
+    def test_clone_and_checkout_success(self) -> None:
         """Test successful clone and checkout."""
 
         # Create a concrete implementation of GitMixin
@@ -142,14 +138,12 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = AsyncMock()
-        mock_versioner.checkout = AsyncMock()
+        mock_versioner.clone = MagicMock()
+        mock_versioner.checkout = MagicMock()
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
             # Should not raise any exception
-            await provider.clone_and_checkout(
-                "test-repo", "/tmp/test", "release-2021.03-dev"
-            )
+            provider.clone_and_checkout("test-repo", "/tmp/test", "release-2021.03-dev")
 
             # Verify both methods were called
             mock_versioner.clone.assert_called_once_with("test-repo", "/tmp/test")
@@ -157,8 +151,7 @@ class TestGitMixinErrorMessages:
                 "/tmp/test", "release-2021.03-dev"
             )
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_without_branch(self) -> None:
+    def test_clone_and_checkout_without_branch(self) -> None:
         """Test clone without checkout."""
 
         # Create a concrete implementation of GitMixin
@@ -176,11 +169,11 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = AsyncMock()
+        mock_versioner.clone = MagicMock()
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
             # Should not raise any exception
-            await provider.clone_and_checkout("test-repo", "/tmp/test", None)
+            provider.clone_and_checkout("test-repo", "/tmp/test", None)
 
             # Verify only clone was called
             mock_versioner.clone.assert_called_once_with("test-repo", "/tmp/test")

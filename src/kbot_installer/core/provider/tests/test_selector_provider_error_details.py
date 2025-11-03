@@ -1,6 +1,6 @@
 """Tests for SelectorProvider detailed error reporting."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,7 +29,7 @@ class TestSelectorProviderErrorDetails:
             ) as mock_create:
                 # Create mock providers that all fail with different errors
                 mock_nexus = MagicMock()
-                mock_nexus.clone_and_checkout = AsyncMock(
+                mock_nexus.clone_and_checkout = MagicMock(
                     side_effect=ProviderError(
                         "Version 'release-2021.03-dev' not found for repository 'test-repo'. Available versions: dev, master, release-2025.03"
                     )
@@ -37,13 +37,13 @@ class TestSelectorProviderErrorDetails:
                 mock_nexus.get_name.return_value = "nexus"
 
                 mock_github = MagicMock()
-                mock_github.clone_and_checkout = AsyncMock(
+                mock_github.clone_and_checkout = MagicMock(
                     side_effect=ProviderError("Repository 'test-repo' not found")
                 )
                 mock_github.get_name.return_value = "github"
 
                 mock_bitbucket = MagicMock()
-                mock_bitbucket.clone_and_checkout = AsyncMock(
+                mock_bitbucket.clone_and_checkout = MagicMock(
                     side_effect=ProviderError("Authentication failed")
                 )
                 mock_bitbucket.get_name.return_value = "bitbucket"
@@ -109,7 +109,7 @@ class TestSelectorProviderErrorDetails:
                     if provider_name == "bitbucket":
                         # Only bitbucket has credentials
                         mock_bitbucket = MagicMock()
-                        mock_bitbucket.clone_and_checkout = AsyncMock(
+                        mock_bitbucket.clone_and_checkout = MagicMock(
                             side_effect=ProviderError(
                                 "Repository 'test-repo' not found"
                             )
@@ -157,7 +157,7 @@ class TestSelectorProviderErrorDetails:
             ) as mock_create:
                 # Create mock providers that all fail with different errors
                 mock_nexus = MagicMock()
-                mock_nexus.clone_and_checkout = AsyncMock(
+                mock_nexus.clone_and_checkout = MagicMock(
                     side_effect=ProviderError(
                         "Version 'release-2021.03-dev' not found for repository 'test-repo'. Available versions: dev, master, release-2025.03"
                     )
@@ -165,13 +165,13 @@ class TestSelectorProviderErrorDetails:
                 mock_nexus.get_name.return_value = "nexus"
 
                 mock_github = MagicMock()
-                mock_github.clone_and_checkout = AsyncMock(
+                mock_github.clone_and_checkout = MagicMock(
                     side_effect=ProviderError("Repository 'test-repo' not found")
                 )
                 mock_github.get_name.return_value = "github"
 
                 mock_bitbucket = MagicMock()
-                mock_bitbucket.clone_and_checkout = AsyncMock(
+                mock_bitbucket.clone_and_checkout = MagicMock(
                     side_effect=ProviderError("Authentication failed")
                 )
                 mock_bitbucket.get_name.return_value = "bitbucket"
@@ -224,7 +224,7 @@ class TestSelectorProviderErrorDetails:
             ) as mock_create:
                 # Create a mock provider that succeeds
                 mock_nexus = MagicMock()
-                mock_nexus.clone_and_checkout = AsyncMock(return_value=None)  # Success
+                mock_nexus.clone_and_checkout = MagicMock(return_value=None)  # Success
                 mock_nexus.get_name.return_value = "nexus"
 
                 # Only return nexus provider, others should not be called

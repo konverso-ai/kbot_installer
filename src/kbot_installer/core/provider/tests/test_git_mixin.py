@@ -16,7 +16,7 @@ class ConcreteProvider(GitMixin):
         """Return mock authentication."""
         return MagicMock()
 
-    async def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists."""
         return True
 
@@ -33,54 +33,50 @@ class TestGitMixin:
         provider = ConcreteProvider()
         assert isinstance(provider, GitMixin)
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_calls_versioner(self) -> None:
+    def test_clone_and_checkout_calls_versioner(self) -> None:
         """Test that clone_and_checkout calls the versioner."""
         provider = ConcreteProvider()
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-            # Create mock async functions
+            # Create mock functions
             mock_clone = MagicMock()
             mock_checkout = MagicMock()
 
-            async def async_mock_clone(*args: object, **kwargs: object) -> object:
+            def mock_clone_func(*args: object, **kwargs: object) -> object:
                 return mock_clone(*args, **kwargs)
 
-            async def async_mock_checkout(*args: object, **kwargs: object) -> object:
+            def mock_checkout_func(*args: object, **kwargs: object) -> object:
                 return mock_checkout(*args, **kwargs)
 
-            mock_versioner.clone = async_mock_clone
-            mock_versioner.checkout = async_mock_checkout
+            mock_versioner.clone = mock_clone_func
+            mock_versioner.checkout = mock_checkout_func
             mock_get_versioner.return_value = mock_versioner
 
-            await provider.clone_and_checkout(
-                "https://test.com/repo", "/test/path", "main"
-            )
+            provider.clone_and_checkout("https://test.com/repo", "/test/path", "main")
 
             mock_get_versioner.assert_called_once()
             mock_clone.assert_called_once_with("https://test.com/repo", "/test/path")
             mock_checkout.assert_called_once_with("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_clone_and_checkout_handles_versioner_error(self) -> None:
+    def test_clone_and_checkout_handles_versioner_error(self) -> None:
         """Test that clone_and_checkout handles VersionerError."""
         provider = ConcreteProvider()
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
 
-            # Create a mock async function that raises an error
+            # Create a mock function that raises an error
             error_message = "Test error"
 
-            async def mock_clone(*_args: object, **_kwargs: object) -> object:
+            def mock_clone(*_args: object, **_kwargs: object) -> object:
                 raise VersionerError(error_message)
 
             mock_versioner.clone = mock_clone
             mock_get_versioner.return_value = mock_versioner
 
             with pytest.raises(ProviderError, match="Failed to clone repository"):
-                await provider.clone_and_checkout(
+                provider.clone_and_checkout(
                     "https://test.com/repo", "/test/path", "main"
                 )
 

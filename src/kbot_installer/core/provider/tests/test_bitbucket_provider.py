@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from kbot_installer.core.auth.pygit_authentication import PyGitAuthenticationBase
 from kbot_installer.core.provider.bitbucket_provider import BitbucketProvider
 from kbot_installer.core.provider.provider_base import ProviderBase
@@ -52,40 +50,37 @@ class TestBitbucketProvider:
 
         assert provider._get_auth() is None
 
-    @pytest.mark.asyncio
     @patch(
         "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
     )
-    async def test_clone_calls_parent_clone(self, mock_clone) -> None:
+    def test_clone_calls_parent_clone(self, mock_clone) -> None:
         """Test that clone calls the parent clone method."""
         provider = BitbucketProvider("test_account")
-        await provider.clone_and_checkout("test_repo", "/test/path", "main")
+        provider.clone_and_checkout("test_repo", "/test/path", "main")
 
         mock_clone.assert_called_once_with(
             "https://bitbucket.org/test_account/test_repo.git", "/test/path", "main"
         )
 
-    @pytest.mark.asyncio
     @patch(
         "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
     )
-    async def test_clone_without_branch(self, mock_clone) -> None:
+    def test_clone_without_branch(self, mock_clone) -> None:
         """Test that clone works without specifying branch."""
         provider = BitbucketProvider("test_account")
-        await provider.clone_and_checkout("test_repo", "/test/path")
+        provider.clone_and_checkout("test_repo", "/test/path")
 
         mock_clone.assert_called_once_with(
             "https://bitbucket.org/test_account/test_repo.git", "/test/path", None
         )
 
-    @pytest.mark.asyncio
     @patch(
         "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
     )
-    async def test_clone_with_different_branch(self, mock_clone) -> None:
+    def test_clone_with_different_branch(self, mock_clone) -> None:
         """Test that clone works with different branch."""
         provider = BitbucketProvider("test_account")
-        await provider.clone_and_checkout("test_repo", "/test/path", "develop")
+        provider.clone_and_checkout("test_repo", "/test/path", "develop")
 
         mock_clone.assert_called_once_with(
             "https://bitbucket.org/test_account/test_repo.git", "/test/path", "develop"
@@ -148,44 +143,42 @@ class TestBitbucketProvider:
         # Before clone, branch_used is None, so should return empty string
         assert provider.get_branch() == ""
 
-    @pytest.mark.asyncio
     @patch(
         "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
     )
-    async def test_get_branch_returns_used_branch_after_clone(
+    def test_get_branch_returns_used_branch_after_clone(
         self, mock_clone_and_checkout
     ) -> None:
         """Test get_branch returns the branch used during clone."""
         provider = BitbucketProvider("test_account")
 
         # Mock the parent clone to simulate setting branch_used
-        async def mock_clone(_url, _path, branch):
+        def mock_clone(_url, _path, branch):
             provider.branch_used = branch
 
         mock_clone_and_checkout.side_effect = mock_clone
 
-        await provider.clone_and_checkout("test_repo", "/test/path", "develop")
+        provider.clone_and_checkout("test_repo", "/test/path", "develop")
 
         # After clone with branch "develop", should return "develop"
         assert provider.get_branch() == "develop"
 
-    @pytest.mark.asyncio
     @patch(
         "kbot_installer.core.provider.bitbucket_provider.GitMixin.clone_and_checkout"
     )
-    async def test_get_branch_returns_empty_when_no_branch(
+    def test_get_branch_returns_empty_when_no_branch(
         self, mock_clone_and_checkout
     ) -> None:
         """Test get_branch returns empty string when no branch specified."""
         provider = BitbucketProvider("test_account")
 
         # Mock the parent clone to simulate setting branch_used to None
-        async def mock_clone(_url, _path, _branch):
+        def mock_clone(_url, _path, _branch):
             provider.branch_used = None
 
         mock_clone_and_checkout.side_effect = mock_clone
 
-        await provider.clone_and_checkout("test_repo", "/test/path", None)
+        provider.clone_and_checkout("test_repo", "/test/path", None)
 
         # When None is specified, should return empty string
         assert provider.get_branch() == ""

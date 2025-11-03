@@ -175,8 +175,7 @@ class TestPygitVersioner:
             with pytest.raises(VersionerError, match="Failed to open repository"):
                 versioner._get_repository("/test/path")
 
-    @pytest.mark.asyncio
-    async def test_add_with_all_files(self, versioner) -> None:
+    def test_add_with_all_files(self, versioner) -> None:
         """Test that add works with all files."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -184,13 +183,12 @@ class TestPygitVersioner:
             mock_repo.index = mock_index
             mock_get_repo.return_value = mock_repo
 
-            await versioner.add("/test/path", None)
+            versioner.add("/test/path", None)
 
             mock_index.add_all.assert_called_once()
             mock_index.write.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_add_with_git_error(self, versioner) -> None:
+    def test_add_with_git_error(self, versioner) -> None:
         """Test that add handles pygit2.GitError."""
         import pygit2
 
@@ -204,10 +202,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to add files to repository"
             ):
-                await versioner.add("/test/path", None)
+                versioner.add("/test/path", None)
 
-    @pytest.mark.asyncio
-    async def test_pull_with_authentication(
+    def test_pull_with_authentication(
         self, versioner_with_auth, mock_repo, mock_auth
     ) -> None:
         """Test that pull works with authentication."""
@@ -223,14 +220,13 @@ class TestPygitVersioner:
             mock_ref = MagicMock()
             mock_repo_obj.lookup_reference.return_value = mock_ref
 
-            await versioner_with_auth.pull("/test/path", "main")
+            versioner_with_auth.pull("/test/path", "main")
 
             mock_remote.fetch.assert_called_once_with(callbacks=mock_callbacks)
             mock_repo_obj.merge_analysis.assert_called_once_with(mock_ref.target)
             mock_repo_obj.merge.assert_called_once_with(mock_ref.target)
 
-    @pytest.mark.asyncio
-    async def test_pull_without_authentication(self, versioner, mock_repo) -> None:
+    def test_pull_without_authentication(self, versioner, mock_repo) -> None:
         """Test that pull works without authentication."""
         mock_repo_obj, mock_remote = mock_repo
 
@@ -241,14 +237,13 @@ class TestPygitVersioner:
             mock_ref = MagicMock()
             mock_repo_obj.lookup_reference.return_value = mock_ref
 
-            await versioner.pull("/test/path", "main")
+            versioner.pull("/test/path", "main")
 
             mock_remote.fetch.assert_called_once_with()
             mock_repo_obj.merge_analysis.assert_called_once_with(mock_ref.target)
             mock_repo_obj.merge.assert_called_once_with(mock_ref.target)
 
-    @pytest.mark.asyncio
-    async def test_pull_with_missing_origin(self, versioner) -> None:
+    def test_pull_with_missing_origin(self, versioner) -> None:
         """Test that pull handles missing origin remote."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -256,10 +251,9 @@ class TestPygitVersioner:
             mock_get_repo.return_value = mock_repo
 
             with pytest.raises(VersionerError, match="No 'origin' remote found"):
-                await versioner.pull("/test/path", "main")
+                versioner.pull("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_with_missing_remote_branch(self, versioner) -> None:
+    def test_pull_with_missing_remote_branch(self, versioner) -> None:
         """Test that pull handles missing remote branch."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -272,10 +266,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Remote branch 'origin/main' not found"
             ):
-                await versioner.pull("/test/path", "main")
+                versioner.pull("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_with_no_current_branch(self, versioner) -> None:
+    def test_pull_with_no_current_branch(self, versioner) -> None:
         """Test that pull handles no current branch."""
         import pygit2
 
@@ -297,10 +290,9 @@ class TestPygitVersioner:
             mock_repo.head = MockHead()
 
             with pytest.raises(VersionerError, match="No current branch found"):
-                await versioner.pull("/test/path", "main")
+                versioner.pull("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_staged_changes(self, versioner) -> None:
+    def test_commit_with_staged_changes(self, versioner) -> None:
         """Test that commit works with staged changes."""
         mock_repo = MagicMock()
         mock_index = MagicMock()
@@ -309,7 +301,7 @@ class TestPygitVersioner:
         mock_index.write_tree.return_value = "tree_oid"
 
         with patch.object(versioner, "_get_repository", return_value=mock_repo):
-            await versioner.commit("/test/path", "Test commit")
+            versioner.commit("/test/path", "Test commit")
 
             mock_repo.create_commit.assert_called_once()
             call_args = mock_repo.create_commit.call_args
@@ -317,8 +309,7 @@ class TestPygitVersioner:
             assert call_args[0][4] == "tree_oid"  # tree
             assert call_args[0][5] == ["HEAD"]  # parent
 
-    @pytest.mark.asyncio
-    async def test_commit_with_no_staged_changes(self, versioner) -> None:
+    def test_commit_with_no_staged_changes(self, versioner) -> None:
         """Test that commit returns without error when no staged changes."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -334,10 +325,9 @@ class TestPygitVersioner:
             mock_get_repo.return_value = mock_repo
 
             # Should return without error when no changes to commit
-            await versioner.commit("/test/path", "Test commit")
+            versioner.commit("/test/path", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_commit_with_initial_commit(self, versioner) -> None:
+    def test_commit_with_initial_commit(self, versioner) -> None:
         """Test that commit works with initial commit (no HEAD)."""
         mock_repo = MagicMock()
         mock_index = MagicMock()
@@ -346,14 +336,13 @@ class TestPygitVersioner:
         mock_index.write_tree.return_value = "tree_oid"
 
         with patch.object(versioner, "_get_repository", return_value=mock_repo):
-            await versioner.commit("/test/path", "Initial commit")
+            versioner.commit("/test/path", "Initial commit")
 
             mock_repo.create_commit.assert_called_once()
             call_args = mock_repo.create_commit.call_args
             assert call_args[0][5] == []  # Empty parent list
 
-    @pytest.mark.asyncio
-    async def test_push_with_authentication(self, versioner_with_auth) -> None:
+    def test_push_with_authentication(self, versioner_with_auth) -> None:
         """Test that push works with authentication."""
         with patch.object(versioner_with_auth, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -368,14 +357,13 @@ class TestPygitVersioner:
                 mock_auth.get_connector.return_value = mock_callbacks
                 mock_get_auth.return_value = mock_auth
 
-                await versioner_with_auth.push("/test/path", "main")
+                versioner_with_auth.push("/test/path", "main")
 
                 mock_remote.push.assert_called_once_with(
                     ["refs/heads/main:refs/heads/main"], callbacks=mock_callbacks
                 )
 
-    @pytest.mark.asyncio
-    async def test_push_without_authentication(self, versioner) -> None:
+    def test_push_without_authentication(self, versioner) -> None:
         """Test that push works without authentication."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -385,14 +373,13 @@ class TestPygitVersioner:
             mock_get_repo.return_value = mock_repo
 
             with patch.object(versioner, "_get_auth", return_value=None):
-                await versioner.push("/test/path", "main")
+                versioner.push("/test/path", "main")
 
                 mock_remote.push.assert_called_once_with(
                     ["refs/heads/main:refs/heads/main"]
                 )
 
-    @pytest.mark.asyncio
-    async def test_push_with_missing_origin(self, versioner) -> None:
+    def test_push_with_missing_origin(self, versioner) -> None:
         """Test that push handles missing origin remote."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -400,10 +387,9 @@ class TestPygitVersioner:
             mock_get_repo.return_value = mock_repo
 
             with pytest.raises(VersionerError, match="No 'origin' remote found"):
-                await versioner.push("/test/path", "main")
+                versioner.push("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_push_with_no_current_branch(self, versioner) -> None:
+    def test_push_with_no_current_branch(self, versioner) -> None:
         """Test that push handles no current branch."""
         import pygit2
 
@@ -424,10 +410,9 @@ class TestPygitVersioner:
             mock_repo.head = MockHead()
 
             with pytest.raises(VersionerError, match="No current branch found"):
-                await versioner.push("/test/path", "main")
+                versioner.push("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_push_with_git_error(self, versioner) -> None:
+    def test_push_with_git_error(self, versioner) -> None:
         """Test that push handles pygit2.GitError."""
         import pygit2
 
@@ -442,12 +427,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to push to remote repository"
             ):
-                await versioner.push("/test/path", "main")
+                versioner.push("/test/path", "main")
 
-    @pytest.mark.asyncio
-    async def test_clone_with_authentication(
-        self, versioner_with_auth, mock_auth
-    ) -> None:
+    def test_clone_with_authentication(self, versioner_with_auth, mock_auth) -> None:
         """Test that clone works with authentication."""
         mock_auth_obj, mock_callbacks = mock_auth
 
@@ -456,9 +438,7 @@ class TestPygitVersioner:
             patch("pygit2.clone_repository") as mock_clone,
             patch("pathlib.Path.mkdir") as mock_mkdir,
         ):
-            await versioner_with_auth.clone(
-                "https://github.com/test/repo.git", "/test/path"
-            )
+            versioner_with_auth.clone("https://github.com/test/repo.git", "/test/path")
 
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_clone.assert_called_once_with(
@@ -467,23 +447,21 @@ class TestPygitVersioner:
                 callbacks=mock_callbacks,
             )
 
-    @pytest.mark.asyncio
-    async def test_clone_without_authentication(self, versioner) -> None:
+    def test_clone_without_authentication(self, versioner) -> None:
         """Test that clone works without authentication."""
         with (
             patch.object(versioner, "_get_auth", return_value=None),
             patch("pygit2.clone_repository") as mock_clone,
             patch("pathlib.Path.mkdir") as mock_mkdir,
         ):
-            await versioner.clone("https://github.com/test/repo.git", "/test/path")
+            versioner.clone("https://github.com/test/repo.git", "/test/path")
 
             mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_clone.assert_called_once_with(
                 "https://github.com/test/repo.git", "/test/path"
             )
 
-    @pytest.mark.asyncio
-    async def test_clone_with_git_error(self, versioner) -> None:
+    def test_clone_with_git_error(self, versioner) -> None:
         """Test that clone handles pygit2.GitError."""
         import pygit2
 
@@ -493,10 +471,9 @@ class TestPygitVersioner:
             patch("pathlib.Path.mkdir"),
         ):
             with pytest.raises(VersionerError, match="Failed to clone repository"):
-                await versioner.clone("https://github.com/test/repo.git", "/test/path")
+                versioner.clone("https://github.com/test/repo.git", "/test/path")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_success_first_branch(self, versioner) -> None:
+    def test_select_branch_success_first_branch(self, versioner) -> None:
         """Test select_branch with successful first branch."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
@@ -507,68 +484,63 @@ class TestPygitVersioner:
             ]
             mock_get_repo.return_value = mock_repo
 
-            result = await versioner.select_branch("/test/repo", ["main", "master"])
+            result = versioner.select_branch("/test/repo", ["main", "master"])
 
             assert result == "main"
             mock_get_repo.assert_called_once_with("/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_success_second_branch(self, versioner) -> None:
+    def test_select_branch_success_second_branch(self, versioner) -> None:
         """Test select_branch with successful second branch."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
             mock_repo.references = ["refs/heads/other", "refs/remotes/origin/master"]
             mock_get_repo.return_value = mock_repo
 
-            result = await versioner.select_branch("/test/repo", ["main", "master"])
+            result = versioner.select_branch("/test/repo", ["main", "master"])
 
             assert result == "master"
             mock_get_repo.assert_called_once_with("/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_no_success(self, versioner) -> None:
+    def test_select_branch_no_success(self, versioner) -> None:
         """Test select_branch with no successful branches."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
             mock_repo.references = ["refs/heads/other", "refs/remotes/origin/feature"]
             mock_get_repo.return_value = mock_repo
 
-            result = await versioner.select_branch(
+            result = versioner.select_branch(
                 "/test/repo", ["main", "master", "develop"]
             )
 
             assert result is None
             mock_get_repo.assert_called_once_with("/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_empty_branches(self, versioner) -> None:
+    def test_select_branch_empty_branches(self, versioner) -> None:
         """Test select_branch with empty branches list."""
-        result = await versioner.select_branch("/test/repo", [])
+        result = versioner.select_branch("/test/repo", [])
 
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_select_branch_single_branch_success(self, versioner) -> None:
+    def test_select_branch_single_branch_success(self, versioner) -> None:
         """Test select_branch with single successful branch."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
             mock_repo.references = ["refs/heads/main", "refs/heads/other"]
             mock_get_repo.return_value = mock_repo
 
-            result = await versioner.select_branch("/test/repo", ["main"])
+            result = versioner.select_branch("/test/repo", ["main"])
 
             assert result == "main"
             mock_get_repo.assert_called_once_with("/test/repo")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_single_branch_failure(self, versioner) -> None:
+    def test_select_branch_single_branch_failure(self, versioner) -> None:
         """Test select_branch with single failing branch."""
         with patch.object(versioner, "_get_repository") as mock_get_repo:
             mock_repo = MagicMock()
             mock_repo.references = ["refs/heads/other", "refs/remotes/origin/feature"]
             mock_get_repo.return_value = mock_repo
 
-            result = await versioner.select_branch("/test/repo", ["main"])
+            result = versioner.select_branch("/test/repo", ["main"])
 
             assert result is None
             mock_get_repo.assert_called_once_with("/test/repo")
@@ -634,8 +606,7 @@ class TestPygitVersioner:
             # Should not call rmtree if temp directory creation fails
             mock_rmtree.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_checkout_remote_branch_success(self, versioner) -> None:
+    def test_checkout_remote_branch_success(self, versioner) -> None:
         """Test checkout of existing remote branch."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -659,15 +630,14 @@ class TestPygitVersioner:
             mock_repo.create_branch.return_value = None
             mock_repo.checkout.return_value = None
 
-            await versioner.checkout("/path/to/repo", "feature-branch")
+            versioner.checkout("/path/to/repo", "feature-branch")
 
             mock_repo.create_branch.assert_called_once_with(
                 "feature-branch", "commit_hash"
             )
             mock_repo.checkout.assert_called_once_with("refs/heads/feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_not_found(self, versioner) -> None:
+    def test_checkout_branch_not_found(self, versioner) -> None:
         """Test checkout of non-existent branch."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -685,12 +655,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Version 'feature-branch' not found"
             ):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_not_found_with_available_branches(
-        self, versioner
-    ) -> None:
+    def test_checkout_branch_not_found_with_available_branches(self, versioner) -> None:
         """Test checkout of non-existent branch with available branches listed."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -710,12 +677,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Version 'feature-branch' not found"
             ):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_not_found_no_available_branches(
-        self, versioner
-    ) -> None:
+    def test_checkout_branch_not_found_no_available_branches(self, versioner) -> None:
         """Test checkout of non-existent branch with no available branches."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -730,10 +694,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Version 'feature-branch' not found"
             ):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_remote_branch_creation_failure(self, versioner) -> None:
+    def test_checkout_remote_branch_creation_failure(self, versioner) -> None:
         """Test checkout when remote branch creation fails."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -760,10 +723,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to create and checkout branch"
             ):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_local_branch_checkout_failure(self, versioner) -> None:
+    def test_checkout_local_branch_checkout_failure(self, versioner) -> None:
         """Test checkout when local branch checkout fails."""
         with (
             patch("pygit2.Repository") as mock_repo_class,
@@ -781,7 +743,7 @@ class TestPygitVersioner:
             mock_repo.checkout.side_effect = pygit2.GitError("Checkout failed")
 
             with pytest.raises(VersionerError, match="Failed to checkout local branch"):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
     def test_str_representation(self, versioner) -> None:
         """Test string representation of versioner."""
@@ -952,8 +914,7 @@ class TestPygitVersioner:
             # Should call rmtree in finally block even on error
             mock_rmtree.assert_called_once_with(Path("/tmp/test"), ignore_errors=True)
 
-    @pytest.mark.asyncio
-    async def test_add_with_specific_files(self, versioner) -> None:
+    def test_add_with_specific_files(self, versioner) -> None:
         """Test add operation with specific files."""
         with (
             patch(
@@ -966,14 +927,13 @@ class TestPygitVersioner:
             mock_index = MagicMock()
             mock_repo.index = mock_index
 
-            await versioner.add("/path/to/repo", ["file1.txt", "file2.txt"])
+            versioner.add("/path/to/repo", ["file1.txt", "file2.txt"])
 
             mock_index.add.assert_any_call("file1.txt")
             mock_index.add.assert_any_call("file2.txt")
             mock_index.write.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_add_git_error(self, versioner) -> None:
+    def test_add_git_error(self, versioner) -> None:
         """Test add operation with git error."""
         with (
             patch(
@@ -990,10 +950,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to add files to repository"
             ):
-                await versioner.add("/path/to/repo", ["file1.txt"])
+                versioner.add("/path/to/repo", ["file1.txt"])
 
-    @pytest.mark.asyncio
-    async def test_pull_no_origin_remote(self, versioner) -> None:
+    def test_pull_no_origin_remote(self, versioner) -> None:
         """Test pull when no origin remote exists."""
         with (
             patch(
@@ -1008,10 +967,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="No 'origin' remote found in repository"
             ):
-                await versioner.pull("/path/to/repo", "main")
+                versioner.pull("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_remote_branch_not_found(self, versioner) -> None:
+    def test_pull_remote_branch_not_found(self, versioner) -> None:
         """Test pull when remote branch not found."""
         with (
             patch(
@@ -1028,10 +986,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Remote branch 'origin/main' not found"
             ):
-                await versioner.pull("/path/to/repo", "main")
+                versioner.pull("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_no_current_branch(self, versioner) -> None:
+    def test_pull_no_current_branch(self, versioner) -> None:
         """Test pull when no current branch exists."""
         with (
             patch(
@@ -1053,10 +1010,9 @@ class TestPygitVersioner:
             )
 
             with pytest.raises(VersionerError, match="No current branch found"):
-                await versioner.pull("/path/to/repo", "main")
+                versioner.pull("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_merge_failure(self, versioner) -> None:
+    def test_pull_merge_failure(self, versioner) -> None:
         """Test pull when merge fails."""
         with (
             patch(
@@ -1074,10 +1030,9 @@ class TestPygitVersioner:
             mock_repo.merge.side_effect = pygit2.GitError("Merge failed")
 
             with pytest.raises(VersionerError, match="Failed to merge remote changes"):
-                await versioner.pull("/path/to/repo", "main")
+                versioner.pull("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_pull_git_error(self, versioner) -> None:
+    def test_pull_git_error(self, versioner) -> None:
         """Test pull with general git error."""
         with (
             patch(
@@ -1094,10 +1049,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to pull from remote repository"
             ):
-                await versioner.pull("/path/to/repo", "main")
+                versioner.pull("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_commit_no_staged_changes(self, versioner) -> None:
+    def test_commit_no_staged_changes(self, versioner) -> None:
         """Test commit when no staged changes exist."""
         with (
             patch(
@@ -1118,10 +1072,9 @@ class TestPygitVersioner:
             mock_index.write_tree.return_value = "same_tree_id"
 
             # Should return without error when no changes to commit
-            await versioner.commit("/path/to/repo", "Test commit")
+            versioner.commit("/path/to/repo", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_commit_initial_commit(self, versioner) -> None:
+    def test_commit_initial_commit(self, versioner) -> None:
         """Test commit for initial commit (no HEAD)."""
         with (
             patch(
@@ -1137,12 +1090,11 @@ class TestPygitVersioner:
             mock_repo.head.target = None  # No HEAD
             mock_repo.create_commit = MagicMock()
 
-            await versioner.commit("/path/to/repo", "Initial commit")
+            versioner.commit("/path/to/repo", "Initial commit")
 
             mock_repo.create_commit.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_commit_git_error(self, versioner) -> None:
+    def test_commit_git_error(self, versioner) -> None:
         """Test commit with git error."""
         with (
             patch(
@@ -1159,10 +1111,9 @@ class TestPygitVersioner:
             mock_repo.create_commit.side_effect = pygit2.GitError("Commit failed")
 
             with pytest.raises(VersionerError, match="Failed to commit changes"):
-                await versioner.commit("/path/to/repo", "Test commit")
+                versioner.commit("/path/to/repo", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_commit_git_error_no_head(self, versioner) -> None:
+    def test_commit_git_error_no_head(self, versioner) -> None:
         """Test commit with git error when no HEAD exists."""
         with (
             patch(
@@ -1179,10 +1130,9 @@ class TestPygitVersioner:
             mock_repo.create_commit.side_effect = pygit2.GitError("Commit failed")
 
             with pytest.raises(VersionerError, match="Failed to commit changes"):
-                await versioner.commit("/path/to/repo", "Test commit")
+                versioner.commit("/path/to/repo", "Test commit")
 
-    @pytest.mark.asyncio
-    async def test_push_no_origin_remote(self, versioner) -> None:
+    def test_push_no_origin_remote(self, versioner) -> None:
         """Test push when no origin remote exists."""
         with (
             patch(
@@ -1197,10 +1147,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="No 'origin' remote found in repository"
             ):
-                await versioner.push("/path/to/repo", "main")
+                versioner.push("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_push_no_current_branch(self, versioner) -> None:
+    def test_push_no_current_branch(self, versioner) -> None:
         """Test push when no current branch exists."""
         with (
             patch(
@@ -1220,10 +1169,9 @@ class TestPygitVersioner:
             )
 
             with pytest.raises(VersionerError, match="No current branch found"):
-                await versioner.push("/path/to/repo", "main")
+                versioner.push("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_push_git_error(self, versioner) -> None:
+    def test_push_git_error(self, versioner) -> None:
         """Test push with git error."""
         with (
             patch(
@@ -1241,10 +1189,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to push to remote repository"
             ):
-                await versioner.push("/path/to/repo", "main")
+                versioner.push("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_clone_with_auth(self, versioner_with_auth) -> None:
+    def test_clone_with_auth(self, versioner_with_auth) -> None:
         """Test clone with authentication."""
         with (
             patch(
@@ -1253,15 +1200,14 @@ class TestPygitVersioner:
             patch("pathlib.Path.exists", return_value=False),
             patch("pathlib.Path.mkdir") as mock_mkdir,
         ):
-            await versioner_with_auth.clone(
+            versioner_with_auth.clone(
                 "https://github.com/test/repo", "/tmp/test_target"
             )
 
             mock_clone.assert_called_once()
             mock_mkdir.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_clone_target_exists_cleanup_fails(self, versioner) -> None:
+    def test_clone_target_exists_cleanup_fails(self, versioner) -> None:
         """Test clone when target exists and cleanup fails."""
         with (
             patch(
@@ -1276,10 +1222,9 @@ class TestPygitVersioner:
 
             # The OSError from rmtree is not caught by the try/except in clone method
             with pytest.raises(OSError, match="Cleanup failed"):
-                await versioner.clone("https://github.com/test/repo", "/path/to/target")
+                versioner.clone("https://github.com/test/repo", "/path/to/target")
 
-    @pytest.mark.asyncio
-    async def test_clone_target_still_exists_after_cleanup(self, versioner) -> None:
+    def test_clone_target_still_exists_after_cleanup(self, versioner) -> None:
         """Test clone when target still exists after cleanup."""
         with (
             patch(
@@ -1296,10 +1241,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Target directory still exists after cleanup"
             ):
-                await versioner.clone("https://github.com/test/repo", "/tmp/test")
+                versioner.clone("https://github.com/test/repo", "/tmp/test")
 
-    @pytest.mark.asyncio
-    async def test_clone_git_error(self, versioner) -> None:
+    def test_clone_git_error(self, versioner) -> None:
         """Test clone with git error."""
         with (
             patch(
@@ -1311,10 +1255,9 @@ class TestPygitVersioner:
             mock_clone.side_effect = pygit2.GitError("Clone failed")
 
             with pytest.raises(VersionerError, match="Failed to clone repository from"):
-                await versioner.clone("https://github.com/test/repo", "/path/to/target")
+                versioner.clone("https://github.com/test/repo", "/path/to/target")
 
-    @pytest.mark.asyncio
-    async def test_checkout_branch_creation_failure(self, versioner) -> None:
+    def test_checkout_branch_creation_failure(self, versioner) -> None:
         """Test checkout when branch creation fails."""
         with (
             patch(
@@ -1335,10 +1278,9 @@ class TestPygitVersioner:
             with pytest.raises(
                 VersionerError, match="Failed to create and checkout branch"
             ):
-                await versioner.checkout("/path/to/repo", "feature-branch")
+                versioner.checkout("/path/to/repo", "feature-branch")
 
-    @pytest.mark.asyncio
-    async def test_checkout_local_branch_failure(self, versioner) -> None:
+    def test_checkout_local_branch_failure(self, versioner) -> None:
         """Test checkout when local branch checkout fails."""
         with (
             patch(
@@ -1352,10 +1294,9 @@ class TestPygitVersioner:
             mock_repo.checkout.side_effect = pygit2.GitError("Checkout failed")
 
             with pytest.raises(VersionerError, match="Failed to checkout local branch"):
-                await versioner.checkout("/path/to/repo", "main")
+                versioner.checkout("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_git_error(self, versioner) -> None:
+    def test_checkout_git_error(self, versioner) -> None:
         """Test checkout with general git error."""
         with (
             patch(
@@ -1369,10 +1310,9 @@ class TestPygitVersioner:
             mock_repo.lookup_reference.side_effect = pygit2.GitError("Git error")
 
             with pytest.raises(VersionerError, match="Version 'main' not found"):
-                await versioner.checkout("/path/to/repo", "main")
+                versioner.checkout("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_checkout_existing_local_branch(self, versioner) -> None:
+    def test_checkout_existing_local_branch(self, versioner) -> None:
         """Test checkout of existing local branch."""
         with (
             patch(
@@ -1387,13 +1327,12 @@ class TestPygitVersioner:
             mock_remote_ref.peel.return_value = "commit_hash"
             mock_repo.lookup_reference.return_value = mock_remote_ref
 
-            await versioner.checkout("/path/to/repo", "main")
+            versioner.checkout("/path/to/repo", "main")
 
             # Should call checkout on the local branch
             mock_repo.checkout.assert_called_once_with("refs/heads/main")
 
-    @pytest.mark.asyncio
-    async def test_select_branch_with_empty_list(self, versioner) -> None:
+    def test_select_branch_with_empty_list(self, versioner) -> None:
         """Test select_branch with empty branch list."""
         with (
             patch(
@@ -1405,12 +1344,11 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
             mock_repo.references = []
 
-            result = await versioner.select_branch("/path/to/repo", [])
+            result = versioner.select_branch("/path/to/repo", [])
 
             assert result is None
 
-    @pytest.mark.asyncio
-    async def test_select_branch_repository_error(self, versioner) -> None:
+    def test_select_branch_repository_error(self, versioner) -> None:
         """Test select_branch with repository error."""
         with (
             patch(
@@ -1421,7 +1359,7 @@ class TestPygitVersioner:
             mock_repo_class.side_effect = pygit2.GitError("Repository error")
 
             with pytest.raises(VersionerError, match="Failed to open repository"):
-                await versioner.select_branch("/path/to/repo", ["main"])
+                versioner.select_branch("/path/to/repo", ["main"])
 
     def test_check_remote_repository_exists_with_auth(
         self, versioner_with_auth
@@ -1491,8 +1429,7 @@ class TestPygitVersioner:
             assert result is False
             mock_rmtree.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_stash_no_changes(self, versioner) -> None:
+    def test_stash_no_changes(self, versioner) -> None:
         """Test stash when there are no changes to stash."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1505,14 +1442,13 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
 
             # Should return False and not call stash
-            result = await versioner.stash("/path/to/repo", "Test message")
+            result = versioner.stash("/path/to/repo", "Test message")
 
             assert result is False
             mock_repo.status.assert_called_once()
             mock_repo.stash.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_stash_with_changes(self, versioner) -> None:
+    def test_stash_with_changes(self, versioner) -> None:
         """Test stash when there are changes to stash."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1524,7 +1460,7 @@ class TestPygitVersioner:
             mock_repo.status.return_value = {"file1.txt": 1}  # Has changes
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner.stash("/path/to/repo", "Test message")
+            result = versioner.stash("/path/to/repo", "Test message")
 
             assert result is True
             mock_repo.status.assert_called_once()
@@ -1533,8 +1469,7 @@ class TestPygitVersioner:
             call_args = mock_repo.stash.call_args
             assert call_args[0][1] == "Test message"  # message parameter
 
-    @pytest.mark.asyncio
-    async def test_stash_with_default_message(self, versioner) -> None:
+    def test_stash_with_default_message(self, versioner) -> None:
         """Test stash with default message when none provided."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1546,15 +1481,14 @@ class TestPygitVersioner:
             mock_repo.status.return_value = {"file1.txt": 1}  # Has changes
             mock_repo_class.return_value = mock_repo
 
-            result = await versioner.stash("/path/to/repo")
+            result = versioner.stash("/path/to/repo")
 
             assert result is True
             mock_repo.stash.assert_called_once()
             call_args = mock_repo.stash.call_args
             assert call_args[0][1] == "Auto-stash by versioner"
 
-    @pytest.mark.asyncio
-    async def test_stash_git_error(self, versioner) -> None:
+    def test_stash_git_error(self, versioner) -> None:
         """Test stash handles GitError."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1568,10 +1502,9 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
 
             with pytest.raises(VersionerError, match="Failed to stash changes"):
-                await versioner.stash("/path/to/repo", "Test message")
+                versioner.stash("/path/to/repo", "Test message")
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_no_changes(self, versioner) -> None:
+    def test_safe_pull_no_changes(self, versioner) -> None:
         """Test safe_pull when there are no local changes."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1585,13 +1518,12 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
             mock_stash.return_value = False  # No stash created
 
-            await versioner.safe_pull("/path/to/repo", "main")
+            versioner.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with("/path/to/repo", "Safe pull stash")
             mock_pull.assert_called_once_with("/path/to/repo", "main")
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_with_changes(self, versioner) -> None:
+    def test_safe_pull_with_changes(self, versioner) -> None:
         """Test safe_pull when there are local changes."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1606,14 +1538,13 @@ class TestPygitVersioner:
             mock_repo_class.return_value = mock_repo
             mock_stash.return_value = True  # Stash was created
 
-            await versioner.safe_pull("/path/to/repo", "main")
+            versioner.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with("/path/to/repo", "Safe pull stash")
             mock_pull.assert_called_once_with("/path/to/repo", "main")
             mock_apply_stash.assert_called_once_with(mock_repo)
 
-    @pytest.mark.asyncio
-    async def test_safe_pull_pull_failure_with_stash_restore(self, versioner) -> None:
+    def test_safe_pull_pull_failure_with_stash_restore(self, versioner) -> None:
         """Test safe_pull when pull fails and stash is restored."""
         with (
             patch("pathlib.Path.exists", return_value=True),
@@ -1630,40 +1561,37 @@ class TestPygitVersioner:
             mock_pull.side_effect = VersionerError("Pull failed")
 
             with pytest.raises(VersionerError, match="Pull failed"):
-                await versioner.safe_pull("/path/to/repo", "main")
+                versioner.safe_pull("/path/to/repo", "main")
 
             mock_stash.assert_called_once_with("/path/to/repo", "Safe pull stash")
             mock_pull.assert_called_once_with("/path/to/repo", "main")
             # Should try to restore stash after pull failure
             mock_apply_stash.assert_called_once_with(mock_repo)
 
-    @pytest.mark.asyncio
-    async def test_apply_stash_no_stashes(self, versioner) -> None:
+    def test_apply_stash_no_stashes(self, versioner) -> None:
         """Test _apply_stash when there are no stashes."""
         mock_repo = MagicMock()
         mock_repo.references = []  # No stash references
 
         # Should not raise an error and should not call stash_apply
-        await versioner._apply_stash(mock_repo)
+        versioner._apply_stash(mock_repo)
 
         mock_repo.stash_apply.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_apply_stash_with_stashes(self, versioner) -> None:
+    def test_apply_stash_with_stashes(self, versioner) -> None:
         """Test _apply_stash when there are stashes."""
         mock_repo = MagicMock()
         mock_repo.references = ["refs/stash", "refs/heads/main"]  # Has stash
 
-        await versioner._apply_stash(mock_repo)
+        versioner._apply_stash(mock_repo)
 
         mock_repo.stash_apply.assert_called_once_with(0)
 
-    @pytest.mark.asyncio
-    async def test_apply_stash_git_error(self, versioner) -> None:
+    def test_apply_stash_git_error(self, versioner) -> None:
         """Test _apply_stash handles GitError."""
         mock_repo = MagicMock()
         mock_repo.references = ["refs/stash"]
         mock_repo.stash_apply.side_effect = pygit2.GitError("Apply failed")
 
         with pytest.raises(VersionerError, match="Failed to apply stash"):
-            await versioner._apply_stash(mock_repo)
+            versioner._apply_stash(mock_repo)

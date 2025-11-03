@@ -54,7 +54,7 @@ class GitMixin(ProviderBase):
             self._versioner = create_versioner("pygit", auth=self._get_auth())
         return self._versioner
 
-    async def clone_and_checkout(
+    def clone_and_checkout(
         self, repository_url: str, target_path: str | Path, branch: str | None = None
     ) -> None:
         """Clone a repository to the specified path and optionally checkout a branch.
@@ -70,12 +70,12 @@ class GitMixin(ProviderBase):
         """
         try:
             versioner = self._get_versioner()
-            await versioner.clone(repository_url, target_path)
+            versioner.clone(repository_url, target_path)
 
             # If a specific branch is requested, checkout that branch
             if branch:
                 try:
-                    await versioner.checkout(target_path, branch)
+                    versioner.checkout(target_path, branch)
                     # Store the branch that was successfully used
                     self.branch_used = branch
                 except VersionerError as e:

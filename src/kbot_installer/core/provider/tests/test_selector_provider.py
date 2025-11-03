@@ -1,7 +1,7 @@
 """Tests for selector_provider module."""
 
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -160,7 +160,7 @@ class TestSelectorProvider:
         with patch.object(selector, "_create_provider_with_credentials") as mock_create:
             mock_nexus = MagicMock()
             mock_github = MagicMock()
-            mock_nexus.clone_and_checkout = AsyncMock(
+            mock_nexus.clone_and_checkout = MagicMock(
                 side_effect=ProviderError("Nexus failed")
             )
             mock_create.side_effect = [mock_nexus, mock_github]
@@ -185,7 +185,7 @@ class TestSelectorProvider:
             # Create separate mock providers for each provider name
             def mock_create_side_effect(provider_name: str) -> MagicMock:  # noqa: ARG001
                 mock_provider = MagicMock()
-                mock_provider.clone_and_checkout = AsyncMock(
+                mock_provider.clone_and_checkout = MagicMock(
                     side_effect=ProviderError("All providers failed")
                 )
                 return mock_provider
@@ -222,10 +222,10 @@ class TestSelectorProvider:
             MagicMock()
             mock_bitbucket = MagicMock()
 
-            mock_nexus.clone_and_checkout = AsyncMock(
+            mock_nexus.clone_and_checkout = MagicMock(
                 side_effect=ProviderError("Nexus failed")
             )
-            mock_bitbucket.clone_and_checkout = AsyncMock(
+            mock_bitbucket.clone_and_checkout = MagicMock(
                 side_effect=ProviderError("Bitbucket failed")
             )
 

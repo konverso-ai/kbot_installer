@@ -55,7 +55,7 @@ class BitbucketProvider(GitMixin):
         """
         return self._auth
 
-    async def clone_and_checkout(
+    def clone_and_checkout(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
         """Clone a repository from Bitbucket and optionally checkout a branch.
@@ -75,7 +75,7 @@ class BitbucketProvider(GitMixin):
             repository_name=repository_name,
         )
         # Use the parent clone_and_checkout method which handles authentication
-        await super().clone_and_checkout(repository_url, target_path, branch)
+        super().clone_and_checkout(repository_url, target_path, branch)
 
     def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on Bitbucket.
