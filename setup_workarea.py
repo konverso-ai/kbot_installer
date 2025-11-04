@@ -109,6 +109,8 @@ class Installer:
         """
         self._StartInstallation()
         self._ReadLicenseAgreement()
+
+        # Build the products
         self._GetProducts()
         self.products.sort_by_type()
         while True:
@@ -117,9 +119,9 @@ class Installer:
 
             if self.target:
                 if os.path.exists(self.target):
-                    print(f"Directory '{self.target}' already exists")
-                else:
-                    break
+                    print(f"ERROR: Directory '{self.target}' already exists!")
+                    sys.exit(1)
+                break
         if not os.path.exists(self.target):
             os.makedirs(self.target)
         self._SetupProducts()
@@ -253,11 +255,11 @@ class Installer:
 
         # Building the product dependency files.
         if self.product:
-            deps.build_dependency_file(self.product, installer, work)
+            deps.build_work_area_dependency_file(self.product, installer, work)
 
         if not len(self.products):
             # at this point we are ready to populate things !
-            self.products.populate()
+            self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
     def _UpdatePythonPackages(self):
         """ Upate products  python packages using requirements.txt file"""
@@ -517,6 +519,10 @@ class Installer:
         
         licensekey = self.products.get_conf_file('license.key')
 
+        if not licensekey:
+            print("ERROR: Missing license file. Add it in one of your product to path conf/license.key")
+            sys.exit(1)
+
         setup_license = True
         if os.path.exists(licensekey):
             try:
@@ -524,7 +530,7 @@ class Installer:
                 self._Link(licensekey, os.path.join(self.target, 'var', 'license.key'))
                 setup_license = False
             except KbotLicenseError as e:
-                print("Missing license file. Add it in one of your product to path conf/license.key")
+                print("ERROR: Invalid license file", licensekey)
                 sys.exit(1)
 
     def _ReadLicenseAgreement(self):
@@ -907,38 +913,11 @@ class Installer:
             sys.exit(1)
 
     def _GetProductPath(self, name):
-        first = True
-        while True:
-            default_path = os.path.realpath(os.path.join(os.environ["KBOT_HOME"], ".."))
-            if name == 'kbot' and first:
-                path = os.path.join(default_path, "kbot")
-            else:
-                originalpath = os.path.realpath(os.path.join(default_path, name))
-                if not self._GetProduct(originalpath, name):
-                    originalpath = ''
 
-                if self.path:
-                    path = os.path.join(self.path, name)
-                else:
-                    if originalpath:
-                        question = "Enter path to '%s' [%s]: "%(name, originalpath)
-                    else:
-                        question = "Enter path to '%s': "%name
-                    path = self.path or input(question).strip()
-                    if not path and originalpath:
-                        path = originalpath
-                    else:
-                        path = os.path.realpath(os.path.expanduser(path))
-            # Now recurse in the parents
-            if path:
-                product = self._GetProduct(path, name)
-                for pname in product.parents:
-                    if pname not in [p.name for p in self.products]:
-                        product = self._GetProductPath(pname)
-                        self.products.append(product)
-
-                return product
-            first = False
+        installer = self.path
+        work = self.workarea
+        deps.build_dependency_file(name, installer, "/tmp/products.json")
+        self.products.populate(products_definition_file="/tmp/products.json")
 
     def _GetProduct(self, path, name):
         if path:
@@ -1251,6 +1230,5 @@ if __name__ == '__main__':
             sys.exit(1)
 
     except Exception as _e:
-        print("Failed due to: ", _e, show_stack=True)
         usage()
-        sys.exit(1)
+        raise

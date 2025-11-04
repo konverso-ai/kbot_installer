@@ -5,6 +5,8 @@
 #
 INSTALLER_HOME=${BASH_ARGV[0]}
 
+export KBOT_INSTALLER=$INSTALLER_HOME
+
 if [[ $INSTALLER_HOME == "" ]];
 then
     echo Using standard installation path

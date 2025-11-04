@@ -35,12 +35,9 @@ def build_dependency_file_rec(product_name, installer_path, products, visit_stat
 
     return json_def
 
-def build_dependency_file(product_name, installer_path, work_area_path, products=None):
-    """Build a dependency file under work/var/products.json"""
-    products = products or []
-    build_dependency_file_rec(product_name, installer_path, products)
-    products.reverse()
 
+def build_work_area_dependency_file(product_name, installer_path, work_area_path, products=None):
+    """Build a dependency file under work/var/products.json"""
     target_folder = os.path.join(work_area_path, "var")
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
@@ -48,6 +45,18 @@ def build_dependency_file(product_name, installer_path, work_area_path, products
     target_file = os.path.join(target_folder, "products.json")
     if os.path.exists(os.path.join(work_area_path, "var")):
         with open(target_file, "w", encoding="utf-8") as fd:
+            fd.write(json.dumps(products, indent=4))
+
+    return build_dependency_file(product_name, installer_path, target_file, products=None)
+
+
+def build_dependency_file(product_name, installer_path, dependency_file_path, products=None):
+    """Build a dependency file under work/var/products.json"""
+    products = products or []
+    build_dependency_file_rec(product_name, installer_path, products)
+    products.reverse()
+
+    with open(dependency_file_path, "w", encoding="utf-8") as fd:
             fd.write(json.dumps(products, indent=4))
 
 def get_dependency(product_name, installer_path, work_area_path):
