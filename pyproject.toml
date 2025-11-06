@@ -1,12 +1,12 @@
 [project]
-name = "kbot"
+name = "kbot-installer"
 version = "2025.03-dev"
 description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
 ]
-requires-python = ">=3.13"
+requires-python = "==3.10.15"
 dependencies = []
 
 [build-system]
