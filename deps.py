@@ -97,5 +97,6 @@ if __name__ == "__main__":
     build_dependency_file(
         product_name=_result.product,
         installer_path=_result.installer or "/home/konverso/dev/installer",
-        work_area_path=_result.workarea or "/home/konverso/dev/work")
+        dependency_file_path=_result.workarea or "/home/konverso/dev/work",
+    )
 
