@@ -169,7 +169,7 @@ class Installer:
         self.update = True
         self.silent = silent
 
-        self._SetupProducts()
+        self._SetupProducts(update=True)
 
         self._SetupBin()
         self._SetupCore()
@@ -248,16 +248,26 @@ class Installer:
         dirname = os.path.join(self.target, 'logs', 'httpd')
         self._Makedirs(dirname)
 
-    def _SetupProducts(self):
-        """Generate a json file with the tree / list of the products"""
+    def _SetupProducts(self, update=False):
+        """Generate a json file with the tree / list of the products
+
+        Args:
+            update: Indicate if we are called on an existing (True) or non existing (False) work area
+        """
         installer = self.path
         work = self.workarea
+
+        if update and not self.product:
+            product_path = os.path.join(work, "var", "products.json")
+            with open(product_path, "r", encoding='utf-8') as fd:
+                products = json.load(fd)
+                self.product = products[0].get("name")
 
         # Building the product dependency files.
         if self.product:
             deps.build_work_area_dependency_file(self.product, installer, work)
 
-        if not len(self.products):
+        if update or not len(self.products):
             # at this point we are ready to populate things !
             self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
@@ -1189,7 +1199,6 @@ if __name__ == '__main__':
         parser.add_argument('-s', '--silent', help="Silent", action="store_true", dest='silent', required=False, default=False)
         parser.add_argument('-u', '--update', help="Update links",  action="store_true", dest='update', required=False, default=False)
 
-
         _result = parser.parse_args()
 
         # Case of the relink
@@ -1201,9 +1210,10 @@ if __name__ == '__main__':
             Installer().ShowTree(_result.product)
             sys.exit(0)
 
-        # Case of the relink
+        # Case of the relink (bin/linkproducts.sh)
         if _result.update:
-            Installer().Update(_result.silent)
+            installer = Installer(path=_result.path, workarea=_result.workarea)
+            installer.Update(_result.silent)
             sys.exit(0)
 
         # Case of the kbot installation
