@@ -13,15 +13,15 @@ import socket
 import json
 import re
 
-import Bot
 import classification
 from classification import MLObject
 from common.Product import ProductList, Product
 from common.Errors import KbotLicenseError
 from dialog.User import User
-import utils
+import utils.base as utils
 from utils.License import License
 from utils.settings.base import Settings
+from utils.env import Env
 
 import deps
 from product import Product as BaseProduct
@@ -269,7 +269,7 @@ class Installer:
                 continue
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
-                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
+                pip_path = os.path.join(Env().binhome, "pip3.sh")
                 os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
 
     def _SetupUI(self):
@@ -812,7 +812,7 @@ class Installer:
         varpkl = os.path.join(self.target, 'var', 'pkl')
         self._Makedirs(varpkl)
 
-        Bot.Bot().varhome = os.path.join(self.target, 'var')
+        Env().varhome = os.path.join(self.target, 'var')
         # Setup predefined classifiers
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
