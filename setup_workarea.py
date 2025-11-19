@@ -524,7 +524,7 @@ class Installer:
                     break
 
     def _ValidateLicense(self):
-        
+        self.products.populate(products_definition_file="/tmp/products.json")
         licensekey = self.products.get_conf_file('license.key')
 
         if not licensekey:
