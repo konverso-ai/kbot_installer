@@ -13,15 +13,15 @@ import socket
 import json
 import re
 
-import Bot
 import classification
 from classification import MLObject
 from common.Product import ProductList, Product
-from common.Config import BotConfig
 from common.Errors import KbotLicenseError
 from dialog.User import User
-import utils
+import utils.base as utils
 from utils.License import License
+from utils.settings.base import Settings
+from utils.env import Env
 
 import deps
 from product import Product as BaseProduct
@@ -136,8 +136,8 @@ class Installer:
 
         self._Link(os.path.join(self.products.kbot().dirname, 'uninstall.sh'), os.path.join(self.target, 'uninstall.sh'))
 
-        self.config = BotConfig(None)
-        self.config.Load(products=self.products)
+        self.config = Settings()
+        self.config.Load()
         self._ReadParameters()
         self._SelectInstallationType()
         self._ValidateLicense()
@@ -163,9 +163,10 @@ class Installer:
 
         # Load the list of the products
 
-        self.config = BotConfig(None)
-        self.config.Load(products=self.products)
-        self.https_port = self.config.Get('https_port')
+        self.products.populate()
+        self.config = Settings()
+        self.config.Load()
+        self.https_port = self.config.GetConfig('https_port')
         self.update = True
         self.silent = silent
 
@@ -278,7 +279,7 @@ class Installer:
                 continue
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
-                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
+                pip_path = os.path.join(Env().binhome, "pip3.sh")
                 os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
 
     def _SetupUI(self):
@@ -324,31 +325,38 @@ class Installer:
         """Read some parameters from kbot.conf"""
         # DB
         if self.db_internal is None:
-            val = self.config.Get('db_internal')
+            val = self.config.GetConfig('db_internal')
             self.db_internal = bool(val is None or val == 'true')
 
-        self.db_host = self.db_host or self.config.Get('db_host') or 'localhost'
-        self.db_port = self.db_port or self.config.Get('db_port') or '5432'
-        self.db_name = self.db_name or self.config.Get('db_name') or 'kbot_db'
-        self.db_user = self.db_user or self.config.Get('db_user') or 'kbot_db_user'
-        self.db_password = self.db_password or utils.Decrypt(self.config.Get('db_password')) or 'kbot_db_pwd'
+        self.db_host = self.db_host or self.config.GetConfig('db_host') or 'localhost'
+        self.db_port = self.db_port or self.config.GetConfig('db_port') or '5432'
+        self.db_name = self.db_name or self.config.GetConfig('db_name') or 'kbot_db'
+        self.db_user = self.db_user or self.config.GetConfig('db_user') or 'kbot_db_user'
+        self.db_password = self.db_password or utils.Decrypt(self.config.GetConfig('db_password')) or 'kbot_db_pwd'
 
-        self.pgbouncer_port = self.config.Get('pgbouncer_port') or '6432'
+        self.pgbouncer_port = self.config.GetConfig('pgbouncer_port') or '6432'
         # Apache
-        self.http_interface = self.config.Get('http_interface') or '*'
-        self.http_port = self.config.Get('http_port')
-        self.https_port = self.config.Get('https_port')
+        self.http_interface = self.config.GetConfig('http_interface') or '*'
+        self.http_port = self.config.GetConfig('http_port')
+        self.https_port = self.config.GetConfig('https_port')
 
-        redis_val = self.config.Get('redis_internal')
+        redis_val = self.config.GetConfig('redis_internal')
         self.redis_internal = bool(redis_val is None or redis_val == 'true')
-        self.redis_host = self.config.Get('redis_host')
-        self.redis_port = self.config.Get('redis_port')
-        self.redis_tls_port = self.config.Get('redis_tls_port')
-        self.redis_db_number = self.config.Get('redis_db_number')
-        self.redis_pwd = self.config.Get('redis_pwd')
-        self.redis_tls_cert_file = self.config.Get('redis_tls_cert_file')
-        self.redis_tls_key_file = self.config.Get('redis_tls_key_file')
-        self.redis_tls_ca_cert_file = self.config.Get('redis_tls_ca_cert_file')
+        self.redis_host = self.config.GetConfig('redis_host')
+        self.redis_port = self.config.GetConfig('redis_port')
+        self.redis_tls_port = self.config.GetConfig('redis_tls_port')
+        self.redis_db_number = self.config.GetConfig('redis_db_number')
+        self.redis_pwd = self.config.GetConfig('redis_pwd')
+        self.redis_tls_cert_file = self.config.GetConfig('redis_tls_cert_file')
+        self.redis_tls_key_file = self.config.GetConfig('redis_tls_key_file')
+        self.redis_tls_ca_cert_file = self.config.GetConfig('redis_tls_ca_cert_file')
+        #if self.basic_installation:
+        print_str = "Following default paramters are in kbot.conf file: DB port %s"%self.db_port
+        if self.http_port:
+            print_str += ", HTTP port %s"%self.http_port
+        if self.https_port:
+            print_str += ", HTTPS port %s"%self.https_port
+        print(print_str)
 
     def _ValidateDatabaseParameters(self):
         """Ask and validate database parameters"""
@@ -468,7 +476,7 @@ class Installer:
 
 
     def _ValidateParameterInKbotConf(self, param, param_name):
-        if not self.config.Get(param):
+        if not self.config.GetConfig(param):
             print("Can't find %s (%s) in kbot.conf" % (param, param_name))
             sys.exit(1)
 
@@ -526,7 +534,7 @@ class Installer:
                     break
 
     def _ValidateLicense(self):
-        
+        self.products.populate(products_definition_file="/tmp/products.json")
         licensekey = self.products.get_conf_file('license.key')
 
         if not licensekey:
@@ -559,9 +567,9 @@ class Installer:
                 sys.exit(1)
 
     def _ValidateHostname(self):
-        hostname = self.config.Get('hostname')
-        kbot_external_root_url = self.config.Get('kbot_external_root_url')
         default_hostname = socket.gethostname() + ".konverso.ai"
+        hostname = self.config.GetConfig('hostname')
+        kbot_external_root_url = self.config.GetConfig('kbot_external_root_url')
 
         while True:
             if self.hostname:
@@ -657,8 +665,8 @@ class Installer:
         return
 
         kbotconf = os.path.join(self.target, 'conf', 'kbot.conf')
-        products_value = self.config.GetProducts(name)
-        saved_value = self.config.Get(name)
+        products_value = self.config.GetConfigProducts(name)
+        saved_value = self.config.GetConfig(name)
         value = str(value or '')
         if name.endswith('_password'):
             products_value = utils.Decrypt(products_value)
@@ -814,7 +822,7 @@ class Installer:
         varpkl = os.path.join(self.target, 'var', 'pkl')
         self._Makedirs(varpkl)
 
-        Bot.Bot().varhome = os.path.join(self.target, 'var')
+        Env().varhome = os.path.join(self.target, 'var')
         # Setup predefined classifiers
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
