@@ -70,6 +70,7 @@ class Installer:
         self.db_user = None
         self.db_password = None
         self.pg_ctl = None
+        self.pg_psql = None
         self.pgbouncer_port = None
 
         self.kbot_external_root_url = None
@@ -149,6 +150,8 @@ class Installer:
         self._ValidateHostname()
         self._UpdatePythonPackages()
 
+        self._SetDatabaseVariables()
+
         if self.db_internal:
             self._SetupDatabase()
         else:
@@ -170,6 +173,7 @@ class Installer:
         self.update = True
         self.silent = silent
 
+        self._SetDatabaseVariables()
         self._SetupProducts(update=True)
 
         self._SetupBin()
@@ -376,7 +380,6 @@ class Installer:
                 self.db_password = input("Enter a password for database user [%s]: "%self.db_password).strip() or self.db_password
 
                 if not self.db_internal:
-                    pg_psql = os.path.join(os.environ['PG_DIR'], 'bin', 'psql')
                     if os.system("export PGPASSWORD='%s';%s -h %s -p %s -d %s -U %s -c 'select 1' > /dev/null"\
                             %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user)) == 0:
                         break
@@ -693,10 +696,6 @@ class Installer:
                     fd.write("%s = %s\n" % (name, value))
 
     def _SetupExternalDatabase(self):
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
-
         # load database schema definition
         print("Loading tables to external database...")
         sys.stdout.flush()
@@ -704,40 +703,40 @@ class Installer:
             sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system("export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -f %s"\
-                             %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
+                             %(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
                     print("Error: can't load tables! Aborting...")
                     sys.exit(1)
 
-    def _SetupDatabase(self):
 
+    def _SetDatabaseVariables(self):
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
-        pg_ctl = os.path.join(pg_bin, 'pg_ctl')
-        self.pg_ctl = pg_ctl
-        pg_data = os.path.join(self.target, 'var', 'db')
+        self.pg_ctl = os.path.join(pg_bin, 'pg_ctl')
+        self.pg_psql = os.path.join(pg_bin, 'psql')
 
+    def _SetupDatabase(self):
+        pg_data = os.path.join(self.target, 'var', 'db')
 
         if not os.path.exists(os.path.join(pg_data, 'PG_VERSION')):
             print("\nInstalling PostgreSQL server...")
             sys.stdout.flush()
             try:
-                result = self._CommandOutput([pg_ctl, '-D', pg_data, '-o', '"-E UTF8"', '-o', '"--locale=en_US.utf8"', 'initdb'])
+                result = self._CommandOutput([self.pg_ctl, '-D', pg_data, '-o', '"-E UTF8"', '-o', '"--locale=en_US.utf8"', 'initdb'])
             except subprocess.CalledProcessError:
                 print("Cannot init database! Aborting...")
                 sys.exit(1)
 
         try:
-            result = self._CommandOutput([pg_ctl, 'status', '--silent', '-D', pg_data])
+            result = self._CommandOutput([self.pg_ctl, 'status', '--silent', '-D', pg_data])
         except subprocess.CalledProcessError:
             # DB is not up, try to start it
             print("Starting PostgreSQL server...")
             sys.stdout.flush()
-            os.system("%s start -l %s/logs/postgres.log -D %s --silent -w -o '-p %s'" % (pg_ctl, self.target, pg_data, self.db_port))
+            os.system("%s start -l %s/logs/postgres.log -D %s --silent -w -o '-p %s'" % (self.pg_ctl, self.target, pg_data, self.db_port))
 
-        #pg_status = os.system('%s status --silent -D %s' % (pg_ctl, pg_data))
+        #pg_status = os.system('%s status --silent -D %s' % (self.pg_ctl, pg_data))
         try:
-            result = self._CommandOutput([pg_ctl, 'status', '--silent', '-D', pg_data])
+            result = self._CommandOutput([self.pg_ctl, 'status', '--silent', '-D', pg_data])
         except subprocess.CalledProcessError:
             #if pg_status != 0:
             print(result)
@@ -745,24 +744,24 @@ class Installer:
             sys.exit(1)
 
         # create PostgreSQL user if not exists
-        pg_user_exists = self._CommandOutput([pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
+        pg_user_exists = self._CommandOutput([self.pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
                                               '-c', "SELECT count(*) FROM pg_user WHERE usename = '%s'"%self.db_user])
         if pg_user_exists == "0":
             print("Creating PostgreSQL user %s..." % self.db_user)
             sys.stdout.flush()
-            os.system('%s postgres -q -p %s -c "CREATE USER %s PASSWORD \'%s\'"'%(pg_psql, self.db_port, self.db_user, self.db_password))
+            os.system('%s postgres -q -p %s -c "CREATE USER %s PASSWORD \'%s\'"'%(self.pg_psql, self.db_port, self.db_user, self.db_password))
         else:
             print("PostgreSQL user %s already exists."%self.db_user)
 
         # create PostgreSQL database if not exists
-        pg_db_exists = self._CommandOutput([pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
+        pg_db_exists = self._CommandOutput([self.pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
                                             '-c', "SELECT count(*) FROM pg_database WHERE datname = '%s'" % self.db_name])
         if pg_db_exists == "0":
             print("Creating PostgreSQL database %s..." % self.db_name)
             sys.stdout.flush()
-            os.system('%s postgres -q -p %s -c "CREATE DATABASE %s ENCODING \'UTF8\' OWNER %s"'%(pg_psql, self.db_port, self.db_name, self.db_user))
-            os.system('%s -q -p %s %s -c "ALTER SCHEMA public OWNER TO %s"'%(pg_psql, self.db_port, self.db_name, self.db_user))
-            os.system('%s -q -p %s %s -c "ALTER SYSTEM SET max_connections TO \'512\'"'%(pg_psql, self.db_port, self.db_name))
+            os.system('%s postgres -q -p %s -c "CREATE DATABASE %s ENCODING \'UTF8\' OWNER %s"'%(self.pg_psql, self.db_port, self.db_name, self.db_user))
+            os.system('%s -q -p %s %s -c "ALTER SCHEMA public OWNER TO %s"'%(self.pg_psql, self.db_port, self.db_name, self.db_user))
+            os.system('%s -q -p %s %s -c "ALTER SYSTEM SET max_connections TO \'512\'"'%(self.pg_psql, self.db_port, self.db_name))
         else:
             print("PostgreSQL database %s already exists." % self.db_name)
 
@@ -775,32 +774,26 @@ class Installer:
 
     def _InitializeDatabaseFromDump(self):
         print("=> Will initialize database from a dump")
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
 
         cmd = '%s -v ON_ERROR_STOP=1 %s -U %s -h %s -p %s -q -c "DROP OWNED BY %s"'
-        cmd = cmd % (pg_psql, self.db_name, "konverso", "localhost", self.db_port, self.db_user)
+        cmd = cmd % (self.pg_psql, self.db_name, "konverso", "localhost", self.db_port, self.db_user)
         os.system(cmd)
 
         cmd = '%s -v ON_ERROR_STOP=1 %s -U %s -h %s -p %s -q -f %s  > /dev/null'
-        cmd = cmd % (pg_psql, self.db_name, self.db_user, "localhost", self.db_port, self.db_dump)
+        cmd = cmd % (self.pg_psql, self.db_name, self.db_user, "localhost", self.db_port, self.db_dump)
         os.system(cmd)
         print("=> PostgreSQL dump loaded")
 
 
     def _InitializeDatabaseFromScratch(self):
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
         print("=> Initializing database tables...")
         for product in reversed(self.products):
             sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system('%s -q -v ON_ERROR_STOP=1 -p %s %s -U %s -f %s'\
-                             %(pg_psql, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
+                             %(self.pg_psql, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
                     print("Error: can't init DB schema! Aborting...")
-                    os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                    os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                     sys.exit(1)
 
         sys.stdout.flush()
@@ -812,9 +805,6 @@ class Installer:
 
         Env().varhome = os.path.join(self.target, 'var')
         # Setup predefined classifiers
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
         for fname in os.listdir(varpkl):
             name = os.path.basename(fname).split('.')[0]
             obj = MLObject(name)
@@ -825,12 +815,12 @@ class Installer:
                            on conflict (variable) do update set value=EXCLUDED.value
                         """%(variable, utils.GetStringTime(datetime.datetime.now()))
                 if self.db_internal:
-                    if os.system('%s -q -p %s %s -c "%s"'%(pg_psql, self.db_port, self.db_name, query)) != 0:
+                    if os.system('%s -q -p %s %s -c "%s"'%(self.pg_psql, self.db_port, self.db_name, query)) != 0:
                         print("Error: can't save predefined classifiers! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                         sys.exit(1)
                 elif os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
-                               """%(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
+                               """%(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
                     print("Error: can't save predefined classifiers! Aborting...")
                     sys.exit(1)
 
@@ -839,7 +829,7 @@ class Installer:
             sys.stdout.flush()
             if os.system('%s/bin/kbot.sh load'%self.target) != 0:
                 print("Error during loading! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                 sys.exit(1)
 
             if self.admin_password:
@@ -847,13 +837,13 @@ class Installer:
                 _db_request += "WHERE user_id=(SELECT users.user_id FROM users WHERE users.user_name=\'admin\')"
                 if self.db_internal:
                     if os.system('%s -q -p %s %s -U %s -c "%s"'\
-                                 %(pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
+                                 %(self.pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
                         print("Error: can't setup admin password! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                         sys.exit(1)
                 # setup admin password
                 elif os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
-                                 %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
+                                 %(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
                     print("Error: can't setup admin password! Aborting...")
                     sys.exit(1)
 
@@ -861,7 +851,7 @@ class Installer:
             print("Learning models...")
             if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
                 print("Error during learning! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                 sys.exit(1)
 
     def _StartInstallation(self):
