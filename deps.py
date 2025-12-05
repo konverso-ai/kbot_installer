@@ -99,4 +99,3 @@ if __name__ == "__main__":
         installer_path=_result.installer or "/home/konverso/dev/installer",
         dependency_file_path=_result.workarea or "/home/konverso/dev/work",
     )
-

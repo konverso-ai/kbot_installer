@@ -226,18 +226,6 @@ class Installer:
         dirname = os.path.join(self.target, 'core')
         self._Makedirs(dirname)
         self._LinkProductFilesToDir('core/python', os.path.join(dirname, 'python'), exts=('.py', '.so'))
-        for name in ('RunBot', 'Learn', 'Load'):
-            for ext in ('', '.py'):
-                filename = '%s%s'%(name, ext)
-                src = os.path.join(self.products.kbot().dirname, 'core', 'python', filename)
-                dst = os.path.join(self.target, 'core', 'python', filename)
-
-                if os.path.exists(dst):
-                    os.unlink(dst)
-                if os.path.exists(src):
-                    
-                    self._Copy(src, dst)
-                    os.chmod(dst, 0o775)
 
     def _SetupRest(self):
         for dname in ('api', 'rest_addons'):
