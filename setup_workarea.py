@@ -173,7 +173,7 @@ class Installer:
         self.update = True
         self.silent = silent
 
-        self._SetDatabaseVariables()
+        #self._SetDatabaseVariables()
         self._SetupProducts(update=True)
 
         self._SetupBin()
