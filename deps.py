@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-w",
         "--workarea",
-        help="Default work-area path",
+        help="Default work-area path, default to /home/konverso/dev/work",
         dest="workarea",
         required=False,
     )
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     )
 
     _result = parser.parse_args()
-    build_dependency_file(
+    build_work_area_dependency_file(
         product_name=_result.product,
         installer_path=_result.installer or "/home/konverso/dev/installer",
         dependency_file_path=_result.workarea or "/home/konverso/dev/work",
