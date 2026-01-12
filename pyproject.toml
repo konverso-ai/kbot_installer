@@ -20,3 +20,9 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 [tool.hatch.build.targets.wheel.sources]
 "core/python" = "."
 "rest" = "."
+
+# [[tool.uv.index]]
+# name = "konverso-nexus"
+# url = "https://nexus.konverso.ai/repository/python_whl/simple/"
+# publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+
