@@ -1,6 +1,6 @@
 [project]
 name = "kbot-installer"
-version = "2025.03-dev"
+version = ""
 description = "Add your description here"
 readme = "README.md"
 authors = [
