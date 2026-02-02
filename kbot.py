@@ -45,6 +45,9 @@ def get_nexus():
     """
     Returns a new instance of the Nexus repository, or None if not configured
     """
+
+    # Nexus is defined as a global variable inside the main arg parser.
+    #pylint: disable=possibly-used-before-assignment
     return nexus
 
 
@@ -57,10 +60,9 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
 
     if not os.path.exists(installation_path):
         os.mkdir(installation_path)
-    else:
-        if not os.path.isdir(installation_path):
-            msg = f"Installation path {installation_path} is not a directory !"
-            raise RuntimeError(msg)
+    elif not os.path.isdir(installation_path):
+        msg = f"Installation path {installation_path} is not a directory !"
+        raise RuntimeError(msg)
 
     if "nexus" in uses:
         nexus_repo = get_nexus()
@@ -302,7 +304,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
     nexus_file = None
     if "nexus" in uses and nexus_files:
         nexus_file = _get_latest_available_nexus_file(nexus_files, product_name, version)
-        
+
         if not nexus_file:
             product_nexus_files = nexus_files.Filter(contains=f"/{product_name}/")
 
@@ -377,8 +379,10 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
             return
 
         parents = _get_xml_product_description(product_name).get("parents")
-        for parent in parents:
-            recurse_product_download(nexus_files, parent, version, uses=uses)
+
+        if recurse:
+            for parent in parents:
+                recurse_product_download(nexus_files, parent, version, uses=uses)
         return
 
     #
@@ -387,7 +391,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
     # Case of product not existing in Nexus repository - try GitHub then Bitbucket
     if not nexus_file:
         print(f"Product {product_name} not found in Nexus. Trying GitHub...")
-        
+
         success = False
         if "github" in uses:
             # Try GitHub first
@@ -397,7 +401,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
             if gh_username and gh_password:
                 github_url = f"https://{gh_username}:{gh_password}@github.com/konverso-ai/{product_name}.git"
                 print(f"Cloning from GitHub: https://github.com/konverso-ai/{product_name}.git")
-            
+
                 response = os.system(f"git clone {github_url}")
                 if response == 0:
                     print(f"Successfully cloned from GitHub")
@@ -408,19 +412,19 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
             else:
                 print("GitHub credentials not provided. Trying Bitbucket...")
                 success = False
-        
+
         # Try Bitbucket if GitHub failed or no credentials
         if "bitbucket" in uses and not success:
             git_username = os.environ.get("GIT_USERNAME")
             git_password = os.environ.get("GIT_PASSWORD")
-            
+
             if git_username and git_password:
                 bitbucket_url = f"https://{git_username}:{git_password}@bitbucket.org/konversoai/{product_name}.git"
                 print(f"Trying Bitbucket (authenticated): https://bitbucket.org/konversoai/{product_name}.git")
             else:
                 bitbucket_url = f"https://bitbucket.org/konversoai/{product_name}.git"
                 print(f"Trying Bitbucket (public): https://bitbucket.org/konversoai/{product_name}.git")
-            
+
             response = os.system(f"git clone {bitbucket_url}")
             if response == 0:
                 print(f"Successfully cloned from Bitbucket")
@@ -431,7 +435,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
                 print(f"  - GitHub: Set GH_USERNAME and GH_PASSWORD environment variables")
                 print(f"  - Bitbucket: Set GIT_USERNAME and GIT_PASSWORD environment variables")
                 return
-        
+
         # If we successfully cloned from either GitHub or Bitbucket
         if success:
             os.rename(product_name, f"{installation_path}/{product_name}")
@@ -448,13 +452,11 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
 
             print(f"Product {product_name} retrieved from GIT")
 
-            if not recurse:
-                return
-
-            # Kick of the recursion on all required products before exiting.
-            parents = _get_xml_product_description(product_name).get("parents")
-            for parent in parents:
-                recurse_product_download(nexus_files, parent, version, uses=uses)
+            if recurse and nexus_files:
+                # Kick of the recursion on all required products before exiting.
+                parents = _get_xml_product_description(product_name).get("parents")
+                for parent in parents:
+                    recurse_product_download(nexus_files, parent, version, uses=uses)
 
             return
 
@@ -475,6 +477,8 @@ def _nexus_download_and_install(nexus_file, product_name):
     Returns the description.json dictionnary of the loaded file
     """
 
+    global backup
+
     print(f"    Downloading product {product_name}  using Nexus file: {nexus_file}")
     start = time.time()
     nexus_file.download(f"/tmp/{product_name}.tar.gz")
@@ -482,6 +486,7 @@ def _nexus_download_and_install(nexus_file, product_name):
     print(f"         => completed in {seconds} seconds")
 
     # Untar / Unzip the file
+    # Backup is another global variable
     if not backup or backup == "none":
         os.system(f"rm -rf {installation_path}/{product_name}")
     elif backup == "folder":
@@ -573,7 +578,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
         if products and not recurse and product_name not in products:
             continue
-            
+
         # print(f"Checking {product_name}")
         xml_product_description = _get_xml_product_description(product_name)
         if not xml_product_description:
@@ -689,7 +694,6 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         else:
             print("    Version file not found in Nexus")
 
-        
 
 
 def usage():
@@ -773,7 +777,7 @@ if __name__ == "__main__":
             dest="git",
             required=False,
         )
-        
+
         parser.add_argument(
             "-gh",
             "--github",
@@ -901,13 +905,13 @@ if __name__ == "__main__":
             nexus = NexusRepository(host, user, password)
         else:
             print("Nexus repository details not provided. Will try GitHub/Bitbucket fallback.")
-            
+
             # Check if at least one credential source is provided
             gh_username = os.environ.get("GH_USERNAME")
             gh_password = os.environ.get("GH_PASSWORD")
             git_username = os.environ.get("GIT_USERNAME")
             git_password = os.environ.get("GIT_PASSWORD")
-            
+
             if not (gh_username and gh_password) and not (git_username and git_password):
                 print("ERROR: No credentials provided!")
                 print("Please provide one of the following:")
