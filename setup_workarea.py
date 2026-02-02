@@ -98,7 +98,10 @@ class Installer:
 
             if self.target:
                 if os.path.exists(self.target):
-                    print(f"Directory '{self.target}' already exists")
+                    print(f"Error: Directory '{self.target}' already exists")
+                    print("To cleanup existing folder and start fresh, we recommend calling:")
+                    print(f"{self.target}/bin/uninstall.sh")
+                    return
                 else:
                     break
         if not os.path.exists(self.target):
@@ -1001,7 +1004,7 @@ class Installer:
                             for pname in product.parents:
                                 if pname not in [p.name for p in self.products]:
                                     self._GetProductPath(pname)
-                            break
+                        break
                     else:
                         print("description.xml doesn't exist in %s" % path)
                 else:

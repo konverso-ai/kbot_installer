@@ -458,16 +458,15 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
 
             return
 
-    print(nexus_file)
+    if "nexus" in uses:
+        # We have a good 'latest' nexus file. Use it:
+        json_product_description = _nexus_download_and_install(nexus_file, product_name)
 
     if not recurse:
         return
 
-    if "nexus" in uses:
-        # We have a good 'latest' nexus file. Use it:
-        json_product_description = _nexus_download_and_install(nexus_file, product_name)
-        for parent in json_product_description.get("parents"):
-            recurse_product_download(nexus_files, parent, version, uses=uses)
+    for parent in json_product_description.get("parents"):
+        recurse_product_download(nexus_files, parent, version, uses=uses)
 
 
 def _nexus_download_and_install(nexus_file, product_name):
