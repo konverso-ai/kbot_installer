@@ -10,23 +10,28 @@ import time
 import datetime
 import getpass
 import socket
+import json
 import re
 
-import Bot
-#import classification
+import classification
 from classification import MLObject
 from common.Product import ProductList, Product
-from common.Config import BotConfig
 from common.Errors import KbotLicenseError
 from dialog.User import User
-import utils
+import utils.base as utils
 from utils.License import License
+from utils.settings.base import Settings
+from utils.env import Env
 
+import deps
+from product import Product as BaseProduct
 
 class Installer:
     """Installer"""
 
-    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None, hostname=None, no_load=False, no_learn=False):
+    #pylint: disable=too-many-positional-arguments
+    def __init__(self, product=None, path=None, secret=None, default=None, workarea=None, license=None,
+                 hostname=None, no_load=False, no_learn=False, no_password=False, db_dump=None):
         """
             product: Optional top level product name. If present, do not ask for the choice of the top level product
             path: Optional path to lookup the products. If defined, do not prompt for the product paths
@@ -39,7 +44,10 @@ class Installer:
         """
         self.path = path or os.path.realpath(os.path.join(os.environ["KBOT_HOME"], ".."))
         self.product = product
-        self.secret = secret
+        if no_password and not secret:
+            self.secret = "lskjf*22SDFSLKsdf"
+        else:
+            self.secret = secret
         self.default = default
         self.workarea = workarea
         self.license = license
@@ -54,6 +62,7 @@ class Installer:
 
         self.installer_log_file = os.path.join('/', 'tmp', 'install.log')
 
+        self.db_dump = db_dump
         self.db_internal = None
         self.db_host = None
         self.db_port = None
@@ -61,6 +70,7 @@ class Installer:
         self.db_user = None
         self.db_password = None
         self.pg_ctl = None
+        self.pg_psql = None
         self.pgbouncer_port = None
 
         self.kbot_external_root_url = None
@@ -77,7 +87,6 @@ class Installer:
         self.redis_tls_cert_file = None
         self.redis_tls_key_file = None
         self.redis_tls_ca_cert_file = None
-
         self.cs_ports_offset = None
         self.admin_password = None
 
@@ -86,10 +95,23 @@ class Installer:
 
         self.cachedir = None
 
+    def ShowTree(self, product):
+        installer = self.path
+        work = self.workarea
+
+        # Building the product dependency files.
+        products = deps.get_dependency(product, installer, work)
+        for prod in products:
+            print("{name}\tversion {version}".format(name=prod.get("name"), version=prod.get("version")))
+
     def Run(self):
-        """Run installer"""
+        """Run the installer
+           Create the work area
+        """
         self._StartInstallation()
         self._ReadLicenseAgreement()
+
+        # Build the products
         self._GetProducts()
         self.products.sort_by_type()
         while True:
@@ -98,14 +120,13 @@ class Installer:
 
             if self.target:
                 if os.path.exists(self.target):
-                    print(f"Directory '{self.target}' already exists")
-                else:
-                    break
+                    print(f"ERROR: Directory '{self.target}' already exists!")
+                    sys.exit(1)
+                break
         if not os.path.exists(self.target):
             os.makedirs(self.target)
         self._SetupProducts()
         self._SetupBin()
-        self._SetupConf()
         self._SetupCore()
         self._SetupRest()
         self._SetupLogs()
@@ -116,8 +137,8 @@ class Installer:
 
         self._Link(os.path.join(self.products.kbot().dirname, 'uninstall.sh'), os.path.join(self.target, 'uninstall.sh'))
 
-        self.config = BotConfig(None)
-        self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
+        self.config = Settings()
+        self.config.Load()
         self._ReadParameters()
         self._SelectInstallationType()
         self._ValidateLicense()
@@ -127,8 +148,10 @@ class Installer:
         self._ValidateRedisParameters()
         self._ValidateHttpPorts()
         self._ValidateHostname()
-        self._SetupVariables()
         self._UpdatePythonPackages()
+
+        self._SetDatabaseVariables()
+
         if self.db_internal:
             self._SetupDatabase()
         else:
@@ -138,23 +161,26 @@ class Installer:
         self._SetupPythonDoc()
 
     def Update(self, silent=False):
-        """Update workarea"""
+        """Update an existing workarea"""
         self.target = os.environ['KBOT_HOME']
+
+        # Load the list of the products
+
         self.products.populate()
-        self.config = BotConfig(None)
-        self.config.Load(os.path.join(self.target, 'conf', 'kbot.conf'), self.products)
-        self.https_port = self.config.Get('https_port')
+        self.config = Settings()
+        self.config.Load()
+        self.https_port = self.config.GetConfig('https_port')
         self.update = True
         self.silent = silent
 
-        self._SetupProducts()
+        #self._SetDatabaseVariables()
+        self._SetupProducts(update=True)
+
         self._SetupBin()
-        self._SetupConf()
         self._SetupCore()
         self._SetupRest()
         self._SetupUI()
         self._SetupTests()
-        self._CopyCertificates()
         self._CopyRedisCertificates()
         self._SetupPythonDoc()
         self._UpdatePythonPackages()
@@ -182,9 +208,10 @@ class Installer:
 
         self._LinkProductFilesToDir('bin', os.path.join(self.target, 'bin'))
 
+        # We want the RC script to be a plain file since we are going to recreate it
         rcfilename = os.path.join(self.target, 'bin', 'rc', 'kbot')
-        # FIXME remove bin/rc/kbot symlink
-        if os.path.exists(rcfilename):
+        # Remove bin/rc/kbot symlink
+        if os.path.exists(rcfilename) or os.path.islink(rcfilename):
             os.unlink(rcfilename)
 
         # copy kbot file to work area
@@ -199,53 +226,10 @@ class Installer:
         os.system('sed -i "s/__KBOT_HOME__/%s/" %s'%(os.path.abspath(os.path.expanduser(self.target)).replace('/', '\/'), rcfilename))
         os.system('sed -i "s/__KBOT_USER__/%s/" %s'%(current_user, rcfilename))
 
-    def _SetupConf(self):
-        dirname = os.path.join(self.target, 'conf')
-        self._Makedirs(dirname)
-
-        #for name in ('search_contexts.conf',):
-        #    fullname = os.path.join(dirname, name)
-        #    for src in self.products.get_files('conf', name):
-        #        if os.path.exists(src):
-        #            self._Copy(src, fullname)
-        #            break
-        #    else:
-        #        print("Doesn't find %s" % name)
-
-        kbotconf = os.path.join(dirname, 'kbot.conf')
-        if not os.path.exists(kbotconf):
-            with open(kbotconf, 'w+', encoding='utf8') as fd:
-                fd.write("# Kbot configuration file.")
-                fd.write("\n#If possible, prefere saving in Site or Customer level configuration file")
-
-        for name in ('classifiers', 'csvs', 'tests', 'scripts', 'clusters', 'json',
-                     'automations', 'push_campaigns', 'devops-tasks',
-                     'tools', 'tool_groups', 'agents', 'assistants', 'connections'): # 'modsecurity'
-            self._LinkProductFilesToDir(os.path.join('conf', name), os.path.join(dirname, name))
-
-        for name in ('categorization_tests.conf', 'tests.conf', 'editable_files*.json', 'km_*.conf',
-                     'actions_ordering.conf', 'roles_custom.conf', 'tenants.json',
-                     'application_assistant.conf'):
-            for fullname in self.products.get_files('conf', name):
-                self._Link(fullname, os.path.join(dirname, os.path.basename(fullname)))
-
-        if self.update:
-            self._ValidateLinksInDir(dirname)
-
     def _SetupCore(self):
         dirname = os.path.join(self.target, 'core')
         self._Makedirs(dirname)
         self._LinkProductFilesToDir('core/python', os.path.join(dirname, 'python'), exts=('.py', '.so'))
-        for name in ('RunBot', 'Learn', 'Load'):
-            for ext in ('', '.py'):
-                filename = '%s%s'%(name, ext)
-                src = os.path.join(self.products.kbot().dirname, 'core', 'python', filename)
-                dst = os.path.join(self.target, 'core', 'python', filename)
-                if os.path.exists(dst):
-                    os.unlink(dst)
-                if os.path.exists(src):
-                    self._Copy(src, dst)
-                    os.chmod(dst, 0o775)
 
     def _SetupRest(self):
         for dname in ('api', 'rest_addons'):
@@ -257,13 +241,28 @@ class Installer:
         dirname = os.path.join(self.target, 'logs', 'httpd')
         self._Makedirs(dirname)
 
-    def _SetupProducts(self):
-        if not self.update:
-            products = os.path.join(self.target, 'products')
-            self._Makedirs(products)
-            for p in self.products:
-                self._LinkAbs(p.dirname, os.path.join(products, p.name))
-                p.dirname = os.path.join(self.target, 'products', p.name)
+    def _SetupProducts(self, update=False):
+        """Generate a json file with the tree / list of the products
+
+        Args:
+            update: Indicate if we are called on an existing (True) or non existing (False) work area
+        """
+        installer = self.path
+        work = self.workarea
+
+        if update and not self.product:
+            product_path = os.path.join(work, "var", "products.json")
+            with open(product_path, "r", encoding='utf-8') as fd:
+                products = json.load(fd)
+                self.product = products[0].get("name")
+
+        # Building the product dependency files.
+        if self.product:
+            deps.build_work_area_dependency_file(self.product, installer, work)
+
+        if update or not len(self.products):
+            # at this point we are ready to populate things !
+            self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
     def _UpdatePythonPackages(self):
         """ Upate products  python packages using requirements.txt file"""
@@ -272,7 +271,7 @@ class Installer:
                 continue
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
-                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
+                pip_path = os.path.join(Env().binhome, "pip3.sh")
                 os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
 
     def _SetupUI(self):
@@ -302,10 +301,9 @@ class Installer:
         if os.path.exists(os.path.join(self.products.kbot().dirname, 'tests')):
             self._Makedirs(dirname)
             self._LinkProductFilesToDir('tests', dirname)
-        else:
-            if self.update and os.path.exists(dirname):
-                if self.silent or self._AskYN("Not used directory 'tests' (%s). Remove it? [yes]" % dirname):
-                    shutil.rmtree(dirname)
+        elif self.update and os.path.exists(dirname):
+            if self.silent or self._AskYN("Not used directory 'tests' (%s). Remove it? [yes]" % dirname):
+                shutil.rmtree(dirname)
 
     def _PortInUse(self, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -319,31 +317,31 @@ class Installer:
         """Read some parameters from kbot.conf"""
         # DB
         if self.db_internal is None:
-            val = self.config.Get('db_internal')
+            val = self.config.GetConfig('db_internal')
             self.db_internal = bool(val is None or val == 'true')
 
-        self.db_host = self.db_host or self.config.Get('db_host') or 'localhost'
-        self.db_port = self.db_port or self.config.Get('db_port') or '5432'
-        self.db_name = self.db_name or self.config.Get('db_name') or 'kbot_db'
-        self.db_user = self.db_user or self.config.Get('db_user') or 'kbot_db_user'
-        self.db_password = self.db_password or utils.Decrypt(self.config.Get('db_password')) or 'kbot_db_pwd'
+        self.db_host = self.db_host or self.config.GetConfig('db_host') or 'localhost'
+        self.db_port = self.db_port or self.config.GetConfig('db_port') or '5432'
+        self.db_name = self.db_name or self.config.GetConfig('db_name') or 'kbot_db'
+        self.db_user = self.db_user or self.config.GetConfig('db_user') or 'kbot_db_user'
+        self.db_password = self.db_password or utils.Decrypt(self.config.GetConfig('db_password')) or 'kbot_db_pwd'
 
-        self.pgbouncer_port = self.config.Get('pgbouncer_port') or '6432'
+        self.pgbouncer_port = self.config.GetConfig('pgbouncer_port') or '6432'
         # Apache
-        self.http_interface = self.config.Get('http_interface') or '*'
-        self.http_port = self.config.Get('http_port')
-        self.https_port = self.config.Get('https_port')
+        self.http_interface = self.config.GetConfig('http_interface') or '*'
+        self.http_port = self.config.GetConfig('http_port')
+        self.https_port = self.config.GetConfig('https_port')
 
-        redis_val = self.config.Get('redis_internal')
+        redis_val = self.config.GetConfig('redis_internal')
         self.redis_internal = bool(redis_val is None or redis_val == 'true')
-        self.redis_host = self.config.Get('redis_host')
-        self.redis_port = self.config.Get('redis_port')
-        self.redis_tls_port = self.config.Get('redis_tls_port')
-        self.redis_db_number = self.config.Get('redis_db_number')
-        self.redis_pwd = self.config.Get('redis_pwd')
-        self.redis_tls_cert_file = self.config.Get('redis_tls_cert_file')
-        self.redis_tls_key_file = self.config.Get('redis_tls_key_file')
-        self.redis_tls_ca_cert_file = self.config.Get('redis_tls_ca_cert_file')
+        self.redis_host = self.config.GetConfig('redis_host')
+        self.redis_port = self.config.GetConfig('redis_port')
+        self.redis_tls_port = self.config.GetConfig('redis_tls_port')
+        self.redis_db_number = self.config.GetConfig('redis_db_number')
+        self.redis_pwd = self.config.GetConfig('redis_pwd')
+        self.redis_tls_cert_file = self.config.GetConfig('redis_tls_cert_file')
+        self.redis_tls_key_file = self.config.GetConfig('redis_tls_key_file')
+        self.redis_tls_ca_cert_file = self.config.GetConfig('redis_tls_ca_cert_file')
         #if self.basic_installation:
         print_str = "Following default paramters are in kbot.conf file: DB port %s"%self.db_port
         if self.http_port:
@@ -382,7 +380,6 @@ class Installer:
                 self.db_password = input("Enter a password for database user [%s]: "%self.db_password).strip() or self.db_password
 
                 if not self.db_internal:
-                    pg_psql = os.path.join(os.environ['PG_DIR'], 'bin', 'psql')
                     if os.system("export PGPASSWORD='%s';%s -h %s -p %s -d %s -U %s -c 'select 1' > /dev/null"\
                             %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user)) == 0:
                         break
@@ -470,7 +467,7 @@ class Installer:
 
 
     def _ValidateParameterInKbotConf(self, param, param_name):
-        if not self.config.Get(param):
+        if not self.config.GetConfig(param):
             print("Can't find %s (%s) in kbot.conf" % (param, param_name))
             sys.exit(1)
 
@@ -528,44 +525,22 @@ class Installer:
                     break
 
     def _ValidateLicense(self):
-        licensekey = os.path.join(self.target, 'license.key')
+        self.products.populate(products_definition_file="/tmp/products.json")
+        licensekey = self.products.get_conf_file('license.key')
+
+        if not licensekey:
+            print("ERROR: Missing license file. Add it in one of your product to path conf/license.key")
+            sys.exit(1)
+
         setup_license = True
-        if not os.path.exists(licensekey):
-            for fname in self.products.get_files('', 'license.key'):
-                if os.path.exists(fname):
-                    licensekey = fname
-                    break
         if os.path.exists(licensekey):
             try:
                 License(licensekey).Validate()
-                self._Link(licensekey, os.path.join(self.target, 'license.key'))
+                self._Link(licensekey, os.path.join(self.target, 'var', 'license.key'))
                 setup_license = False
             except KbotLicenseError as e:
-                print("Current license file %s is not valid: %s" % (licensekey, e))
-
-        if setup_license:
-            while True:
-                newlicense = os.path.expanduser(input("Please provide the path to your license.key: ").strip())
-                if newlicense:
-                    if os.path.exists(newlicense):
-                        if os.path.isdir(newlicense):
-                            newlicense = os.path.join(newlicense, 'license.key')
-                        if os.path.isfile(newlicense):
-                            try:
-                                License(newlicense).Validate()
-                                print("%s is a valid license file, thank you."%newlicense)
-                                print("I'll copy it into %s" % licensekey)
-                                sys.stdout.flush()
-                                if os.path.exists(licensekey):
-                                    os.unlink(licensekey)
-                                self._Copy(newlicense, licensekey)
-                                break
-                            except KbotLicenseError as e:
-                                print("%s is not a valid license file: %s" % (newlicense, e))
-                        else:
-                            print("%s is not a file" % newlicense)
-                    else:
-                        print("%s does not exists" % newlicense)
+                print("ERROR: Invalid license file", licensekey)
+                sys.exit(1)
 
     def _ReadLicenseAgreement(self):
         if self.license:
@@ -583,24 +558,29 @@ class Installer:
                 sys.exit(1)
 
     def _ValidateHostname(self):
-        hostname = self.config.Get('hostname')
-        kbot_external_root_url = self.config.Get('kbot_external_root_url')
+        default_hostname = socket.gethostname() + ".konverso.ai"
+        hostname = self.config.GetConfig('hostname')
+        kbot_external_root_url = self.config.GetConfig('kbot_external_root_url')
 
         while True:
             if self.hostname:
                 answer = self.hostname
-            elif hostname.strip():
+            elif hostname and hostname.strip():
                 answer = hostname.strip()
             else:
-                answer = input("Specify the current host name: ").strip()
+                # Make a default proposal:
+                default_hostname = socket.gethostname() + ".konverso.ai"
+                answer = input(f"Specify the current host name [{default_hostname}]: ").strip()
+
+            if answer:
+                self.hostname = answer
+                break
 
             if not answer and hostname:
                 self.hostname = hostname
                 break
 
-            if answer:
-                self.hostname = answer
-                break
+            self.hostname = default_hostname
 
         while True:
             if not kbot_external_root_url or kbot_external_root_url == 'https://server.domain.com':
@@ -642,56 +622,6 @@ class Installer:
             else:
                 self.https_port = None
 
-    def _SetupVariables(self):
-        self._SaveVariable('hostname', self.hostname)
-        self._SaveVariable('kbot_external_root_url', self.kbot_external_root_url)
-
-        # save database parameters
-        self._SaveVariable('db_internal', str(self.db_internal).lower())
-        self._SaveVariable('db_host', self.db_host)
-        self._SaveVariable('db_port', self.db_port)
-        self._SaveVariable('db_name', self.db_name)
-        self._SaveVariable('db_user', self.db_user)
-        self._SaveVariable('db_password', utils.Encrypt(self.db_password))
-
-        self.config.Set('db_port', self.db_port)
-
-        # web server
-        self._SaveVariable('http_interface', self.http_interface)
-        for attr in ('http_port', 'https_port'):
-            value = getattr(self, attr)
-            self._SaveVariable(attr, value)
-
-        self._SaveVariable('redis_internal', str(self.db_internal).lower())
-        self._SaveVariable('redis_host', self.redis_host)
-        self._SaveVariable('redis_port', self.redis_port)
-        self._SaveVariable('redis_tls_port', self.redis_tls_port)
-        self._SaveVariable('redis_pwd', self.redis_pwd)
-        self._SaveVariable('redis_db_number', self.redis_db_number)
-        self._SaveVariable('redis_tls_cert_file', self.redis_tls_cert_file)
-        self._SaveVariable('redis_tls_key_file', self.redis_tls_key_file)
-        self._SaveVariable('redis_tls_ca_cert_file', self.redis_tls_ca_cert_file)
-        self._CopyCertificates()
-
-
-    def _CopyCertificates(self):
-        # if HTTPS port is enabled then generate self-signed certificate
-        if self.https_port:
-            for name in ('kbot-certificate.crt', 'kbot-certificate.key'):
-                for filename in self.products.get_files('conf/certificates', name):
-                    dst = os.path.join(self.target, 'conf', 'certificates', name)
-                    if self.update and os.path.exists(dst) and os.path.getmtime(filename) > os.path.getmtime(dst):
-                        if self.silent or self._AskYN("Newer file '%s'. Update in workarea? [yes] " % (filename)):
-                            os.unlink(dst)
-                            self._Copy(filename, dst)
-                    break
-                else:
-                    if not self.update:
-                        print("Didn't find '%s' certificate. Will generate certificates.\n" % (name))
-                        sys.stdout.flush()
-                        os.system(os.path.join(self.target, 'bin', 'gencertificate.sh'))
-                        break
-
     def _CopyRedisCertificates(self):
         # if Redis tls is enabled then generate self-signed certificate
         if self.redis_tls_port:
@@ -721,9 +651,13 @@ class Installer:
         If it is already exists then update its value
         If not exists then add
         """
+        print("We recommend you add the following to your site kbot.conf")
+        print(f"{name} = {value}")
+        return
+
         kbotconf = os.path.join(self.target, 'conf', 'kbot.conf')
-        products_value = self.config.GetProducts(name)
-        saved_value = self.config.Get(name)
+        products_value = self.config.GetConfigProducts(name)
+        saved_value = self.config.GetConfig(name)
         value = str(value or '')
         if name.endswith('_password'):
             products_value = utils.Decrypt(products_value)
@@ -762,50 +696,47 @@ class Installer:
                     fd.write("%s = %s\n" % (name, value))
 
     def _SetupExternalDatabase(self):
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
-
         # load database schema definition
         print("Loading tables to external database...")
         sys.stdout.flush()
         for product in reversed(self.products):
-            sqlfile = os.path.join(self.target, 'products', product.name, 'db', 'init', 'db_schema.sql')
+            sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system("export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -f %s"\
-                             %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
+                             %(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
                     print("Error: can't load tables! Aborting...")
                     sys.exit(1)
 
-    def _SetupDatabase(self):
 
+    def _SetDatabaseVariables(self):
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
-        pg_ctl = os.path.join(pg_bin, 'pg_ctl')
-        pg_data = os.path.join(self.target, 'var', 'db')
+        self.pg_ctl = os.path.join(pg_bin, 'pg_ctl')
+        self.pg_psql = os.path.join(pg_bin, 'psql')
 
+    def _SetupDatabase(self):
+        pg_data = os.path.join(self.target, 'var', 'db')
 
         if not os.path.exists(os.path.join(pg_data, 'PG_VERSION')):
             print("\nInstalling PostgreSQL server...")
             sys.stdout.flush()
             try:
-                result = self._CommandOutput([pg_ctl, '-D', pg_data, '-o', '"-E UTF8"', '-o', '"--locale=en_US.utf8"', 'initdb'])
+                result = self._CommandOutput([self.pg_ctl, '-D', pg_data, '-o', '"-E UTF8"', '-o', '"--locale=en_US.utf8"', 'initdb'])
             except subprocess.CalledProcessError:
                 print("Cannot init database! Aborting...")
                 sys.exit(1)
 
         try:
-            result = self._CommandOutput([pg_ctl, 'status', '--silent', '-D', pg_data])
+            result = self._CommandOutput([self.pg_ctl, 'status', '--silent', '-D', pg_data])
         except subprocess.CalledProcessError:
             # DB is not up, try to start it
             print("Starting PostgreSQL server...")
             sys.stdout.flush()
-            os.system("%s start -l %s/logs/postgres.log -D %s --silent -w -o '-p %s'" % (pg_ctl, self.target, pg_data, self.db_port))
+            os.system("%s start -l %s/logs/postgres.log -D %s --silent -w -o '-p %s'" % (self.pg_ctl, self.target, pg_data, self.db_port))
 
-        #pg_status = os.system('%s status --silent -D %s' % (pg_ctl, pg_data))
+        #pg_status = os.system('%s status --silent -D %s' % (self.pg_ctl, pg_data))
         try:
-            result = self._CommandOutput([pg_ctl, 'status', '--silent', '-D', pg_data])
+            result = self._CommandOutput([self.pg_ctl, 'status', '--silent', '-D', pg_data])
         except subprocess.CalledProcessError:
             #if pg_status != 0:
             print(result)
@@ -813,53 +744,67 @@ class Installer:
             sys.exit(1)
 
         # create PostgreSQL user if not exists
-        pg_user_exists = self._CommandOutput([pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
+        pg_user_exists = self._CommandOutput([self.pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
                                               '-c', "SELECT count(*) FROM pg_user WHERE usename = '%s'"%self.db_user])
         if pg_user_exists == "0":
             print("Creating PostgreSQL user %s..." % self.db_user)
             sys.stdout.flush()
-            os.system('%s postgres -q -p %s -c "CREATE USER %s PASSWORD \'%s\'"'%(pg_psql, self.db_port, self.db_user, self.db_password))
+            os.system('%s postgres -q -p %s -c "CREATE USER %s PASSWORD \'%s\'"'%(self.pg_psql, self.db_port, self.db_user, self.db_password))
         else:
             print("PostgreSQL user %s already exists."%self.db_user)
 
         # create PostgreSQL database if not exists
-        pg_db_exists = self._CommandOutput([pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
+        pg_db_exists = self._CommandOutput([self.pg_psql, 'postgres', '-t', '-A', '-p', self.db_port,
                                             '-c', "SELECT count(*) FROM pg_database WHERE datname = '%s'" % self.db_name])
         if pg_db_exists == "0":
             print("Creating PostgreSQL database %s..." % self.db_name)
             sys.stdout.flush()
-            os.system('%s postgres -q -p %s -c "CREATE DATABASE %s ENCODING \'UTF8\' OWNER %s"'%(pg_psql, self.db_port, self.db_name, self.db_user))
-            os.system('%s -q -p %s %s -c "ALTER SCHEMA public OWNER TO %s"'%(pg_psql, self.db_port, self.db_name, self.db_user))
-            os.system('%s -q -p %s %s -c "ALTER SYSTEM SET max_connections TO \'512\'"'%(pg_psql, self.db_port, self.db_name))
+            os.system('%s postgres -q -p %s -c "CREATE DATABASE %s ENCODING \'UTF8\' OWNER %s"'%(self.pg_psql, self.db_port, self.db_name, self.db_user))
+            os.system('%s -q -p %s %s -c "ALTER SCHEMA public OWNER TO %s"'%(self.pg_psql, self.db_port, self.db_name, self.db_user))
+            os.system('%s -q -p %s %s -c "ALTER SYSTEM SET max_connections TO \'512\'"'%(self.pg_psql, self.db_port, self.db_name))
         else:
             print("PostgreSQL database %s already exists." % self.db_name)
 
-        print("PostgreSQL is installed.")
         sys.stdout.flush()
 
-        # load database schema definition
-        print("Loading database tables...")
+        if self.db_dump:
+            self._InitializeDatabaseFromDump()
+        else:
+            self._InitializeDatabaseFromScratch()
+
+    def _InitializeDatabaseFromDump(self):
+        print("=> Will initialize database from a dump")
+
+        cmd = '%s -v ON_ERROR_STOP=1 %s -U %s -h %s -p %s -q -c "DROP OWNED BY %s"'
+        cmd = cmd % (self.pg_psql, self.db_name, "konverso", "localhost", self.db_port, self.db_user)
+        os.system(cmd)
+
+        cmd = '%s -v ON_ERROR_STOP=1 %s -U %s -h %s -p %s -q -f %s  > /dev/null'
+        cmd = cmd % (self.pg_psql, self.db_name, self.db_user, "localhost", self.db_port, self.db_dump)
+        os.system(cmd)
+        print("=> PostgreSQL dump loaded")
+
+
+    def _InitializeDatabaseFromScratch(self):
+        print("=> Initializing database tables...")
         for product in reversed(self.products):
-            sqlfile = os.path.join(self.target, 'products', product.name, 'db', 'init', 'db_schema.sql')
+            sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
                 if os.system('%s -q -v ON_ERROR_STOP=1 -p %s %s -U %s -f %s'\
-                             %(pg_psql, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
+                             %(self.pg_psql, self.db_port, self.db_name, self.db_user, sqlfile)) != 0:
                     print("Error: can't init DB schema! Aborting...")
-                    os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                    os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                     sys.exit(1)
 
         sys.stdout.flush()
-        self.pg_ctl = pg_ctl
+        print("=> PostgreSQL DB loaded")
 
     def _LoadAndLearn(self):
         varpkl = os.path.join(self.target, 'var', 'pkl')
         self._Makedirs(varpkl)
 
-        Bot.Bot().varhome = os.path.join(self.target, 'var')
+        Env().varhome = os.path.join(self.target, 'var')
         # Setup predefined classifiers
-        pg_dir = os.environ['PG_DIR']
-        pg_bin = os.path.join(pg_dir, 'bin')
-        pg_psql = os.path.join(pg_bin, 'psql')
         for fname in os.listdir(varpkl):
             name = os.path.basename(fname).split('.')[0]
             obj = MLObject(name)
@@ -870,22 +815,21 @@ class Installer:
                            on conflict (variable) do update set value=EXCLUDED.value
                         """%(variable, utils.GetStringTime(datetime.datetime.now()))
                 if self.db_internal:
-                    if os.system('%s -q -p %s %s -c "%s"'%(pg_psql, self.db_port, self.db_name, query)) != 0:
+                    if os.system('%s -q -p %s %s -c "%s"'%(self.pg_psql, self.db_port, self.db_name, query)) != 0:
                         print("Error: can't save predefined classifiers! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                         sys.exit(1)
-                else:
-                    if os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
-                              """%(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
-                        print("Error: can't save predefined classifiers! Aborting...")
-                        sys.exit(1)
+                elif os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
+                               """%(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
+                    print("Error: can't save predefined classifiers! Aborting...")
+                    sys.exit(1)
 
-        if not self.no_load:
+        if not self.no_load and not self.db_dump:
             print("Loading data...")
             sys.stdout.flush()
             if os.system('%s/bin/kbot.sh load'%self.target) != 0:
                 print("Error during loading! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                 sys.exit(1)
 
             if self.admin_password:
@@ -893,22 +837,21 @@ class Installer:
                 _db_request += "WHERE user_id=(SELECT users.user_id FROM users WHERE users.user_name=\'admin\')"
                 if self.db_internal:
                     if os.system('%s -q -p %s %s -U %s -c "%s"'\
-                                 %(pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
+                                 %(self.pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
                         print("Error: can't setup admin password! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                         sys.exit(1)
-                else:
-                    # setup admin password
-                    if os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
-                                 %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
-                        print("Error: can't setup admin password! Aborting...")
-                        sys.exit(1)
+                # setup admin password
+                elif os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
+                                 %(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
+                    print("Error: can't setup admin password! Aborting...")
+                    sys.exit(1)
 
         if not self.no_learn:
             print("Learning models...")
             if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
                 print("Error during learning! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
                 sys.exit(1)
 
     def _StartInstallation(self):
@@ -932,13 +875,16 @@ class Installer:
             os.system('%s -D %s/var/db --silent stop' %
                       (self.pg_ctl, self.target))
 
-        # Set permission for kbot.conf (available only for current user)
-        os.chmod(os.path.join(self.target, 'conf', 'kbot.conf'), 0o600)
+        local_kbot_conf = os.path.join(self.target, 'conf', 'kbot.conf')
+        if os.path.exists(local_kbot_conf):
+            # Set permission for kbot.conf (available only for current user)
+            os.chmod(os.path.join(self.target, 'conf', 'kbot.conf'), 0o600)
 
         # Create history.txt with the date of installation
+        # SHOULDN'T WE DO THIS INSIDE THE RUN.LOG INSTEAD ?
         ts = time.time()
-        with open(os.path.join(self.target, 'history.txt'), 'w+', encoding='utf8') as fd:
-            fd.write("Installed on %s\n" % datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d'))
+        with open(os.path.join(self.target, 'var', 'run.log'), 'w+', encoding='utf8') as fd:
+            fd.write("%s: Initial work area setup\n" % datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d'))
 
         print("\n\nCongratulation!")
         print("Now you can start Kbot using command '%s start'"%(os.path.join(self.target, 'bin', 'kbot.sh')))
@@ -963,62 +909,33 @@ class Installer:
             sys.exit(1)
 
     def _GetProductPath(self, name):
-        first = True
-        while True:
-            default_path = os.path.realpath(os.path.join(os.environ["KBOT_HOME"], ".."))
-            if name == 'kbot' and first:
-                path = os.path.join(default_path, "kbot")
-            else:
-                originalpath = os.path.realpath(os.path.join(default_path, name))
-                if not self._GetProduct(originalpath, name):
-                    originalpath = ''
 
-                if self.path:
-                    path = os.path.join(self.path, name)
-                else:
-                    if originalpath:
-                        question = "Enter path to '%s' [%s]: "%(name, originalpath)
-                    else:
-                        question = "Enter path to '%s': "%name
-                    path = self.path or input(question).strip()
-                    if not path and originalpath:
-                        path = originalpath
-                    else:
-                        path = os.path.realpath(os.path.expanduser(path))
-            #path = '/home/konverso/%s'%name
-            if path:
-                if os.path.exists(path):
-                    description = os.path.join(path, 'description.xml')
-                    if os.path.exists(description):
-                        product = Product()
-                        product.Parse(description)
-                        if str(product.name) != str(name):
-                            print("Invalid product name (%s vs %s)" % (product.name, name))
-                        else:
-                            product.filename = description
-                            product.dirname = os.path.dirname(description)
-                            self.products.append(product)
-                            for pname in product.parents:
-                                if pname not in [p.name for p in self.products]:
-                                    self._GetProductPath(pname)
-                            break
-                    else:
-                        print("description.xml doesn't exist in %s" % path)
-                else:
-                    print(f"Path {path} doesn't exist")
-            first = False
+        installer = self.path
+        work = self.workarea
+        deps.build_dependency_file(name, installer, "/tmp/products.json")
+        self.products.populate(products_definition_file="/tmp/products.json")
 
     def _GetProduct(self, path, name):
         if path:
             if os.path.exists(path):
-                description = os.path.join(path, 'description.xml')
-                if os.path.exists(description):
+                description_xml_path = os.path.join(path, 'description.xml')
+
+                if os.path.exists(description_xml_path):
+                    # Use the installer product class to load the product definition
+                    product_def =  BaseProduct.from_xml_file(description_xml_path)
+                    json_def = json.loads(product_def.to_json())
+
+                    # Create a kbot product instance
                     product = Product()
-                    product.Parse(description)
-                    if str(product.name) == str(name):
-                        product.filename = description
-                        product.dirname = os.path.dirname(description)
-                        return product
+                    product.Update(json_def)
+                    product.filename = description_xml_path
+                    product.dirname = path
+                    return product
+            else:
+                print("Path not found:", path)
+        else:
+            print("No path:", path)
+
         return None
 
     def _Copy(self, src, dst):
@@ -1051,7 +968,9 @@ class Installer:
                 if self.update and os.path.islink(dst):
                     targetpath = os.readlink(dst)
                     # Get absolute path
-                    targetpath = os.path.join(os.environ['KBOT_HOME'], targetpath.strip("./"))
+                    if not targetpath.startswith("/"):
+                        targetpath = os.path.join(os.environ['KBOT_HOME'], targetpath.strip("./"))
+
                     if not os.path.exists(targetpath):
                         if self.silent or self._AskYN("Broken link '%s'. Remove it? [yes]" % (dst)):
                             os.unlink(dst)
@@ -1061,9 +980,8 @@ class Installer:
                 if not os.path.exists(dst):
                     os.symlink(self._NewSrc(src, dst), dst)
 
+    #pylint: disable=too-many-positional-arguments
     def _LinkProductFilesToDir(self, relpath, dst, linkdirs=None, exts=None, ignoredirs=None):
-
-        #self._LinkFilesToDir(self.products.get_files('core/python', '*'), os.path.join(dirname, 'python'))
         if linkdirs is None:
             linkdirs = []
         if ignoredirs is None:
@@ -1152,11 +1070,8 @@ class Installer:
             os.makedirs(dst)
 
     def _NewSrc(self, src, dst):
-        dsts = os.path.normpath(dst).split(os.sep)
-        srcs = os.path.normpath(src).split(os.sep)
-        targets = os.path.normpath(self.target).split(os.sep)
-        top = '/'.join((len(dsts) - len(targets) - 1) * ['..'])
-        return os.path.join(top, '/'.join(srcs[len(targets):]))
+        # We return absolute path links
+        return src
 
     def _AskYN(self, question, default='y'):
         while True:
@@ -1164,9 +1079,9 @@ class Installer:
                 answer = "y"
             else:
                 answer = input(question).strip().lower() or default
-            if answer in ('y', 'yes'):
+            if answer in {'y', 'yes'}:
                 return True
-            if answer in ('n', 'no'):
+            if answer in {'n', 'no'}:
                 return False
             print('Answer either "y" or "n".')
 
@@ -1179,17 +1094,19 @@ class Installer:
                     print("Do not use port number below 1024 as it requires root privileges")
                 elif limit and port > 65535:
                     print("Max port number is 65535.")
+                elif (ptype == 'http' and answer == self.https_port) or \
+                   (ptype == 'https' and answer == self.http_port):
+                    print("HTTP and HTTPS ports could not be the same")
                 else:
-                    if (ptype == 'http' and answer == self.https_port) or \
-                       (ptype == 'https' and answer == self.http_port):
-                        print("HTTP and HTTPS ports could not be the same")
-                    else:
-                        return answer
+                    return answer
             else:
                 print("Wrong port number")
 
     def _CommandOutput(self, command):
-        return subprocess.check_output(command, stderr=subprocess.STDOUT).strip().decode('utf-8')
+        res = subprocess.check_output(command, stderr=subprocess.STDOUT).strip().decode('utf-8')
+        #if res:
+        #    print("Failed running", command)
+        return res
 
 def usage():
     print("""
@@ -1249,6 +1166,8 @@ if __name__ == '__main__':
                             action="store_true", dest='default', required=False, default=False)
         parser.add_argument('--no-learn', help="Do not learn following the setup", dest='no_learn', action="store_true", required=False, default=False)
         parser.add_argument('--no-load', help="Do not load following the setup", dest='no_load', action="store_true", required=False, default=False)
+        parser.add_argument('--no-password', help="Do not require a password", dest='no_password', action="store_true", required=False, default=False)
+        parser.add_argument('--db-dump', help="Optional dump file to load on work area creation", dest='db_dump', required=False)
 
         #
         # Optional Postgres arguments
@@ -1262,14 +1181,25 @@ if __name__ == '__main__':
         #
         # The relink (update) related arguments
         #
-        parser.add_argument('-u', '--update', help="Update links",  action="store_true", dest='update', required=False, default=False)
+        parser.add_argument('-t', '--tree', help="Display the product tree",  action="store_true", dest='show_tree', required=False, default=False)
         parser.add_argument('-s', '--silent', help="Silent", action="store_true", dest='silent', required=False, default=False)
+        parser.add_argument('-u', '--update', help="Update links",  action="store_true", dest='update', required=False, default=False)
 
         _result = parser.parse_args()
 
         # Case of the relink
+        if _result.show_tree:
+            if not _result.product:
+                print("Missing the mandatory -p flag")
+                sys.exit(1)
+
+            Installer().ShowTree(_result.product)
+            sys.exit(0)
+
+        # Case of the relink (bin/linkproducts.sh)
         if _result.update:
-            Installer().Update(_result.silent)
+            installer = Installer(path=_result.path, workarea=_result.workarea)
+            installer.Update(_result.silent)
             sys.exit(0)
 
         # Case of the kbot installation
@@ -1277,7 +1207,8 @@ if __name__ == '__main__':
 
             installer = Installer(product=_result.product, path=_result.path, secret=_result.secret, workarea=_result.workarea,
                                   license=_result.license, hostname=_result.hostname, default=_result.default,
-                                  no_load=_result.no_load, no_learn=_result.no_learn)
+                                  no_load=_result.no_load, no_learn=_result.no_learn, no_password=_result.no_password,
+                                  db_dump=_result.db_dump)
 
             # Update the installer values based on some argument parameters
             for _param in ('db_host', 'db_port', 'db_user', 'db_password', 'db_name'):
@@ -1295,6 +1226,5 @@ if __name__ == '__main__':
             sys.exit(1)
 
     except Exception as _e:
-        print("Failed due to: ", _e)
         usage()
-        sys.exit(1)
+        raise

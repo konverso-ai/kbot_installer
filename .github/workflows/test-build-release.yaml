@@ -1,0 +1,151 @@
+name: Test Build Release
+run-name: "${{github.ref_name}} -- Test Build Release"
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+  
+env:
+  GH_USER: konversoai 
+  NEXUS_USER: github
+  NEXUS_URL: https://nexus.konverso.ai
+  VERSION: ${{ github.ref_name }}
+
+jobs:
+  pre-test:
+    name: Pre Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit message
+        run: |
+          PR_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          COMMIT_MSG=$(git show --no-patch --format="%s" $PR_HEAD_SHA)
+          echo "Commit message: '$COMMIT_MSG'"
+          
+            VALID_PREFIXES="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
+            VALID_JIRA_PROJECTS="CS|DO|INFRA|KB"
+            
+            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\(($VALID_JIRA_PROJECTS)-[0-9]+\\): .+"; then
+              echo -e "\033[32m++ Commit message format is valid: $COMMIT_MSG\033[39m"
+            elif echo "$COMMIT_MSG" | grep -qE "^(Merge|Auto merge:) "; then
+              echo -e "\033[32m++ Merge commit detected, skipping validation: $COMMIT_MSG\033[39m"
+            else
+              echo -e "\033[33m++ Invalid commit message format: $COMMIT_MSG\033[39m"
+              echo "Expected format: <prefix>(<jira-project-id>-12345): <message>"
+              echo "Valid prefixes: $VALID_PREFIXES"
+              echo "Valid JIRA projects: $VALID_JIRA_PROJECTS"
+              echo "Example: feat(KB-123): add new feature"
+              echo "Example: fix(DO-456): fix bug"
+              exit 1
+            fi
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install Dependencies
+        run: uv sync --all-groups --locked --no-editable
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+
+      - name: Lint code with Ruff
+        run: uv ruff check
+        continue-on-error: true
+  
+      - name: Run Pylint
+        run: uv pylint .
+        continue-on-error: true
+
+      - name: Build
+        run: uv build
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+
+  build-release-wheel:
+    name: Build & release wheel ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'master' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install Dependencies
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+        run: uv sync --all-groups --locked --no-editable
+
+      - name: Build
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+        run: uv build
+
+      - name: Remove existing wheel from Nexus
+        env:
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+          NEXUS_URL: ${{ env.NEXUS_URL }}
+          NEXUS_USER: uv
+        run: |
+          # Extract package name and version from pyproject.toml
+          PACKAGE_NAME=$(grep -E '^name\s*=' pyproject.toml | sed -E 's/name\s*=\s*["'\'']([^"'\'']+)["'\'']/\1/')
+          VERSION=$(grep -E '^version\s*=' pyproject.toml | sed -E 's/version\s*=\s*["'\'']([^"'\'']+)["'\'']/\1/')
+          
+          echo -e "\033[32m++ Package: $PACKAGE_NAME, Version: $VERSION\033[39m"
+          
+          # Search for existing components using Nexus REST API
+          REPO_NAME="konverso-nexus"
+          SEARCH_URL="$NEXUS_URL/service/rest/v1/search?repository=$REPO_NAME&name=$PACKAGE_NAME"
+          
+          # Get component IDs from search results, filtering by version
+          COMPONENT_IDS=$(curl -s -u "$NEXUS_USER:$NEXUS_PASSWORD" "$SEARCH_URL" | \
+            jq -r --arg version "$VERSION" '.items[] | select(.version == $version) | .id')
+          
+          if [ -z "$COMPONENT_IDS" ]; then
+            echo -e "\033[32m++ No existing components found for this version\033[39m"
+          else
+            # Delete each component found
+            for COMPONENT_ID in $COMPONENT_IDS; do
+              echo -e "\033[32m++ Deleting component $COMPONENT_ID...\033[39m"
+              DELETE_URL="$NEXUS_URL/service/rest/v1/components/$COMPONENT_ID"
+              if curl -s -X DELETE -u "$NEXUS_USER:$NEXUS_PASSWORD" "$DELETE_URL"; then
+                echo -e "\033[32m++ Deleted component $COMPONENT_ID\033[39m"
+              else
+                echo -e "\033[33m++ WARN: Failed to delete component $COMPONENT_ID\033[39m"
+              fi
+            done
+          fi
+
+      - name: Publish to Nexus
+        env:
+          UV_PUBLISH_USERNAME: uv
+          UV_PUBLISH_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+        run: |
+          uv publish --index konverso-nexus
