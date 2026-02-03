@@ -25,8 +25,3 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 name = "konverso-nexus"
 url = "https://nexus.konverso.ai/repository/python_whl/simple/"
 publish-url = "https://nexus.konverso.ai/repository/python_whl/"
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
-
