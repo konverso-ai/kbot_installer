@@ -16,17 +16,3 @@ help your reviewer understand the context of this PR.--->
 
 ### 📋 Additional Notes
 <!-- Any additional information that reviewers should know -->
-
----
-
-## 🔄 Auto-Merge Information
-
-### Branch Flow
-This PR will trigger the following auto-merge actions:
-
-**If merging to a `-dev` branch:**
-- ✅ Will create a PR to the corresponding release branch (requires manual review)
-
-**If merging to a release branch:**
-- ✅ Will automatically cascade to upstream branches
-- ✅ Will automatically merge to the corresponding `-dev` branch
