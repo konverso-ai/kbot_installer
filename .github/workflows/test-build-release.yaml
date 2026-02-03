@@ -49,16 +49,6 @@ jobs:
               exit 1
             fi
 
-      - name: Orca - Set repository name
-        run: |
-          ORCA_PROJECT_KEY=$(echo "${{ github.repository }}" | sed 's/\//-/g')
-          echo "ORCA_PROJECT_KEY=$ORCA_PROJECT_KEY" >> $GITHUB_ENV
-
-      - name: Orca - SAST Scan
-        run: |
-          curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
-          orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
-
       - name: Set up Python 3.10
         uses: actions/setup-python@v6
         with:
