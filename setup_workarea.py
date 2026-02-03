@@ -120,9 +120,12 @@ class Installer:
 
             if self.target:
                 if os.path.exists(self.target):
-                    print(f"ERROR: Directory '{self.target}' already exists!")
+                    print(f"Error: Directory '{self.target}' already exists")
+                    print("To cleanup existing folder and start fresh, we recommend calling:")
+                    print(f"{self.target}/bin/uninstall.sh")
                     sys.exit(1)
-                break
+                else:
+                    break
         if not os.path.exists(self.target):
             os.makedirs(self.target)
         self._SetupProducts()
