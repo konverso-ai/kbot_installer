@@ -296,6 +296,8 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
     if not version:
         print("Missing version info. Please add the -v flag")
 
+    uses = uses or []
+
     # Try Nexus first if available
     nexus_file = None
     if "nexus" in uses and nexus_files:
@@ -363,7 +365,7 @@ def recurse_product_download(nexus_files, product_name, version, recurse=True, u
             )
             if recurse:
                 for parent_product_name in json_product_description.get("parents"):
-                    recurse_product_download(nexus_files, parent_product_name, version)
+                    recurse_product_download(nexus_files, parent_product_name, version, uses=uses)
         return
 
     #
