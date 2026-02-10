@@ -13,18 +13,14 @@ import socket
 import json
 import re
 
-import classification
-from classification import MLObject
-from common.Product import ProductList, Product
-from common.Errors import KbotLicenseError
-from dialog.User import User
 import utils.base as utils
-from utils.License import License
-from utils.settings.base import Settings
-from utils.env import Env
-
+from common.Errors import KbotLicenseError
+from common.Product import ProductList, Product
 import deps
-from product import Product as BaseProduct
+from dialog.User import User
+from utils.License import License
+from utils.env import Env
+from utils.settings.base import Settings
 
 class Installer:
     """Installer"""
@@ -800,6 +796,8 @@ class Installer:
         print("=> PostgreSQL DB loaded")
 
     def _LoadAndLearn(self):
+        from classification import MLObject
+
         varpkl = os.path.join(self.target, 'var', 'pkl')
         self._Makedirs(varpkl)
 
@@ -916,6 +914,8 @@ class Installer:
         self.products.populate(products_definition_file="/tmp/products.json")
 
     def _GetProduct(self, path, name):
+        from product import Product as BaseProduct
+
         if path:
             if os.path.exists(path):
                 description_xml_path = os.path.join(path, 'description.xml')
