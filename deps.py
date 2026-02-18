@@ -71,7 +71,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Kbot_Actions")
     parser.add_argument(
         "-i",
-        "--installation",
+        "--installer",
         help="Installation path, defauls to /home/konverso/dev/installer",
         default="/home/konverso/dev/installer",
     )
