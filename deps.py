@@ -45,7 +45,7 @@ def build_work_area_dependency_file(product_name, installer_path, work_area_path
     target_file = os.path.join(target_folder, "products.json")
     if os.path.exists(os.path.join(work_area_path, "var")):
         with open(target_file, "w", encoding="utf-8") as fd:
-            fd.write(json.dumps(products, indent=4))
+            json.dump(products, fd, indent=4)
 
     return build_dependency_file(product_name, installer_path, target_file, products=None)
 
@@ -57,7 +57,7 @@ def build_dependency_file(product_name, installer_path, dependency_file_path, pr
     products.reverse()
 
     with open(dependency_file_path, "w", encoding="utf-8") as fd:
-            fd.write(json.dumps(products, indent=4))
+        json.dump(products, fd, indent=4)
 
 def get_dependency(product_name, installer_path, work_area_path):
     products = []
@@ -71,31 +71,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Kbot_Actions")
     parser.add_argument(
         "-i",
-        "--installation",
+        "--installer",
         help="Installation path, defauls to /home/konverso/dev/installer",
-        dest="installer",
-        required=False,
+        default="/home/konverso/dev/installer",
     )
 
     parser.add_argument(
         "-w",
         "--workarea",
         help="Default work-area path, default to /home/konverso/dev/work",
-        dest="workarea",
-        required=False,
+        default="/home/konverso/dev/work",
     )
     parser.add_argument(
         "-p",
         "--product",
         help="First product in the chain",
         action="store",
-        dest="product",
-        required=False,
     )
 
     _result = parser.parse_args()
     build_work_area_dependency_file(
         product_name=_result.product,
-        installer_path=_result.installer or "/home/konverso/dev/installer",
-        dependency_file_path=_result.workarea or "/home/konverso/dev/work",
+        installer_path=_result.installer,
+        work_area_path=_result.workarea,
     )
