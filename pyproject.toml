@@ -3,9 +3,7 @@ name = "kbot-installer"
 version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
-]
+authors = []
 requires-python = "==3.10.15"
 dependencies = []
 
@@ -25,3 +23,9 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 name = "konverso-nexus"
 url = "https://nexus.konverso.ai/repository/python_whl/simple/"
 publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+
+[tool.kbot]
+doc = []
+build = ""
+date = ""
+categories = []
