@@ -62,17 +62,17 @@ test:
 ifdef PKG
 	@echo "Running tests for package: $(PKG)"
 	@if [ -d "$(PKG)/tests" ]; then \
-		uv run python -B -m pytest $(PKG)/tests/ -v; \
+		uv run python -B -m pytest $(PKG)/tests/; \
 	elif [ -d "$(PKG)" ]; then \
 		echo "No tests directory found in $(PKG), searching for test files..."; \
-		uv run python -B -m pytest $(PKG)/ -v; \
+		uv run python -B -m pytest $(PKG)/; \
 	else \
 		echo "Package $(PKG) not found!"; \
 		exit 1; \
 	fi
 else
 	@echo "Running all tests"
-	uv run python -B -m pytest -v
+	uv run python -B -m pytest
 endif
 
 
@@ -82,17 +82,17 @@ test-cov:
 ifdef PKG
 	@echo "Running tests with coverage for package: $(PKG)"
 	@if [ -d "$(PKG)/tests" ]; then \
-		uv run python -B -m pytest $(PKG)/tests/ --cov=$(PKG) --cov-report=html --cov-report=term -v; \
+		uv run python -B -m pytest $(PKG)/tests/ --cov=$(PKG) --cov-report=html --cov-report=term; \
 	elif [ -d "$(PKG)" ]; then \
 		echo "No tests directory found in $(PKG), searching for test files..."; \
-		uv run python -B -m pytest $(PKG)/ --cov=$(PKG) --cov-report=html --cov-report=term -v; \
+		uv run python -B -m pytest $(PKG)/ --cov=$(PKG) --cov-report=html --cov-report=term; \
 	else \
 		echo "Package $(PKG) not found!"; \
 		exit 1; \
 	fi
 else
 	@echo "Running all tests with coverage"
-	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term -v
+	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term
 endif
 
 

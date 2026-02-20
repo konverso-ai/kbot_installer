@@ -16,6 +16,8 @@ dependencies = [
     "defusedxml>=0.7.1",
     "rich>=14.1.0",
     "gitpython>=3.1.45",
+    "azure-keyvault-secrets>=4.7.0",
+    "azure-identity>=1.15.0",
 ]
 
 [project.scripts]
