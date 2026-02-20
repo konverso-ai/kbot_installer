@@ -5,7 +5,8 @@
 #
 INSTALLER_HOME=${BASH_ARGV[0]}
 
-echo INSTALLER_HOME set to $INSTALLER_HOME
+export KBOT_INSTALLER=$INSTALLER_HOME
+
 if [[ $INSTALLER_HOME == "" ]];
 then
     echo Using standard installation path
@@ -14,8 +15,6 @@ else
     echo Using custom installation path
     KBOT_HOME=$INSTALLER_HOME/kbot
 fi
-
-echo Using KBOT_HOME as: $KBOT_HOME
 
 # Note that we send all parameters excepter for the installer path which is not required.
 PARAMS_TO_KEEP=$(($#-1))

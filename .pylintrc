@@ -1,0 +1,53 @@
+[MASTER]
+ignore=
+    .venv,
+    migrations,
+    tests
+jobs=1
+load-plugins=
+unsafe-load-any-extension=no
+extension-pkg-whitelist=
+
+[MESSAGES CONTROL]
+# Désactive les règles couvertes par Ruff
+disable=
+    C0305,  # trailing-newlines
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+    C0103,  # invalid-name (naming conventions)
+    W0611,  # unused-import
+    W0612,  # unused-variable
+    W0621,  # redefined-outer-name
+    R0801,  # duplicate-code
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    R0915,  # too-many-statements
+    R0903,  # too-few-public-methods
+    W0105,  # string-statement (e.g. docstring not used)
+
+# Active toutes les autres règles (logique, typage, structure)
+enable=all
+
+[TYPECHECK]
+ignore-mixin-members=yes
+ignored-modules=
+ignored-classes=
+
+[FORMAT]
+# Déjà géré par Ruff
+max-line-length=88
+
+[REPORTS]
+output-format=colorized
+reports=no
+score=yes
+
+[DESIGN]
+max-args=10
+max-attributes=10
+max-branches=12
+max-locals=15
+max-returns=6
+max-statements=50
+max-public-methods=20
