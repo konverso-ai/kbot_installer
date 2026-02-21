@@ -21,6 +21,9 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 "core/python" = "."
 "rest" = "."
 
+[tool.hatch.build.targets.wheel.force-include]
+"description.xml" = "installer/kbot_installer/description.xml"
+
 [[tool.uv.index]]
 name = "konverso-nexus"
 url = "https://nexus.konverso.ai/repository/python_whl/simple/"
