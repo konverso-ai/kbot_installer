@@ -13,14 +13,13 @@ import socket
 import json
 import re
 
+import Bot
 import utils.base as utils
 from common.Errors import KbotLicenseError
 from common.Product import ProductList, Product
 import deps
 from dialog.User import User
 from utils.License import License
-from utils.env import Env
-from utils.settings.base import Settings
 
 class Installer:
     """Installer"""
@@ -136,7 +135,7 @@ class Installer:
 
         self._Link(os.path.join(self.products.kbot().dirname, 'uninstall.sh'), os.path.join(self.target, 'uninstall.sh'))
 
-        self.config = Settings()
+        self.config = Bot.Bot()
         self.config.Load()
         self._ReadParameters()
         self._SelectInstallationType()
@@ -166,7 +165,7 @@ class Installer:
         # Load the list of the products
 
         self.products.populate()
-        self.config = Settings()
+        self.config = Bot.Bot()
         self.config.Load()
         self.https_port = self.config.GetConfig('https_port')
         self.update = True
@@ -270,7 +269,7 @@ class Installer:
                 continue
             req_path = os.path.join(p.dirname, "requirements.txt")
             if os.path.exists(req_path):
-                pip_path = os.path.join(Env().binhome, "pip3.sh")
+                pip_path = os.path.join(Bot.Bot().binhome, "pip3.sh")
                 os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
 
     def _SetupUI(self):
@@ -804,7 +803,7 @@ class Installer:
         varpkl = os.path.join(self.target, 'var', 'pkl')
         self._Makedirs(varpkl)
 
-        Env().varhome = os.path.join(self.target, 'var')
+        Bot.Bot().varhome = os.path.join(self.target, 'var')
         # Setup predefined classifiers
         for fname in os.listdir(varpkl):
             name = os.path.basename(fname).split('.')[0]
