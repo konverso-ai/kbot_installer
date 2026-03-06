@@ -6,7 +6,7 @@ on:
     branches:
       - master
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, closed]
   workflow_dispatch:
   
 env:
@@ -48,6 +48,16 @@ jobs:
               echo "Example: fix(DO-456): fix bug"
               exit 1
             fi
+
+      - name: Orca - Set repository name
+        run: |
+          ORCA_PROJECT_KEY=$(echo "${{ github.repository }}" | sed 's/\//-/g')
+          echo "ORCA_PROJECT_KEY=$ORCA_PROJECT_KEY" >> $GITHUB_ENV
+
+      - name: Orca - SAST Scan
+        run: |
+          curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
+          orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v6
@@ -96,6 +106,23 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Bump patch version
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+        run: |
+          uv version --bump patch
+          NEW_VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*["'\''"]([^"'\'']+)["'\''"].*/\1/')
+          echo -e "\033[32m++ Bumped patch version to $NEW_VERSION\033[39m"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Commit and push version bump
+        run: |
+          git config --global user.email "73905580+konversoai@users.noreply.github.com" && git config --global user.name "konversoai"   
+          git add pyproject.toml uv.lock
+          git commit -m "chore(KB-123): bump version to $NEW_VERSION [skip ci]"
+          git push
+
       - name: Install Dependencies
         env:
           UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
@@ -107,41 +134,6 @@ jobs:
           UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
           UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
         run: uv build
-
-      - name: Remove existing wheel from Nexus
-        env:
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
-          NEXUS_URL: ${{ env.NEXUS_URL }}
-          NEXUS_USER: uv
-        run: |
-          # Extract package name and version from pyproject.toml
-          PACKAGE_NAME=$(grep -E '^name\s*=' pyproject.toml | sed -E 's/name\s*=\s*["'\'']([^"'\'']+)["'\'']/\1/')
-          VERSION=$(grep -E '^version\s*=' pyproject.toml | sed -E 's/version\s*=\s*["'\'']([^"'\'']+)["'\'']/\1/')
-          
-          echo -e "\033[32m++ Package: $PACKAGE_NAME, Version: $VERSION\033[39m"
-          
-          # Search for existing components using Nexus REST API
-          REPO_NAME="konverso-nexus"
-          SEARCH_URL="$NEXUS_URL/service/rest/v1/search?repository=$REPO_NAME&name=$PACKAGE_NAME"
-          
-          # Get component IDs from search results, filtering by version
-          COMPONENT_IDS=$(curl -s -u "$NEXUS_USER:$NEXUS_PASSWORD" "$SEARCH_URL" | \
-            jq -r --arg version "$VERSION" '.items[] | select(.version == $version) | .id')
-          
-          if [ -z "$COMPONENT_IDS" ]; then
-            echo -e "\033[32m++ No existing components found for this version\033[39m"
-          else
-            # Delete each component found
-            for COMPONENT_ID in $COMPONENT_IDS; do
-              echo -e "\033[32m++ Deleting component $COMPONENT_ID...\033[39m"
-              DELETE_URL="$NEXUS_URL/service/rest/v1/components/$COMPONENT_ID"
-              if curl -s -X DELETE -u "$NEXUS_USER:$NEXUS_PASSWORD" "$DELETE_URL"; then
-                echo -e "\033[32m++ Deleted component $COMPONENT_ID\033[39m"
-              else
-                echo -e "\033[33m++ WARN: Failed to delete component $COMPONENT_ID\033[39m"
-              fi
-            done
-          fi
 
       - name: Publish to Nexus
         env:
