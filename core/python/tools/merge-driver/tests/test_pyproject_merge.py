@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from pyproject_merge import merge
+from pyproject_merge import _merge_dependencies
 
 
 def D(s: str) -> str:
@@ -452,12 +453,127 @@ def D(s: str) -> str:
                 description = "hello"
             """),
         ),
+
+        # ---------------------------------------------------------
+        # CASE 12
+        # base has no [project] (e.g. empty or tool-only)
+        # -> _get_deps(base_doc) returns [] (proj is None)
+        # ---------------------------------------------------------
+        dict(
+            base="",
+            current=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+            """),
+            incoming=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+            """),
+            expected=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+            """),
+        ),
+
+        # ---------------------------------------------------------
+        # CASE 13
+        # both current and incoming removed the same dependency
+        # -> no conflict, dep stays removed (continue when cur_val is None)
+        # ---------------------------------------------------------
+        dict(
+            base=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["ansible==2.0.0", "snow>=2026.1"]
+            """),
+            current=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["ansible==2.0.0"]
+            """),
+            incoming=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["ansible==2.0.0"]
+            """),
+            expected=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["ansible==2.0.0"]
+            """),
+        ),
+
+        # CASE 14
+        # incoming removes a dep, current unchanged from base for that dep
+        # -> dep removed (del cur[k] when base_val == cur_val)
+        # Use a single exact-version dep so canonical form matches
+        # ---------------------------------------------------------
+        dict(
+            base=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["ansible==2.0.0", "pkg==1.0.0"]
+            """),
+            current=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["ansible==2.0.0", "pkg==1.0.0"]
+            """),
+            incoming=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["ansible==2.0.0"]
+            """),
+            expected=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["ansible==2.0.0"]
+            """),
+        ),
     ],
 )
 def test_merge(params: dict):
     expected = params.pop("expected")
     actual = merge(**params)
     assert actual == expected
+
+
+def test_merge_dependencies_removal_unchanged():
+    """Cover _merge_dependencies path: incoming removes dep, current unchanged (del cur[k])."""
+    import tomlkit
+    base_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.1.0"
+        dependencies = ["pkg==1.0.0", "other==2.0.0"]
+    """))
+    cur_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.2.0"
+        dependencies = ["pkg==1.0.0", "other==2.0.0"]
+    """))
+    inc_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.1.0"
+        dependencies = ["pkg==1.0.0"]
+    """))
+    conflicts = []
+    _merge_dependencies(base_doc, cur_doc, inc_doc, conflicts)
+    assert conflicts == []
+    assert cur_doc["project"]["dependencies"] == ["pkg==1.0.0"]
 
 
 def test_merge_without_packaging():
