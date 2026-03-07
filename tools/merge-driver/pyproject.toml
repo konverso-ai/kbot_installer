@@ -1,0 +1,13 @@
+[project]
+name = "merge-driver"
+version = "0.1.0"
+description = "Merge drive scripts to use for merge resolution"
+readme = "README.md"
+requires-python = "==3.10.15"
+dependencies = [
+    "tomlkit"
+]
+
+[dependency-groups]
+lint = ["pylint", "ruff"]
+test = ["pytest", "pytest-cov", "coverage"]
