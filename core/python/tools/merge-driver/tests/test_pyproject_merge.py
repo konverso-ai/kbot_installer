@@ -203,9 +203,7 @@ def D(s: str) -> str:
 
         # ---------------------------------------------------------
         # CASE 6
-        # dependencies:
-        # incoming adds a dep while current modified an existing one
-        # -> new dep added + 3-way conflict on the whole deps list
+        # dependencies: per-package newer specifier wins; added deps merged in
         # ---------------------------------------------------------
         dict(
             base=D("""
@@ -231,23 +229,12 @@ def D(s: str) -> str:
                 name = "demo"
                 version = "0.2.0"
                 dependencies = ["ansible==3.0.0", "snow>=2026.1"]
-
-                # ===== MERGE CONFLICTS (manual resolution required) =====
-                # [1] Path: project.dependencies
-                # Reason: Concurrent changes (3-way).
-                <<<<<<< CURRENT
-                ["ansible==3.0.0"]
-                =======
-                ["ansible==2.0.0", "snow>=2026.1"]
-                >>>>>>> INCOMING
             """),
         ),
 
         # ---------------------------------------------------------
         # CASE 7
-        # dependencies:
-        # incoming removes a dep, current modified it
-        # -> dep kept in current + removal conflict
+        # dependencies: incoming removes dep; current had bumped it vs base -> keep current's newer pin
         # ---------------------------------------------------------
         dict(
             base=D("""
@@ -273,29 +260,12 @@ def D(s: str) -> str:
                 name = "demo"
                 version = "0.2.0"
                 dependencies = ["ansible==2.0.0", "snow>=2026.2"]
-
-                # ===== MERGE CONFLICTS (manual resolution required) =====
-                # [1] Path: project.dependencies
-                # Reason: Concurrent changes (3-way).
-                <<<<<<< CURRENT
-                ["ansible==2.0.0", "snow>=2026.2"]
-                =======
-                ["ansible==2.0.0"]
-                >>>>>>> INCOMING
-                # [2] Path: project.dependencies
-                # Reason: Incoming removes 'snow' but current has modified it since base.
-                <<<<<<< CURRENT
-                snow>=2026.2
-                =======
-                (removed)
-                >>>>>>> INCOMING
             """),
         ),
 
         # ---------------------------------------------------------
         # CASE 8
-        # dependencies:
-        # incoming modifies a dep, current removed it -> conflict
+        # dependencies: current dropped a dep; incoming still has it -> take incoming (re-add newer pin)
         # ---------------------------------------------------------
         dict(
             base=D("""
@@ -320,32 +290,13 @@ def D(s: str) -> str:
                 [project]
                 name = "demo"
                 version = "0.2.0"
-                dependencies = ["ansible==2.0.0"]
-
-                # ===== MERGE CONFLICTS (manual resolution required) =====
-                # [1] Path: project.dependencies
-                # Reason: Concurrent changes (3-way).
-                <<<<<<< CURRENT
-                ["ansible==2.0.0"]
-                =======
-                ["ansible==2.0.0", "snow>=2026.2"]
-                >>>>>>> INCOMING
-                # [2] Path: project.dependencies
-                # Reason: Incoming modifies 'snow' but current has removed it.
-                <<<<<<< CURRENT
-                (removed)
-                =======
-                snow>=2026.2
-                >>>>>>> INCOMING
+                dependencies = ["ansible==2.0.0", "snow>=2026.2"]
             """),
         ),
 
         # ---------------------------------------------------------
         # CASE 9
-        # dependencies:
-        # both modify same dep differently + incoming changes
-        # another dep that current left unchanged
-        # -> current kept for both + conflict for diverging dep
+        # dependencies: both sides change pins -> pick newer for each package name
         # ---------------------------------------------------------
         dict(
             base=D("""
@@ -370,23 +321,7 @@ def D(s: str) -> str:
                 [project]
                 name = "demo"
                 version = "0.2.0"
-                dependencies = ["ansible==3.0.0", "snow>=2026.1"]
-
-                # ===== MERGE CONFLICTS (manual resolution required) =====
-                # [1] Path: project.dependencies
-                # Reason: Concurrent changes (3-way).
-                <<<<<<< CURRENT
-                ["ansible==3.0.0", "snow>=2026.1"]
-                =======
-                ["ansible==4.0.0", "snow>=2026.2"]
-                >>>>>>> INCOMING
-                # [2] Path: project.dependencies
-                # Reason: 'ansible' modified in both incoming and current; current ranges kept.
-                <<<<<<< CURRENT
-                ansible==3.0.0
-                =======
-                ansible==4.0.0
-                >>>>>>> INCOMING
+                dependencies = ["ansible==4.0.0", "snow>=2026.2"]
             """),
         ),
 
@@ -570,10 +505,8 @@ def test_merge_dependencies_removal_unchanged():
         version = "0.1.0"
         dependencies = ["pkg==1.0.0"]
     """))
-    conflicts = []
-    _merge_dependencies(base_doc, cur_doc, inc_doc, conflicts)
-    assert conflicts == []
-    assert cur_doc["project"]["dependencies"] == ["pkg==1.0.0"]
+    _merge_dependencies(base_doc, cur_doc, inc_doc)
+    assert list(cur_doc["project"]["dependencies"]) == ["pkg==1.0.0"]
 
 
 def test_merge_without_packaging():
@@ -606,3 +539,115 @@ def test_merge_without_packaging():
         dependencies = ["ansible==2.0.0", "snow>=2026.1,<2026.2"]
     """)
     assert actual == expected
+
+
+def test_merge_dependencies_preserves_multiline_when_any_side_multiline() -> None:
+    """Merged project.dependencies stays multiline when base/current/incoming use multiline style."""
+    actual = merge(
+        base=D("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            dependencies = [
+                "ansible==2.0.0",
+            ]
+        """),
+        current=D("""
+            [project]
+            name = "demo"
+            version = "0.2.0"
+            dependencies = [
+                "ansible==2.0.0",
+            ]
+        """),
+        incoming=D("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+            dependencies = [
+                "ansible==2.0.0",
+                "snow>=2026.1,<2026.2",
+            ]
+        """),
+    )
+    i = actual.find("dependencies = [")
+    j = actual.find("]", i)
+    assert i != -1 and j != -1
+    assert actual[i:j].count("\n") >= 2
+    assert "snow>=2026.1,<2026.2" in actual
+
+
+def test_merge_tool_uv_sources_union_restores_from_incoming() -> None:
+    """tool.uv.sources is union-merged: current dropped the section but incoming still has entries -> restored."""
+    actual = merge(
+        base=D("""
+            [project]
+            name = "kbot"
+            version = "2026.2.dev0"
+
+            [tool.uv.sources]
+            snow = { workspace = true }
+        """),
+        current=D("""
+            [project]
+            name = "kbot"
+            version = "2026.2.dev2"
+        """),
+        incoming=D("""
+            [project]
+            name = "kbot"
+            version = "2026.1.dev1"
+
+            [tool.uv.sources]
+            snow = { workspace = true }
+        """),
+    )
+    assert "[tool.uv.sources]" in actual
+    assert "snow = { workspace = true }" in actual
+    assert "2026.2.dev2" in actual
+
+
+def test_merge_tool_uv_index_union_keeps_both_named_indexes() -> None:
+    """[[tool.uv.index]] merged by name: current dropped one block, incoming still has both -> both kept."""
+    actual = merge(
+        base=D("""
+            [project]
+            name = "kbot"
+            version = "0.1.0"
+
+            [[tool.uv.index]]
+            name = "konverso-nexus"
+            url = "https://nexus.example/wheels/simple/"
+
+            [[tool.uv.index]]
+            name = "konverso-pypi-proxy"
+            url = "https://nexus.example/pypi/simple"
+            default = true
+        """),
+        current=D("""
+            [project]
+            name = "kbot"
+            version = "0.2.0"
+
+            [[tool.uv.index]]
+            name = "konverso-nexus"
+            url = "https://nexus.example/wheels/simple/"
+        """),
+        incoming=D("""
+            [project]
+            name = "kbot"
+            version = "0.1.0"
+
+            [[tool.uv.index]]
+            name = "konverso-nexus"
+            url = "https://nexus.example/wheels/simple/"
+
+            [[tool.uv.index]]
+            name = "konverso-pypi-proxy"
+            url = "https://nexus.example/pypi/simple"
+            default = true
+        """),
+    )
+    assert actual.count("[[tool.uv.index]]") == 2
+    assert "konverso-pypi-proxy" in actual
+    assert "0.2.0" in actual
