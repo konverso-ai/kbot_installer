@@ -357,7 +357,7 @@ def D(s: str) -> str:
         ),
 
         # ---------------------------------------------------------
-        # CASE 10
+        # CASE 11
         # incoming adds a new TOML section not in base/current
         # -> section is added to current
         # ---------------------------------------------------------
@@ -391,7 +391,7 @@ def D(s: str) -> str:
         ),
 
         # ---------------------------------------------------------
-        # CASE 11
+        # CASE 12
         # current adds a field not in base or incoming
         # -> current's field is preserved
         # ---------------------------------------------------------
@@ -421,7 +421,7 @@ def D(s: str) -> str:
         ),
 
         # ---------------------------------------------------------
-        # CASE 12
+        # CASE 13
         # base has no [project] (e.g. empty or tool-only)
         # -> _get_deps(base_doc) returns [] (proj is None)
         # ---------------------------------------------------------
@@ -445,7 +445,7 @@ def D(s: str) -> str:
         ),
 
         # ---------------------------------------------------------
-        # CASE 13
+        # CASE 14
         # both current and incoming removed the same dependency
         # -> no conflict, dep stays removed (continue when cur_val is None)
         # ---------------------------------------------------------
@@ -476,7 +476,7 @@ def D(s: str) -> str:
             """),
         ),
 
-        # CASE 14
+        # CASE 15
         # incoming removes a dep, current unchanged from base for that dep
         # -> dep removed (del cur[k] when base_val == cur_val)
         # Use a single exact-version dep so canonical form matches
