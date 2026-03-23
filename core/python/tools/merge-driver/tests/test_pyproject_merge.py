@@ -509,6 +509,32 @@ def test_merge_dependencies_removal_unchanged():
     assert list(cur_doc["project"]["dependencies"]) == ["pkg==1.0.0"]
 
 
+def test_merge_dependencies_current_removal_unchanged():
+    """Current removes a dep; incoming unchanged vs base — accept removal (symmetric 3-way merge)."""
+    import tomlkit
+
+    base_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.1.0"
+        dependencies = ["pkg==1.0.0", "other==2.0.0"]
+    """))
+    cur_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.2.0"
+        dependencies = ["other==2.0.0"]
+    """))
+    inc_doc = tomlkit.parse(D("""
+        [project]
+        name = "demo"
+        version = "0.1.0"
+        dependencies = ["pkg==1.0.0", "other==2.0.0"]
+    """))
+    _merge_dependencies(base_doc, cur_doc, inc_doc)
+    assert list(cur_doc["project"]["dependencies"]) == ["other==2.0.0"]
+
+
 def test_merge_without_packaging():
     """Fallback path when packaging is not available."""
     with patch("pyproject_merge.Requirement", None):

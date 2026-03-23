@@ -184,7 +184,11 @@ def _merge_dependencies(
             continue
 
         if cur_s is None and inc_s is not None:
-            # Current removed; incoming still lists it — restore incoming
+            # Current removed this package
+            if base_s is not None and inc_s == base_s:
+                # Incoming did not change the dep vs base: accept current's removal
+                continue
+            # Incoming added or changed the dep: take incoming's specifier
             out[k] = inc_s
             continue
 
