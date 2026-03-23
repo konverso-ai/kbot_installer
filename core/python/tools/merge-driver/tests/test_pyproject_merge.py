@@ -327,6 +327,37 @@ def D(s: str) -> str:
 
         # ---------------------------------------------------------
         # CASE 10
+        # dependencies: higher lower-bound beats lower pin (version-first; no pin-over-range tier)
+        # ---------------------------------------------------------
+        dict(
+            base=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["lib==1.0.0"]
+            """),
+            current=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["lib==1.0.0"]
+            """),
+            incoming=D("""
+                [project]
+                name = "demo"
+                version = "0.1.0"
+                dependencies = ["lib>=5.0.0"]
+            """),
+            expected=D("""
+                [project]
+                name = "demo"
+                version = "0.2.0"
+                dependencies = ["lib>=5.0.0"]
+            """),
+        ),
+
+        # ---------------------------------------------------------
+        # CASE 10
         # incoming adds a new TOML section not in base/current
         # -> section is added to current
         # ---------------------------------------------------------

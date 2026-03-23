@@ -56,7 +56,7 @@ def _req_map(reqs: list[str]) -> dict[str, str]:
 
 
 def _dominant_version_token(req_str: str) -> Any:
-    """Single comparable value for 'how new' a specifier is (best effort)."""
+    """Comparable value for ordering: dominant parsed version (pin or lower bound), not specifier shape."""
     if parse_version is None or Requirement is None:
         m = re.search(r"(\d+\.\d+(?:\.\d+)?)", req_str)
         if m:
@@ -71,28 +71,34 @@ def _dominant_version_token(req_str: str) -> Any:
     except Exception:
         return (0,)
 
-    pin: Any = None
-    lower: Any = None
+    best: Any = None
     for sp in req.specifier:
         try:
             v = parse_version(sp.version)
         except (InvalidVersion, TypeError, ValueError):
             continue
         if sp.operator == "==":
-            pin = v if pin is None else max(pin, v)
+            best = v if best is None else max(best, v)
         elif sp.operator in (">=", "~=", ">"):
-            lower = v if lower is None else max(lower, v)
+            best = v if best is None else max(best, v)
 
-    if pin is not None:
-        return (2, pin)
-    if lower is not None:
-        return (1, lower)
-    return (0, parse_version("0"))
+    if best is not None:
+        return best
+    return parse_version("0")
 
 
 def _pick_newer_requirement(cur: str, inc: str) -> str:
     """Return the requirement string that is newer (more recent pin/range)."""
     rc, ri = _dominant_version_token(cur), _dominant_version_token(inc)
+    if parse_version is not None:
+        def _as_cmp_version(x: Any) -> Any:
+            if isinstance(x, tuple):
+                if not x or x == (0,):
+                    return parse_version("0")
+                return parse_version(".".join(str(n) for n in x))
+            return x
+
+        rc, ri = _as_cmp_version(rc), _as_cmp_version(ri)
     if rc == ri:
         return cur
     if rc > ri:
