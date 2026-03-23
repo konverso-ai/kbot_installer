@@ -677,3 +677,47 @@ def test_merge_tool_uv_index_union_keeps_both_named_indexes() -> None:
     assert actual.count("[[tool.uv.index]]") == 2
     assert "konverso-pypi-proxy" in actual
     assert "0.2.0" in actual
+
+
+def test_incoming_removes_field_current_unchanged_vs_base() -> None:
+    """Incoming deletes a key; current matches base — accept deletion (no None in TOML)."""
+    actual = merge(
+        base=D("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [tool.demo]
+            extra = true
+        """),
+        current=D("""
+            [project]
+            name = "demo"
+            version = "0.2.0"
+
+            [tool.demo]
+            extra = true
+        """),
+        incoming=D("""
+            [project]
+            name = "demo"
+            version = "0.1.0"
+
+            [tool.demo]
+        """),
+    )
+    expected = D("""
+        [project]
+        name = "demo"
+        version = "0.2.0"
+
+        [tool.demo]
+    """)
+    assert actual == expected
+
+
+def test_dumps_value_as_toml_none() -> None:
+    from pyproject_merge import _dumps_value_as_toml
+
+    assert _dumps_value_as_toml(None) == "<absent>"
+

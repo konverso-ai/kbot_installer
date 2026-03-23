@@ -26,6 +26,8 @@ class Conflict:
 
 
 def _dumps_value_as_toml(v: Any) -> str:
+    if v is None:
+        return "<absent>"
     doc = tomlkit.document()
     doc.add("x", v)
     s = tomlkit.dumps(doc)
@@ -236,6 +238,20 @@ def _toml_set(doc: Any, path: list[str], value: Any) -> None:
     cur[path[-1]] = value
 
 
+def _toml_delete(doc: Any, path: list[str]) -> None:
+    """Remove key at *path* from *doc* (TOML has no null; never assign None)."""
+    if not path:
+        return
+    cur = doc
+    for p in path[:-1]:
+        if not isinstance(cur, dict) or p not in cur:
+            return
+        cur = cur[p]
+    key = path[-1]
+    if isinstance(cur, dict) and key in cur:
+        del cur[key]
+
+
 def _iter_paths(obj: Any, prefix: list[str] | None = None):
     prefix = prefix or []
     if isinstance(obj, dict):
@@ -413,7 +429,10 @@ def merge(base: str, current: str, incoming: str) -> str:
             continue
 
         if c == b and i != b:
-            _toml_set(cur_doc, path, i)
+            if i is None:
+                _toml_delete(cur_doc, path)
+            else:
+                _toml_set(cur_doc, path, i)
         elif i == b:
             continue
         else:
