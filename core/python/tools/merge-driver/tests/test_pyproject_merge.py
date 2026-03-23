@@ -5,8 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
-from pyproject_merge import merge
+from pyproject_merge import _dominant_version_token
 from pyproject_merge import _merge_dependencies
+from pyproject_merge import _pick_newer_requirement
+from pyproject_merge import merge
 
 
 def D(s: str) -> str:
@@ -745,6 +747,26 @@ def test_incoming_removes_field_current_unchanged_vs_base() -> None:
         [tool.demo]
     """)
     assert actual == expected
+
+
+def test_pick_newer_requirement_upper_bounds_compare_by_ceiling() -> None:
+    """Upper-bound-only specs use their ceiling for ordering, not version zero."""
+    assert _pick_newer_requirement("lib<3.0.0", "lib<4.0.0") == "lib<4.0.0"
+    assert _pick_newer_requirement("lib<4.0.0", "lib<3.0.0") == "lib<4.0.0"
+    assert _pick_newer_requirement("lib<=3.0.0", "lib<4.0.0") == "lib<4.0.0"
+
+
+def test_pick_newer_requirement_upper_vs_lower_uses_numeric_order() -> None:
+    """Do not treat `<5` as 0 and lose to any `>=1` by mistake."""
+    assert _pick_newer_requirement("lib<5.0.0", "lib>=1.0.0") == "lib<5.0.0"
+    assert _pick_newer_requirement("lib>=1.0.0", "lib<5.0.0") == "lib<5.0.0"
+
+
+def test_dominant_version_token_range_prefers_lower_bound() -> None:
+    """`>=x,<y` keeps x as the dominant token (unchanged vs upper-only fix)."""
+    from packaging.version import parse as parse_version
+
+    assert _dominant_version_token("snow>=2026.1,<2026.2") == parse_version("2026.1")
 
 
 def test_dumps_value_as_toml_none() -> None:

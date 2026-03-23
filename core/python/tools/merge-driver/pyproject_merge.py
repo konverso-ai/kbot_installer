@@ -56,7 +56,11 @@ def _req_map(reqs: list[str]) -> dict[str, str]:
 
 
 def _dominant_version_token(req_str: str) -> Any:
-    """Comparable value for ordering: dominant parsed version (pin or lower bound), not specifier shape."""
+    """Comparable value for ordering: pin / lower bound, else upper bound (<, <=), else zero.
+
+    Upper-bound-only specifiers (e.g. ``foo<3``) must not fall through as version zero, or
+    they lose to any ``>=`` and compare equal to each other arbitrarily.
+    """
     if parse_version is None or Requirement is None:
         m = re.search(r"(\d+\.\d+(?:\.\d+)?)", req_str)
         if m:
@@ -71,19 +75,24 @@ def _dominant_version_token(req_str: str) -> Any:
     except Exception:
         return (0,)
 
-    best: Any = None
+    lower: Any = None
+    upper: Any = None
     for sp in req.specifier:
         try:
             v = parse_version(sp.version)
         except (InvalidVersion, TypeError, ValueError):
             continue
         if sp.operator == "==":
-            best = v if best is None else max(best, v)
+            lower = v if lower is None else max(lower, v)
         elif sp.operator in (">=", "~=", ">"):
-            best = v if best is None else max(best, v)
+            lower = v if lower is None else max(lower, v)
+        elif sp.operator in ("<", "<="):
+            upper = v if upper is None else max(upper, v)
 
-    if best is not None:
-        return best
+    if lower is not None:
+        return lower
+    if upper is not None:
+        return upper
     return parse_version("0")
 
 
