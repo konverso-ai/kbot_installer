@@ -1,0 +1,292 @@
+name: Sync PR Description to Jira
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+env:
+  GH_TOKEN: ${{ secrets.GH_PAT }}
+
+jobs:
+  sync-pr-to-jira:
+    name: Sync PR Description to Jira
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Fetch PR Description
+        id: pr_info
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          
+          # Fetch PR details using GitHub CLI
+          PR_JSON=$(gh pr view $PR_NUMBER --json number,title,body,url,author)
+          
+          # Extract PR description (body)
+          PR_DESCRIPTION=$(echo "$PR_JSON" | jq -r '.body // ""')
+          PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+          PR_URL=$(echo "$PR_JSON" | jq -r '.url')
+          
+          # Save to outputs
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+          echo "url=$PR_URL" >> $GITHUB_OUTPUT
+          
+          # Extract Jira ticket ID from PR title or description
+          # Pattern: KB-123, DO-456, INFRA-789, CS-123, etc.
+          JIRA_TICKET=$(echo "$PR_TITLE $PR_DESCRIPTION" | grep -oE '([A-Z]+-[0-9]+)' | head -n 1 || echo "")
+          
+          if [ -z "$JIRA_TICKET" ]; then
+            echo "WARNING: No Jira ticket ID found in PR title or description"
+            echo "ticket_id=" >> $GITHUB_OUTPUT
+          else
+            echo "Found Jira ticket: $JIRA_TICKET"
+            echo "ticket_id=$JIRA_TICKET" >> $GITHUB_OUTPUT
+          fi
+          
+          # Display PR info
+          echo "PR Title: $PR_TITLE"
+          echo "PR URL: $PR_URL"
+          echo "Jira Ticket: ${JIRA_TICKET:-Not found}"
+
+      - name: Process PR Description
+        id: process_description
+        if: steps.pr_info.outputs.ticket_id != ''
+        env:
+          PR_DESCRIPTION: ${{ steps.pr_info.outputs.description }}
+        run: |
+          # Remove HTML comments (e.g., <!-- CURSOR_SUMMARY --> and <!-- /CURSOR_SUMMARY -->)
+          CLEANED=$(echo "$PR_DESCRIPTION" | sed 's/<!--[^>]*-->//g')
+          
+          # Remove leading/trailing whitespace and empty lines
+          CLEANED=$(echo "$CLEANED" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          
+          # Save cleaned description (will be converted to ADF in next step)
+          echo "cleaned_description<<EOF" >> $GITHUB_OUTPUT
+          echo "$CLEANED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update Jira Ticket
+        if: steps.pr_info.outputs.ticket_id != ''
+        env:
+          JIRA_EMAIL: build@konverso.ai
+          JIRA_API_TOKEN: ${{ secrets.JIRA_DEVBOT_API_TOKEN }}
+          JIRA_BASE_URL: https://konverso.atlassian.net
+          JIRA_TICKET_ID: ${{ steps.pr_info.outputs.ticket_id }}
+          PR_DESCRIPTION: ${{ steps.process_description.outputs.cleaned_description }}
+          PR_TITLE: ${{ steps.pr_info.outputs.title }}
+          PR_URL: ${{ steps.pr_info.outputs.url }}
+        run: |
+          # Convert markdown to Jira ADF format
+          # Create a temporary jq script file to avoid shell quoting issues
+          cat > /tmp/convert_markdown.jq << 'JQ_SCRIPT'
+          # Helper function to process text with markdown (bold, code)
+          def process_markdown:
+            [splits("(\\*\\*[^*]+\\*\\*|`[^`]+`)")] |
+            map(
+              if . | test("^\\*\\*.*\\*\\*$") then
+                {"type": "text", "marks": [{"type": "strong"}], "text": (. | sub("^\\*\\*"; "") | sub("\\*\\*$"; ""))}
+              elif . | test("^`.*`$") then
+                {"type": "text", "marks": [{"type": "code"}], "text": (. | sub("^`"; "") | sub("`$"; ""))}
+              else
+                {"type": "text", "text": .}
+              end
+            );
+          
+          split("\n") |
+          # Group consecutive list items
+          reduce .[] as $line (
+            {"result": [], "current_list": []};
+            # Horizontal rule
+            if $line | test("^---+$") then
+              # Flush any pending list
+              (if .current_list | length > 0 then
+                .result + [{"type": "bulletList", "content": .current_list}]
+              else
+                .result
+              end) as $new_result |
+              {"result": ($new_result + [{"type": "rule"}]), "current_list": []}
+            # Note block start
+            elif $line | test("^> \\[!NOTE\\]") then
+              # Flush any pending list
+              (if .current_list | length > 0 then
+                .result + [{"type": "bulletList", "content": .current_list}]
+              else
+                .result
+              end) as $new_result |
+              {
+                "result": ($new_result + [{
+                  "type": "panel",
+                  "attrs": {"panelType": "info"},
+                  "content": [{
+                    "type": "paragraph",
+                    "content": [{
+                      "type": "text",
+                      "text": ($line | sub("^> \\[!NOTE\\]"; ""; "g") | ltrimstr(" "))
+                    }]
+                  }]
+                }]),
+                "current_list": []
+              }
+            # Note/quote continuation
+            elif $line | test("^> ") then
+              # Flush any pending list
+              (if .current_list | length > 0 then
+                .result + [{"type": "bulletList", "content": .current_list}]
+              else
+                .result
+              end) as $new_result |
+              {
+                "result": ($new_result + [{
+                  "type": "paragraph",
+                  "content": [{"type": "text", "text": ($line | ltrimstr("> "))}]
+                }]),
+                "current_list": []
+              }
+            # List item
+            elif $line | test("^[-*] ") then
+              # Add to current list
+              {
+                "result": .result,
+                "current_list": (.current_list + [{
+                  "type": "listItem",
+                  "content": [{
+                    "type": "paragraph",
+                    "content": (($line | sub("^[-*] "; "")) | process_markdown)
+                  }]
+                }])
+              }
+            # Regular paragraph (non-empty)
+            elif ($line | length) > 0 then
+              # Flush any pending list
+              (if .current_list | length > 0 then
+                .result + [{"type": "bulletList", "content": .current_list}]
+              else
+                .result
+              end) as $new_result |
+              {
+                "result": ($new_result + [{
+                  "type": "paragraph",
+                  "content": ($line | process_markdown)
+                }]),
+                "current_list": []
+              }
+            else
+              # Empty line - flush list if exists, but don't add empty paragraph
+              (if .current_list | length > 0 then
+                .result + [{"type": "bulletList", "content": .current_list}]
+              else
+                .result
+              end) as $new_result |
+              {"result": $new_result, "current_list": []}
+            end
+          ) |
+          # Flush any remaining list items
+          if .current_list | length > 0 then
+            .result + [{"type": "bulletList", "content": .current_list}]
+          else
+            .result
+          end
+          JQ_SCRIPT
+          
+          # Run the conversion
+          DESCRIPTION_ADF=$(echo "$PR_DESCRIPTION" | jq -R -s -f /tmp/convert_markdown.jq)
+          
+          # Build header content array
+          HEADER_CONTENT=$(jq -n \
+            --arg title "$PR_TITLE" \
+            --arg url "$PR_URL" \
+            '[
+              {
+                "type": "heading",
+                "attrs": {"level": 3},
+                "content": [{"type": "text", "text": "Pull Request Information"}]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {"type": "text", "marks": [{"type": "strong"}], "text": "PR Title: "},
+                  {"type": "text", "text": $title}
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {"type": "text", "marks": [{"type": "strong"}], "text": "PR URL: "},
+                  {"type": "text", "marks": [{"type": "link", "attrs": {"href": $url}}], "text": $url}
+                ]
+              },
+              {
+                "type": "heading",
+                "attrs": {"level": 3},
+                "content": [{"type": "text", "text": "PR Description"}]
+              }
+            ]')
+          
+          # Combine header and description
+          COMMENT_JSON=$(jq -n \
+            --argjson header "$HEADER_CONTENT" \
+            --argjson description "$DESCRIPTION_ADF" \
+            '{
+              "body": {
+                "type": "doc",
+                "version": 1,
+                "content": ($header + $description)
+              }
+            }')
+          
+          # Check for existing comment with "Pull Request Information"
+          # Search through all comments to find one that contains our marker
+          EXISTING_COMMENTS=$(curl -s \
+            -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET_ID/comment")
+          
+          # Find comment that contains "Pull Request Information" heading
+          # Search through the ADF structure recursively
+          EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENTS" | jq -r '
+            .comments[] |
+            select(
+              .body.content[]? |
+              select(.type == "heading") |
+              .content[]? |
+              select(.type == "text" and .text == "Pull Request Information")
+            ) |
+            .id
+          ' | head -n1)
+          
+          if [ -n "$EXISTING_COMMENT_ID" ] && [ "$EXISTING_COMMENT_ID" != "null" ]; then
+            # Update existing comment
+            echo "Found existing comment, updating comment ID: $EXISTING_COMMENT_ID"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
+              -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET_ID/comment/$EXISTING_COMMENT_ID" \
+              -d "$COMMENT_JSON")
+          else
+            # Create new comment
+            echo "No existing comment found, creating new comment"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$JIRA_TICKET_ID/comment" \
+              -d "$COMMENT_JSON")
+          fi
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          if [ "$HTTP_CODE" -eq 201 ] || [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
+            echo "Successfully updated Jira ticket $JIRA_TICKET_ID"
+            echo "Response: $RESPONSE_BODY"
+          else
+            echo "Failed to update Jira ticket. HTTP Code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY"
+            exit 1
+          fi
+
