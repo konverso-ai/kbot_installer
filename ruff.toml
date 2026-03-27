@@ -1,37 +1,82 @@
-# Ruff configuration: stricte + complète
+# Ruff configuration for kbot (see also .pylintrc: Pylint is limited to Django and checks not covered by Ruff).
+# First-party roots match pyproject.toml hatch wheel sources.
 
-# Répertoire de base du code
 src = [
-    "app"
+    "core/python",
+    "rest",
+    "tests",
 ]
 
-# ✅ Active toutes les règles de lint connues
+# Enable all built-in rule categories (flake8, pyflakes, isort, pylint-PL, etc.).
 lint.select = ["ALL"]
 
-# ❌ Désactive celles que tu ne veux vraiment pas (par défaut : vide ici)
+# Rules turned off here are intentionally ignored project-wide (noise vs. legacy codebase).
 lint.ignore = [
-    "COM812",
-    "D100",
-    "D203",
-    "D212",
+    "ANN002",  # flake8-annotations: missing-type-args (*args)
+    "ANN003",  # flake8-annotations: missing-type-kwargs (**kwargs)
+    "ANN401",  # flake8-annotations: any-type (typing.Any)
+    "ARG001",  # flake8-unused-arguments: unused function argument
+    "ARG002",  # flake8-unused-arguments: unused method argument
+    "ARG005",  # flake8-unused-arguments: unused lambda argument
+    "ASYNC210",  # flake8-async: blocking-http-call-in-async-function
+    "B018",  # flake8-bugbear: useless-expression
+    "BLE001",  # flake8-blind-except: blind-except
+    "COM812",  # flake8-commas: trailing-comma-missing (often conflicts with formatters)
+    "C901",  # mccabe: complexity too high
+    "D100",  # pydocstyle: undocumented-public-module
+    "D107",  # pydocstyle: undocumented-public-init
+    "D203",  # pydocstyle: incorrect-blank-line-before-class (conflicts with D211)
+    "D212",  # pydocstyle: multi-line-summary-first-line
+    "DTZ003",  # flake8-datetimez: call-datetime-utcnow
+    "DTZ007",  # flake8-datetimez: call-datetime-utcfromtimestamp
+    "EM101",  # flake8-errmsg: raw-string-in-exception
+    "EM102",  # flake8-errmsg: f-string-in-exception
+    "E722",  # pycodestyle: bare-except
+    "B008",  # flake8-bugbear: function-call-in-default-argument
+    "FBT001",  # flake8-boolean-trap: boolean-positional-arg-in-function-definition
+    "FBT002",  # flake8-boolean-trap: boolean-default-value-positional-argument
+    "FURB162",  # refurb: fromisoformat-z
+    "INP001",  # flake8-no-pep420: implicit-namespace-package
+    "PLR0911",  # pylint: too-many-return-statements
+    "PLR0912",  # pylint: too-many-branches
+    "PLR0915",  # pylint: too-many-statements
+    "PLR2004",  # pylint: magic-value-comparison
+    "FBT003",  # flake8-boolean-trap: boolean-positional-value-in-call
+    "PTH102",  # flake8-use-pathlib: os-mkdir
+    "PTH103",  # flake8-use-pathlib: os-makedirs
+    "PTH106",  # flake8-use-pathlib: os-rmdir
+    "PTH107",  # flake8-use-pathlib: os-remove
+    "PTH110",  # flake8-use-pathlib: os-path-exists
+    "PTH116",  # flake8-use-pathlib: os-stat
+    "PTH118",  # flake8-use-pathlib: os-path-isdir
+    "PTH120",  # flake8-use-pathlib: os-path-isfile
+    "PTH122",  # flake8-use-pathlib: os-getcwd
+    "PTH208",  # flake8-use-pathlib: os-path-isabs
+    "PLR0913",  # pylint: too-many-arguments
+    "PLW2901",  # pylint: redefined-loop-name
+    "RET504",  # flake8-return: unnecessary-assign
+    "SIM108",  # flake8-simplify: use-ternary-operator
+    "RUF013",  # Ruff-specific: implicit-optional
+    "SIM105",  # flake8-simplify: suppressible-exception
+    "S101",  # flake8-bandit: assert
+    "S110",  # flake8-bandit: try-except-pass
+    "TRY003",  # tryceratops: raise-vanilla-args
+    "TRY301",  # tryceratops: raise-within-try
 ]
 
-# ✅ Fix automatique (optionnel, utile en CI locale)
-# fix = true
+# fix = true  # optional: apply safe fixes in CI or locally
 
-# ✅ Cible la dernière version stable de Python utilisée
-target-version = "py313"
+target-version = "py310"
 
-# ✅ Exclut les fichiers générés, migrations, etc.
 exclude = [
-  ".git",
-  ".mypy_cache",
-  ".ruff_cache",
-  "__pycache__",
-  "migrations",
-  "tests",
-  "**/__init__.py"
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "migrations",
+    "tests",
+    "**/alembic/versions",
+    "**/__init__.py",
 ]
 
-# ✅ Formattage compatible avec Black (si tu l'utilises)
-line-length = 88
+line-length = 120
