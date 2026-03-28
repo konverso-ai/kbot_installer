@@ -1,0 +1,2 @@
+uv.lock merge=ours
+pyproject.toml merge=pyproject-merge

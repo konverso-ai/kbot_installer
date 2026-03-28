@@ -21,7 +21,41 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 "core/python" = "."
 "rest" = "."
 
+[tool.hatch.build.targets.wheel.force-include]
+"description.xml" = "installer/kbot_installer/description.xml"
+"pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[dependency-groups]
+lint = [
+    "pylint",
+    "pylint-django",
+    "pylint-django-settings",
+    "pylint-plugin-utils",
+    "ruff"
+]
+
+typecheck = [
+    "ty"
+]
+
+test = [
+    "pytest",
+    "pytest-cov",
+    "testcontainers",
+]
+
+dev = [
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "test" },
+]
+
 [[tool.uv.index]]
 name = "konverso-nexus"
 url = "https://nexus.konverso.ai/repository/python_whl/simple/"
 publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+default = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
