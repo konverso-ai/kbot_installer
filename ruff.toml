@@ -1,6 +1,9 @@
 # Ruff configuration for kbot (see also .pylintrc: Pylint is limited to Django and checks not covered by Ruff).
 # First-party roots match pyproject.toml hatch wheel sources.
 
+# Store Ruff cache under /tmp (not .ruff_cache in the repo); same idea as .pytest.ini cache_dir.
+cache-dir = "/tmp/ruff_cache"
+
 src = [
     "core/python",
     "rest",
