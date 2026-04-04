@@ -3,11 +3,11 @@ name = "kbot-installer"
 version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
-]
+authors = []
 requires-python = "==3.10.15"
-dependencies = []
+dependencies = [
+    "defusedxml"
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -24,6 +24,16 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 [tool.hatch.build.targets.wheel.force-include]
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[[tool.uv.index]]
+name = "konverso-nexus"
+url = "https://nexus.konverso.ai/repository/python_whl/simple/"
+publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+default = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
 
 [dependency-groups]
 lint = [
@@ -50,12 +60,3 @@ dev = [
     { include-group = "test" },
 ]
 
-[[tool.uv.index]]
-name = "konverso-nexus"
-url = "https://nexus.konverso.ai/repository/python_whl/simple/"
-publish-url = "https://nexus.konverso.ai/repository/python_whl/"
-default = true
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
