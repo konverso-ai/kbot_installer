@@ -51,6 +51,7 @@ typecheck = [
 test = [
     "pytest",
     "pytest-cov",
+    "pytest-django>=4.12.0",
     "testcontainers",
 ]
 
