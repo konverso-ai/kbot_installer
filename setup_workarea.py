@@ -191,17 +191,14 @@ class Installer:
         if not os.path.exists(pythondocfile):
             self._Makedirs(pythondocfolder)
             with open(pythondocfile, "w", encoding='utf8') as fd:
-                fd.write("""
-<title>Bot API documentation</title>
+                fd.write("""<title>Bot API documentation</title>
 <meta name="description" content="Main Bot module." />
 <html>
 <body>
 <p> Python Docs are only available with the "python-dev" solution installed.</p>
 </body>
 
-</html>
-""")
-
+</html>""")
 
     def _SetupBin(self):
 
@@ -264,14 +261,35 @@ class Installer:
             self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
     def _UpdatePythonPackages(self):
-        """ Upate products  python packages using requirements.txt file"""
-        for p in self.products:
-            if p.type not in ("solution", "customer"):
-                continue
-            req_path = os.path.join(p.dirname, "requirements.txt")
-            if os.path.exists(req_path):
-                pip_path = os.path.join(Env().binhome, "pip3.sh")
-                os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
+        """Sync Python dependencies with ``uv sync`` at ``KBOT_INSTALLER`` (workspace root).
+
+        Expects a uv project or workspace layout under the installer tree (e.g. ``~/dev/installer``).
+        Skips quietly if ``KBOT_INSTALLER`` is unset, the directory is missing, or ``uv`` is not on
+        ``PATH``. Uses ``--frozen`` when ``uv.lock`` is present.
+        """
+        root = os.environ.get("KBOT_INSTALLER")
+        if not root or not os.path.isdir(root):
+            return
+        if not shutil.which("uv"):
+            print("Warning: uv not found in PATH; skipping uv sync.", file=sys.stderr)
+            return
+        # TODO: drive ``uv sync`` extras from an env (e.g. KBOT_UV_ENV=dev|prod): pass ``--no-dev``
+        # in production so dependency-groups like dev/test are skipped; omit in dev.
+        cmd = ["uv", "sync"]
+        if os.path.isfile(os.path.join(root, "uv.lock")):
+            cmd.insert(2, "--frozen")
+        proc = subprocess.run(
+            cmd,
+            cwd=root,
+            env=os.environ.copy(),
+            check=False,
+        )
+        if proc.returncode != 0:
+            print(
+                "uv sync failed in KBOT_INSTALLER=%s (exit %s)."
+                % (root, proc.returncode),
+                file=sys.stderr,
+            )
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')
@@ -463,7 +481,6 @@ class Installer:
                             question = "Enter full path to redis Certificate Authority file [%s]: "
                             question = (question % self.redis_tls_ca_cert_file).strip()
                             self.redis_tls_ca_cert_file = input(question) or self.redis_tls_ca_cert_file
-
 
     def _ValidateParameterInKbotConf(self, param, param_name):
         if not self.config.GetConfig(param):
@@ -706,7 +723,6 @@ class Installer:
                     print("Error: can't load tables! Aborting...")
                     sys.exit(1)
 
-
     def _SetDatabaseVariables(self):
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
@@ -782,7 +798,6 @@ class Installer:
         cmd = cmd % (self.pg_psql, self.db_name, self.db_user, "localhost", self.db_port, self.db_dump)
         os.system(cmd)
         print("=> PostgreSQL dump loaded")
-
 
     def _InitializeDatabaseFromScratch(self):
         print("=> Initializing database tables...")
@@ -1145,9 +1160,7 @@ def usage():
             for external URLs references.
 
    To run a automatic (non interactive installer), make sure to include at the least the following flags:
-       --product --path --accept-licence --default --hostname
-
-""")
+       --product --path --accept-licence --default --hostname""")
 
 
 if __name__ == '__main__':
