@@ -3,11 +3,11 @@ name = "kbot-installer"
 version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
-]
+authors = []
 requires-python = "==3.10.15"
-dependencies = []
+dependencies = [
+    "tomlkit>=0.12",
+]
 
 [build-system]
 requires = ["hatchling"]
