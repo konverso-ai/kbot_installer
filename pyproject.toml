@@ -3,43 +3,30 @@ name = "kbot-installer"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "httpx",
-    "python-dotenv",
-    "tqdm",
-    "colorama",
-    "pygit2",
     "aiofiles",
+    "click",
+    "colorama",
+    "defusedxml",
     "furl",
-    "requests>=2.32.5",
-    "psutil>=7.1.0",
-    "click>=8.3.0",
-    "defusedxml>=0.7.1",
-    "rich>=14.1.0",
-    "gitpython>=3.1.45",
+    "gitpython",
+    "httpx",
+    "psutil",
+    "pygit2",
+    "python-dotenv",
+    "requests",
+    "rich",
+    "tqdm",
 ]
 
 [project.scripts]
-kbot-installer = "kbot_installer.__main__:cli"
+kbot-installer = "kbot_installer.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["core/python", "rest"]
-py-modules = ["Bot", "Load", "Learn", "System"]
-
-[tool.hatch.build.targets.wheel.sources]
-"core/python" = "."
-"rest" = "."
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["kbot_installer*"]
-
-[dependency-groups]
-lint = ["ruff"]
-test = ["pytest", "pytest-cov", "pytest-asyncio"]
+packages = ["src/kbot_installer"]
 
 [[tool.uv.index]]
 name = "konverso-nexus"
@@ -63,3 +50,25 @@ omit = [
 
 [tool.coverage.html]
 directory = "/tmp/htmlcov"
+
+[dependency-groups]
+lint = [
+    "pylint",
+    "ruff",
+]
+
+typecheck = [
+    "ty",
+]
+
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+
+dev = [
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "test" },
+]

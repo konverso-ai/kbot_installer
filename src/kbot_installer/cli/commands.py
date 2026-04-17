@@ -50,14 +50,18 @@ def _parse_providers(uses: str | None) -> list[str] | None:
     return [p.lower() for p in providers_list]
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version="0.1.0", prog_name="kbot-installer")
-def cli() -> None:
+@click.pass_context
+def cli(ctx: click.Context) -> None:
     """Kbot Installer - A tool for installing and managing kbot products.
 
     This CLI provides commands to install, list, and explore kbot products
     and their dependencies.
     """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit()
 
 
 @cli.command()
