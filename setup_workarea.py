@@ -33,6 +33,18 @@ _INSTALLER_WORKSPACE_EXCLUDE = frozenset(
 )
 
 
+def _uv_python_cli_args():
+    """Return ``uv`` CLI flags so resolution/sync use the same interpreter as this process.
+
+    When started via ``kbot/bin/python.sh``, that matches ``PYTHON_DIR`` / env.sh; without this,
+    ``uv`` may pick another Python from PATH or its own managed runtimes.
+    """
+    exe = (sys.executable or "").strip()
+    if not exe:
+        return []
+    return ["--python", os.path.realpath(exe)]
+
+
 def _requires_python_spec_for_workspace():
     major = os.environ.get("PYTHON_MAJOR_VERSION", "3.10")
     if not re.match(r"^\d+(\.\d+)?$", str(major).strip()):
@@ -339,6 +351,7 @@ class Installer:
             return
         cmd = (
             ["uv", "add"]
+            + _uv_python_cli_args()
             + [f"./{name}" for name in subdirs]
             + ["--workspace", "--no-sync"]
         )
@@ -373,9 +386,9 @@ class Installer:
             return
         # TODO: drive ``uv sync`` extras from an env (e.g. KBOT_UV_ENV=dev|prod): pass ``--no-dev``
         # in production so dependency-groups like dev/test are skipped; omit in dev.
-        cmd = ["uv", "sync"]
+        cmd = ["uv", "sync"] + _uv_python_cli_args()
         if os.path.isfile(os.path.join(root, "uv.lock")):
-            cmd.insert(2, "--frozen")
+            cmd.append("--frozen")
         proc = subprocess.run(
             cmd,
             cwd=root,
@@ -933,7 +946,7 @@ class Installer:
                 if self.db_internal:
                     if os.system('%s -q -p %s %s -c "%s"'%(self.pg_psql, self.db_port, self.db_name, query)) != 0:
                         print("Error: can't save predefined classifiers! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                         sys.exit(1)
                 elif os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
                                """%(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
@@ -945,7 +958,7 @@ class Installer:
             sys.stdout.flush()
             if os.system('%s/bin/kbot.sh load'%self.target) != 0:
                 print("Error during loading! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                 sys.exit(1)
 
             if self.admin_password:
@@ -955,7 +968,7 @@ class Installer:
                     if os.system('%s -q -p %s %s -U %s -c "%s"'\
                                  %(self.pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
                         print("Error: can't setup admin password! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                         sys.exit(1)
                 # setup admin password
                 elif os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
@@ -967,7 +980,7 @@ class Installer:
             print("Learning models...")
             if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
                 print("Error during learning! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                 sys.exit(1)
 
     def _StartInstallation(self):
