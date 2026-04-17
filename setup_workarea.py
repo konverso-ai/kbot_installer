@@ -326,6 +326,7 @@ class Installer:
         """Ensure ``KBOT_INSTALLER`` has a root project and register product dirs via ``uv add --workspace``.
 
         Skips ``3rdparty`` and ``installer``. Does not edit ``[tool.uv.*]``; ``uv add`` updates the manifest.
+        On new work-area creation (not ``Update``), a non-zero ``uv`` exit aborts the installer.
         """
         root = os.environ.get("KBOT_INSTALLER")
         if not root or not os.path.isdir(root):
@@ -353,13 +354,16 @@ class Installer:
                 % (root, proc.returncode),
                 file=sys.stderr,
             )
+            if not self.update:
+                sys.exit(proc.returncode if proc.returncode else 1)
 
     def _UpdatePythonPackages(self):
         """Sync Python dependencies with ``uv sync`` at ``KBOT_INSTALLER`` (workspace root).
 
         Expects a uv project or workspace layout under the installer tree (e.g. ``~/dev/installer``).
         Skips quietly if ``KBOT_INSTALLER`` is unset, the directory is missing, or ``uv`` is not on
-        ``PATH``. Uses ``--frozen`` when ``uv.lock`` is present.
+        ``PATH``. Uses ``--frozen`` when ``uv.lock`` is present. On new work-area creation (not
+        ``Update``), a non-zero ``uv`` exit aborts the installer.
         """
         root = os.environ.get("KBOT_INSTALLER")
         if not root or not os.path.isdir(root):
@@ -384,6 +388,8 @@ class Installer:
                 % (root, proc.returncode),
                 file=sys.stderr,
             )
+            if not self.update:
+                sys.exit(proc.returncode if proc.returncode else 1)
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')

@@ -39,4 +39,7 @@ export PG_DIR
 
 export PYTHONPATH=$PYTHONPATH:$KBOT_HOME/rest
 
-$KBOT_HOME/bin/python.sh $( dirname "${BASH_SOURCE[0]}" )/setup_workarea.py $INSTALLER_PARAMS |& tee /tmp/install.log ; test ${PIPESTATUS[0]} -eq 0
+# Propagate Python exit code (tee would otherwise make the pipeline look successful).
+$KBOT_HOME/bin/python.sh "$(dirname "${BASH_SOURCE[0]}")/setup_workarea.py" $INSTALLER_PARAMS 2>&1 | tee /tmp/install.log
+rc=${PIPESTATUS[0]}
+exit "$rc"
