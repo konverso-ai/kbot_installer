@@ -222,7 +222,7 @@ class Installer:
         current_user = getpass.getuser()
         # update rc script with proper path and user name
         #pylint: disable=anomalous-backslash-in-string
-        os.system('sed -i "s/__KBOT_HOME__/%s/" %s'%(os.path.abspath(os.path.expanduser(self.target)).replace('/', '\/'), rcfilename))
+        os.system('sed -i "s/__KBOT_HOME__/%s/" %s' % (os.path.abspath(os.path.expanduser(self.target)).replace('/', '\\/'), rcfilename))
         os.system('sed -i "s/__KBOT_USER__/%s/" %s'%(current_user, rcfilename))
 
     def _SetupCore(self):
@@ -404,7 +404,7 @@ class Installer:
                     sfile = os.path.join(sourcedir, fname)
                     self._Copy(sfile, tfile)
                     # pylint: disable=anomalous-backslash-in-string
-                    os.system('sed -i "s/__KBOT_HOME__/%s/" %s'%(os.path.abspath(os.path.expanduser(self.target)).replace('/', '\/'), tfile))
+                    os.system('sed -i "s/__KBOT_HOME__/%s/" %s' % (os.path.abspath(os.path.expanduser(self.target)).replace('/', '\\/'), tfile))
                     os.system('sed -i "s/__DB_HOST__/%s/" %s'%(self.db_host, tfile))
                     os.system('sed -i "s/__DB_NAME__/%s/" %s'%(self.db_name, tfile))
                     os.system('sed -i "s/__DB_NAME__/%s/" %s'%(self.db_name, tfile))
@@ -680,9 +680,9 @@ class Installer:
                             break
             #pylint: disable=anomalous-backslash-in-string
             if commented:
-                os.system('sed -i "s/^#%s\s=.*/%s = %s/" %s'%(name, name, str(value).replace('/', '\/'), kbotconf))
+                os.system('sed -i "s/^#%s\\s=.*/%s = %s/" %s' % (name, name, str(value).replace('/', '\\/'), kbotconf))
             elif present:
-                os.system('sed -i "s/^%s\s=.*/%s = %s/" %s'%(name, name, str(value).replace('/', '\/'), kbotconf))
+                os.system('sed -i "s/^%s\\s=.*/%s = %s/" %s' % (name, name, str(value).replace('/', '\\/'), kbotconf))
             else:
                 add_new_line = False
                 with open(kbotconf, 'r', encoding='utf8') as fd:
