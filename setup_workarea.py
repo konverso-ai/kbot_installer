@@ -12,6 +12,7 @@ import getpass
 import socket
 import json
 import re
+import shlex
 
 import utils.base as utils
 from common.Errors import KbotLicenseError
@@ -264,14 +265,22 @@ class Installer:
             self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
     def _UpdatePythonPackages(self):
-        """ Upate products  python packages using requirements.txt file"""
+        """Install product Python dependencies from pyproject.toml or requirements.txt."""
+        pip_path = os.path.join(Env().binhome, "pip3.sh")
+        quiet = "--quiet --disable-pip-version-check"
         for p in self.products:
             if p.type not in ("solution", "customer"):
                 continue
-            req_path = os.path.join(p.dirname, "requirements.txt")
-            if os.path.exists(req_path):
-                pip_path = os.path.join(Env().binhome, "pip3.sh")
-                os.system(f"{pip_path} install -r {req_path} --quiet --disable-pip-version-check")
+            root = p.dirname
+            pyproject_path = os.path.join(root, "pyproject.toml")
+            req_path = os.path.join(root, "requirements.txt")
+            if os.path.exists(pyproject_path):
+                # PEP 621 project: install the distribution in editable mode so [project].dependencies are resolved.
+                cmd = f"{shlex.quote(pip_path)} install -e {shlex.quote(root)} {quiet}"
+                os.system(cmd)
+            elif os.path.exists(req_path):
+                cmd = f"{shlex.quote(pip_path)} install -r {shlex.quote(req_path)} {quiet}"
+                os.system(cmd)
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')
