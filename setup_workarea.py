@@ -265,22 +265,45 @@ class Installer:
             self.products.populate() #products_definition_file=os.path.join(work, "var", "products.json"))
 
     def _UpdatePythonPackages(self):
-        """Install product Python dependencies from pyproject.toml or requirements.txt."""
+        """Install product Python dependencies from pyproject.toml or requirements.txt.
+
+        All PEP 621 roots are passed in a single ``pip install -e ... -e ...`` so the resolver
+        can satisfy inter-product dependencies (kbot, ithd, agentic-saas, etc.) from the
+        local trees instead of only PyPI. Per-product installs fail when another product is
+        not yet registered in the environment.
+        """
         pip_path = os.path.join(Env().binhome, "pip3.sh")
-        quiet = "--quiet --disable-pip-version-check"
+        editable_roots = []
+        req_files = []
+        seen_roots = set()
+        seen_reqs = set()
+
         for p in self.products:
             if p.type not in ("solution", "customer"):
                 continue
-            root = p.dirname
+            root = os.path.realpath(p.dirname)
             pyproject_path = os.path.join(root, "pyproject.toml")
             req_path = os.path.join(root, "requirements.txt")
             if os.path.exists(pyproject_path):
-                # PEP 621 project: install the distribution in editable mode so [project].dependencies are resolved.
-                cmd = f"{shlex.quote(pip_path)} install -e {shlex.quote(root)} {quiet}"
-                os.system(cmd)
+                if root not in seen_roots:
+                    seen_roots.add(root)
+                    editable_roots.append(root)
             elif os.path.exists(req_path):
-                cmd = f"{shlex.quote(pip_path)} install -r {shlex.quote(req_path)} {quiet}"
-                os.system(cmd)
+                req_real = os.path.realpath(req_path)
+                if req_real not in seen_reqs:
+                    seen_reqs.add(req_real)
+                    req_files.append(req_path)
+
+        if not editable_roots and not req_files:
+            return
+
+        cmd_parts = [shlex.quote(pip_path), "install"]
+        for root in editable_roots:
+            cmd_parts.extend(["-e", shlex.quote(root)])
+        for req_path in req_files:
+            cmd_parts.extend(["-r", shlex.quote(req_path)])
+        cmd_parts.extend(["--quiet", "--disable-pip-version-check"])
+        os.system(" ".join(cmd_parts))
 
     def _SetupUI(self):
         dirname = os.path.join(self.target, 'ui')
