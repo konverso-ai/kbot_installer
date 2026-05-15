@@ -28,7 +28,7 @@ help:
 	@echo "Available packages:"
 	@echo "  - provider (main package)"
 	@echo "  - auth (includes pygit_authentication and http_auth subpackages)"
-	@echo "  - factory"
+	@echo "  - utils/factory (dynamic factory helpers; use: make test PKG=utils/factory)"
 	@echo "  - versioner"
 	@echo "  - http_client"
 	@echo "  - url_manager"

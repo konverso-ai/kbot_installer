@@ -1,0 +1,9 @@
+# Coverage.py configuration (read by coverage and pytest-cov).
+# coverage does not load coverage settings from pytest.ini.
+
+[run]
+data_file = /tmp/.coverage
+omit = */*example*,*/*examples*,*/test_*,*/tests/*,*/__pycache__/*,*/.*,gitpassword.py,nexus.py,kbot.py,setup_workarea.py
+
+[html]
+directory = /tmp/htmlcov

@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
-version = "0.1.0"
-requires-python = ">=3.13"
+version = "2.0.0"
+requires-python = "==3.12.13"
 dependencies = [
     "aiofiles",
     "click",
@@ -19,37 +19,28 @@ dependencies = [
 ]
 
 [project.scripts]
-kbot-installer = "kbot_installer.__main__:main"
+kbot-installer = "cli.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/kbot_installer"]
+[tool.hatch.build.targets.wheel.sources]
+"core/python" = "."
+
+[tool.hatch.build.targets.wheel.force-include]
+"description.xml" = "installer/kbot_installer/description.xml"
+"pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
 [[tool.uv.index]]
-name = "konverso-nexus"
-url = "https://nexus.konverso.ai/repository/python_whl/simple/"
-publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+name = "konverso-aws-private"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
 
-[tool.coverage.run]
-data_file = "/tmp/.coverage"
-omit = [
-    "*/*example*",
-    "*/*examples*",
-    "*/test_*",
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/.*",
-    "gitpassword.py",
-    "nexus.py",
-    "kbot.py",
-    "setup_workarea.py",
-]
-
-[tool.coverage.html]
-directory = "/tmp/htmlcov"
+[[tool.uv.index]]
+name = "konverso-aws-pypi-proxy"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+default = true
 
 [dependency-groups]
 lint = [
