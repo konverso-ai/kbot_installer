@@ -706,7 +706,6 @@ class Installer:
                     print("Error: can't load tables! Aborting...")
                     sys.exit(1)
 
-
     def _SetDatabaseVariables(self):
         pg_dir = os.environ['PG_DIR']
         pg_bin = os.path.join(pg_dir, 'bin')
@@ -1118,15 +1117,15 @@ def usage():
       installer/kbot/install.sh --product ithd
                                 [--path /home/konverso/dev/installer]
                                 [--workarea /home/konverso/dev/work]
-                                [--accept-licence] [--default] 
-  
+                                [--accept-licence] [--default]
+
   To update the product links:
        installer/kbot/install.sh [-s|--silent] -u|--update
 
 
   Details of the parameters and associated specs and constaints:
 
-  --product: Mandatory. Define the target product to be installed. 
+  --product: Mandatory. Define the target product to be installed.
              All related product dependencies are automatically calculated.
 
   --path or -p: Optional. The path to be used for the retrieving the product binaries
@@ -1135,7 +1134,7 @@ def usage():
   --accept-licence: Optional. Can be used to explicity indicate license approval
              and avoid the interactive prompt for the license approval
 
-  ---default or -d: Optional. Use the default values, to avoid any interaction, specifically, this will include: 
+  ---default or -d: Optional. Use the default values, to avoid any interaction, specifically, this will include:
              - default db name/user/password/port
              - default https port
              - default URL, based on the current hostname

@@ -3,25 +3,128 @@ name = "kbot-installer"
 version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
+authors = []
+requires-python = ">=3.12"
+dependencies = [
+    "defusedxml"
 ]
-requires-python = "==3.10.15"
-dependencies = []
+
+[tool.kbot]
+doc = []
+build = "__BUILD__"
+date = "__DATE__"
+categories = []
+
+[tool.uv]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64' and python_full_version >= '3.12' and python_full_version < '3.13'",
+]
+
+[[tool.uv.index]]
+name = "konverso-aws-private"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
+
+[[tool.uv.index]]
+name = "konverso-aws-pypi-proxy"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+default = true
+
+[tool.deptry]
+known_first_party = [
+    "deps",
+    "setup_workarea",
+    "Bot",
+    "Learn",
+    "Load",
+    "RunBot",
+    "System",
+    "agentassist",
+    "am",
+    "authenticate",
+    "callback",
+    "classification",
+    "common",
+    "communication",
+    "dialog",
+    "domain",
+    "errors",
+    "kprocess",
+    "llm",
+    "nlp",
+    "recommendation",
+    "reports",
+    "search",
+    "security",
+    "smart",
+    "ticket",
+    "tools",
+    "unittest",
+    "utils",
+    "wf",
+    "agent_assist",
+    "api",
+    "content_view",
+    "jira_ext",
+    "manage",
+    "msteams_tab",
+    "oauth2",
+    "pages",
+    "rest",
+    "rest_addons",
+    "rest_common",
+    "search_app",
+    "web_client",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
-packages = ["core/python", "rest"]
+packages = ["core/python", "rest", "config"]
 py-modules = ["Bot", "Load", "Learn", "System"]
+exclude = [
+    "Makefile",
+    "*/Makefile",
+]
 
 [tool.hatch.build.targets.wheel.sources]
 "core/python" = "."
 "rest" = "."
 
-[[tool.uv.index]]
-name = "konverso-nexus"
-url = "https://nexus.konverso.ai/repository/python_whl/simple/"
-publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+[tool.hatch.build.targets.wheel.force-include]
+"conf" = "installer/kbot_installer/conf"
+"description.xml" = "installer/kbot_installer/description.xml"
+"pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[dependency-groups]
+deps = [
+    "deptry",
+]
+lint = [
+    "pylint",
+    "pylint-django",
+    "pylint-django-settings",
+    "pylint-plugin-utils",
+    "ruff",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+typecheck = [
+    "ty",
+]
+
+dev = [
+    { include-group = "deps" },
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "test" },
+    "psycopg[binary]==3.2.10",
+]
