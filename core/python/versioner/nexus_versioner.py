@@ -13,7 +13,7 @@ from auth.http_auth.http_auth_base import HttpAuthBase
 from provider.utils import FileInfo
 from installer_support.installer_utils import optimized_download_and_extract
 from versioner.str_repr_mixin import StrReprMixin
-from versioner.versioner_base import VersionerError
+from versioner.base import VersionerError
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ class NexusVersioner(StrReprMixin):
         )
         raise VersionerError(error_msg)
 
-    def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def remote_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using Nexus API.
 
         Args:

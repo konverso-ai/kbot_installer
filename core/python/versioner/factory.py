@@ -1,7 +1,7 @@
 """Factory functions for creating versioner instances."""
 
 from utils.factory.factory import factory_method
-from versioner.versioner_base import VersionerBase
+from versioner.base import VersionerBase
 
 
 def create_versioner(name: str, **kwargs: object) -> VersionerBase:

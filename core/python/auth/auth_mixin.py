@@ -1,14 +1,11 @@
 """Mixin providing HTTP and Dulwich authentication behaviour."""
 
 from collections.abc import Iterator
-from typing import TypeAlias
 
 import httpx
 from pydantic import computed_field
 
-from auth.base import AuthBase
-
-RemoteKwargs: TypeAlias = dict[str, str]
+from auth.base import AuthBase, RemoteKwargs
 
 
 class AuthMixin(AuthBase):
@@ -27,4 +24,5 @@ class AuthMixin(AuthBase):
         yield request
 
     def remote_kwargs(self) -> RemoteKwargs:
+        """Return keyword arguments for Dulwich remote operations."""
         return {}

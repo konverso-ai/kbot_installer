@@ -4,7 +4,7 @@ This module provides mixin classes that implement __str__ and __repr__ methods
 for versioner classes using the _get_auth() method.
 """
 
-from versioner.versioner_base import VersionerBase
+from versioner.base import VersionerBase
 
 
 class StrReprMixin(VersionerBase):

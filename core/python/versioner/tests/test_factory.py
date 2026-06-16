@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from versioner.factory import create_versioner
-from versioner.versioner_base import VersionerBase
+from versioner.base import VersionerBase
 
 
 class TestCreateVersioner:

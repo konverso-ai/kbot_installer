@@ -8,7 +8,7 @@ import pytest
 
 from auth.http_auth.http_auth_base import HttpAuthBase
 from versioner.nexus_versioner import NexusVersioner
-from versioner.versioner_base import VersionerError
+from versioner.base import VersionerError
 
 
 class TestNexusVersioner:
@@ -226,44 +226,44 @@ class TestNexusVersioner:
             ):
                 versioner.push(repo_path, "main")
 
-    def test_check_remote_repository_exists_success(
+    def test_remote_exists_success(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test check_remote_repository_exists with successful response."""
+        """Test remote_exists with successful response."""
         with patch.object(
             versioner, "_check_nexus_repository_exists_sync"
         ) as mock_check:
             mock_check.return_value = True
 
-            result = versioner.check_remote_repository_exists("test_repo")
+            result = versioner.remote_exists("test_repo")
 
             assert result is True
             mock_check.assert_called_once_with("test_repo")
 
-    def test_check_remote_repository_exists_failure(
+    def test_remote_exists_failure(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test check_remote_repository_exists with failed response."""
+        """Test remote_exists with failed response."""
         with patch.object(
             versioner, "_check_nexus_repository_exists_sync"
         ) as mock_check:
             mock_check.return_value = False
 
-            result = versioner.check_remote_repository_exists("test_repo")
+            result = versioner.remote_exists("test_repo")
 
             assert result is False
             mock_check.assert_called_once_with("test_repo")
 
-    def test_check_remote_repository_exists_handles_error(
+    def test_remote_exists_handles_error(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test check_remote_repository_exists handles exceptions."""
+        """Test remote_exists handles exceptions."""
         with patch.object(
             versioner, "_check_nexus_repository_exists_sync"
         ) as mock_check:
             mock_check.side_effect = Exception("API error")
 
-            result = versioner.check_remote_repository_exists("test_repo")
+            result = versioner.remote_exists("test_repo")
 
             assert result is False
 
@@ -481,16 +481,16 @@ class TestNexusVersioner:
 
                 mock_download.assert_called_once_with("test_repo", target_path)
 
-    def test_check_remote_repository_exists_with_exception_in_check(
+    def test_remote_exists_with_exception_in_check(
         self, versioner: NexusVersioner
     ) -> None:
-        """Test check_remote_repository_exists when _check_nexus_repository_exists_sync raises exception."""
+        """Test remote_exists when _check_nexus_repository_exists_sync raises exception."""
         with patch.object(
             versioner, "_check_nexus_repository_exists_sync"
         ) as mock_check:
             mock_check.side_effect = Exception("Unexpected error")
 
-            result = versioner.check_remote_repository_exists("test_repo")
+            result = versioner.remote_exists("test_repo")
 
             assert result is False
 

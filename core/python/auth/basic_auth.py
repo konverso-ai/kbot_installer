@@ -6,7 +6,8 @@ from typing import Annotated, Self, TypeAlias
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from auth.auth_mixin import AuthMixin, RemoteKwargs
+from auth.auth_mixin import AuthMixin
+from auth.base import RemoteKwargs
 
 BasicPrefix: TypeAlias = Annotated[str, Field(default="Basic")]
 

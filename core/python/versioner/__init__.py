@@ -5,7 +5,7 @@ including clone, add, pull, commit, and push.
 """
 
 from versioner.factory import create_versioner
-from versioner.versioner_base import VersionerBase, VersionerError
+from versioner.base import VersionerBase, VersionerError
 
 __all__ = [
     "VersionerBase",

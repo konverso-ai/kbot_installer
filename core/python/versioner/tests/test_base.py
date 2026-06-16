@@ -1,10 +1,10 @@
-"""Tests for versioner_base module."""
+"""Tests for versioner.base module."""
 
 from abc import ABC
 
 import pytest
 
-from versioner.versioner_base import VersionerBase, VersionerError
+from versioner.base import VersionerBase, VersionerError
 
 
 class TestVersionerError:

@@ -11,7 +11,8 @@ from typing import Annotated, Self, TypeAlias
 import httpx
 from pydantic import Field, PrivateAttr, SecretStr, model_validator
 
-from auth.auth_mixin import AuthMixin, RemoteKwargs
+from auth.auth_mixin import AuthMixin
+from auth.base import RemoteKwargs
 
 GitUsername: TypeAlias = Annotated[str, Field(default="git")]
 StrictHostKeyChecking: TypeAlias = Annotated[str, Field(default="accept-new")]

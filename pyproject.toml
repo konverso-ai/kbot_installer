@@ -1,16 +1,19 @@
 [project]
 name = "kbot-installer"
 version = "2.0.0"
-requires-python = "==3.12.13"
+requires-python = ">=3.10"
 dependencies = [
     "aiofiles",
     "click",
     "colorama",
     "defusedxml",
+    "dulwich>=1.2.6",
     "furl",
     "gitpython",
     "httpx",
+    "more-itertools>=11.1.0",
     "psutil",
+    "pydantic-settings",
     "pygit2",
     "python-dotenv",
     "requests",
@@ -32,17 +35,20 @@ build-backend = "hatchling.build"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
-[[tool.uv.index]]
-name = "konverso-aws-private"
-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
-publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
+# [[tool.uv.index]]
+# name = "konverso-aws-private"
+# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+# publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
 
-[[tool.uv.index]]
-name = "konverso-aws-pypi-proxy"
-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
-default = true
+# [[tool.uv.index]]
+# name = "konverso-aws-pypi-proxy"
+# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+# default = true
 
 [dependency-groups]
+deps = [
+    "deptry",
+]
 lint = [
     "pylint",
     "ruff",
@@ -56,6 +62,7 @@ test = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "pytest-mock",
 ]
 
 dev = [
