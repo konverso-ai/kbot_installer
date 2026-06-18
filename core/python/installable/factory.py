@@ -1,12 +1,11 @@
 """Factory for creating installable products."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from utils.factory.factory import factory_class
-from installable.installable_base import InstallableBase
 
 if TYPE_CHECKING:
-    from installable.product_installable import BuildDetails
+    from installable.product_installable import BuildDetails, ProductInstallable
 
 
 def create_installable(
@@ -24,8 +23,8 @@ def create_installable(
     build_details: "BuildDetails | None" = None,
     providers: list[str] | None = None,
     branch: str | None = None,
-) -> InstallableBase:
-    """Create an InstallableBase instance.
+) -> "ProductInstallable":
+    """Create a ProductInstallable instance.
 
     This is the factory method for creating installable products. It currently
     creates ProductInstallable instances, but could be extended to support
@@ -49,7 +48,7 @@ def create_installable(
                this branch is used instead of calculating from version.
 
     Returns:
-        InstallableBase instance.
+        ProductInstallable instance.
 
     """
     # If branch is specified, force env to "dev"
@@ -80,4 +79,4 @@ def create_installable(
     )
 
     # Instantiate with the product kwargs
-    return cls(**product_kwargs)
+    return cast("ProductInstallable", cls(**product_kwargs))

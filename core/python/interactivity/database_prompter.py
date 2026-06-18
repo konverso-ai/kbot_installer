@@ -5,8 +5,19 @@ import re
 import socket
 import subprocess
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 from interactivity.base import InteractivePrompter
+
+
+class ExternalDbParams(TypedDict):
+    """Validated external database connection parameters."""
+
+    db_host: str
+    db_port: str
+    db_name: str
+    db_user: str
+    db_password: str
 
 
 class DatabasePrompter(InteractivePrompter):
@@ -96,7 +107,7 @@ class DatabasePrompter(InteractivePrompter):
             raise ValueError(msg)
         return identifier
 
-    def _test_external_database_connection(self, result: dict[str, str | bool]) -> bool:
+    def _test_external_database_connection(self, result: ExternalDbParams) -> bool:
         """Test connection to external database with validated parameters.
 
         Args:
@@ -163,7 +174,7 @@ class DatabasePrompter(InteractivePrompter):
 
     def prompt_database_parameters(
         self,
-        config: dict,
+        config: dict[str, Any],
         *,
         basic_installation: bool,
         db_internal: bool | None = None,
@@ -172,7 +183,7 @@ class DatabasePrompter(InteractivePrompter):
         db_name: str | None = None,
         db_user: str | None = None,
         db_password: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Prompt and validate database parameters.
 
         Args:
@@ -258,7 +269,9 @@ class DatabasePrompter(InteractivePrompter):
 
             if not result["db_internal"]:
                 # Test connection to external database
-                if self._test_external_database_connection(result):
+                if self._test_external_database_connection(
+                    cast(ExternalDbParams, result)
+                ):
                     break
                 print(
                     "Can't connect to an external database with specified parameters!"
@@ -270,11 +283,11 @@ class DatabasePrompter(InteractivePrompter):
 
     def prompt_pgbouncer_parameters(
         self,
-        config: dict,
+        config: dict[str, Any],
         *,
         basic_installation: bool,
         pgbouncer_port: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Prompt and validate pgbouncer parameters.
 
         Args:

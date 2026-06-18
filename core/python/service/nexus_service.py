@@ -1,11 +1,13 @@
 """Async Nexus repository service."""
 
-import httpx
+from pathlib import Path
 
-from auth.base import AuthBase
-from service.nexus_files import NexusFiles
-from service.errors import NexusHttpError
+import httpx
+from auth.base import HttpAuthBase
 from utils.async_api_client import AsyncAPIClient
+
+from service.errors import NexusHttpError
+from service.nexus_files import NexusFiles
 
 REST_PREFIX = "service/rest"
 
@@ -13,7 +15,7 @@ REST_PREFIX = "service/rest"
 class NexusService:
     """Async service for Nexus repository operations."""
 
-    def __init__(self, host: str, auth: AuthBase | None = None) -> None:
+    def __init__(self, host: str, auth: HttpAuthBase | None = None) -> None:
         self._host = host
         self._auth = auth
         self._base_url = f"https://{host}"
@@ -81,3 +83,34 @@ class NexusService:
             raise NexusHttpError(exc.response.status_code) from exc
 
         return NexusFiles.from_json(payload, service=self)
+
+    async def file_exists(self, repository_path: str) -> bool:
+        """Return True when a repository file is reachable."""
+        if not repository_path.startswith("/"):
+            repository_path = f"/{repository_path}"
+
+        try:
+            async with AsyncAPIClient(self._base_url, prefix="", auth=self._auth) as client:
+                await client.head(f"repository{repository_path}")
+        except httpx.HTTPStatusError:
+            return False
+        else:
+            return True
+
+    async def download_and_extract(
+        self,
+        repository_path: str,
+        target_dir: str | Path,
+    ) -> None:
+        """Download a gzipped tar archive from the repository and extract it."""
+        if not repository_path.startswith("/"):
+            repository_path = f"/{repository_path}"
+
+        try:
+            async with AsyncAPIClient(self._base_url, prefix="", auth=self._auth) as client:
+                await client.download_and_untar_file(target_dir, f"repository{repository_path}")
+        except httpx.HTTPStatusError as exc:
+            raise NexusHttpError(
+                exc.response.status_code,
+                f"Failed to download '{repository_path}'",
+            ) from exc

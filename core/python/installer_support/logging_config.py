@@ -7,7 +7,9 @@ that includes level, package, class/method/function, line number, and message.
 import inspect
 import logging
 import logging.config
+import types
 from pathlib import Path
+from typing_extensions import override
 
 
 class DetailedFormatter(logging.Formatter):
@@ -19,6 +21,7 @@ class DetailedFormatter(logging.Formatter):
     Format: levelname package.classname.funcName(lineno): message
     """
 
+    @override
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record with class name if available.
 
@@ -65,7 +68,7 @@ class DetailedFormatter(logging.Formatter):
             logging.getLogger(__name__).debug("Failed to extract class name: %s", e)
         return ""
 
-    def _find_logging_frame(self, record: logging.LogRecord) -> object | None:
+    def _find_logging_frame(self, record: logging.LogRecord) -> types.FrameType | None:
         """Find the frame where the logging call was made.
 
         Args:

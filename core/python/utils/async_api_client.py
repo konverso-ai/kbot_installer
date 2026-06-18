@@ -1,11 +1,12 @@
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import aiofiles
 import httpx
+from auth.base import HttpAuthBase
 
-from auth.base import AuthBase
 from utils.streaming_reader import download_and_extract_tar_gz
 
 
@@ -14,7 +15,7 @@ class AsyncAPIClient:
         self,
         base_url: str,
         prefix: str = "api",
-        auth: AuthBase | None = None,
+        auth: HttpAuthBase | None = None,
     ) -> None:
         self.__base_url = (prefix and f"{base_url}/{prefix}") or base_url
         self.__auth = auth
@@ -35,7 +36,7 @@ class AsyncAPIClient:
         if self.__client:
             await self.__client.aclose()
 
-    async def get(self, endpoint: str, params: dict | None = None) -> dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a GET request"""
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
@@ -44,7 +45,7 @@ class AsyncAPIClient:
         response.raise_for_status()
         return response.json()
 
-    async def head(self, endpoint: str, params: dict | None = None) -> dict[str, Any]:
+    async def head(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a HEAD request"""
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
@@ -106,8 +107,7 @@ class AsyncAPIClient:
         self,
         requests: Iterator[tuple[str, dict[str, Any]]]
     ) -> list[dict[str, Any]]:
-        """
-        Send multiple POST requests in parallel
+        """Send multiple POST requests in parallel
 
         Args:
             requests: List of tuples (endpoint, data)
@@ -118,6 +118,7 @@ class AsyncAPIClient:
                 ('/users', {'name': 'Bob'}),
                 ('/users', {'name': 'Charlie'})
             ])
+
         """
         if not self.__client:
             raise RuntimeError("Client not initialized")

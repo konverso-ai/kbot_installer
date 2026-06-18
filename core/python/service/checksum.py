@@ -1,6 +1,7 @@
 """Nexus asset checksum model."""
 
-from typing import Annotated, Any, Self, TypeAlias
+from typing import Annotated, Any, TypeAlias
+from typing_extensions import Self
 
 from pydantic import BaseModel, Field
 

@@ -1,9 +1,15 @@
 """DependencyGraph class for managing product dependencies."""
 
+from __future__ import annotations
+
 from collections import defaultdict, deque
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
-from installable.installable_base import InstallableBase
+from typing_extensions import override
+
+if TYPE_CHECKING:
+    from installable.product_installable import ProductInstallable
 
 
 class DependencyGraph:
@@ -16,7 +22,7 @@ class DependencyGraph:
 
     """
 
-    def __init__(self, products: list[InstallableBase]) -> None:
+    def __init__(self, products: list[ProductInstallable]) -> None:
         """Initialize dependency graph with products.
 
         Args:
@@ -302,7 +308,7 @@ class DependencyGraph:
 
         return result
 
-    def get_bfs_ordered_products(self, root_product_name: str) -> list[InstallableBase]:
+    def get_bfs_ordered_products(self, root_product_name: str) -> list[ProductInstallable]:
         """Get Product instances in BFS order.
 
         Args:
@@ -327,7 +333,7 @@ class DependencyGraph:
 
         """
 
-        def get_depth(node: str, visited: set) -> int:
+        def get_depth(node: str, visited: set[str]) -> int:
             if node in visited:
                 return 0  # Circular dependency
 
@@ -357,7 +363,7 @@ class DependencyGraph:
             if self.get_product_depth(product.name) == depth
         ]
 
-    def __iter__(self) -> Iterator[InstallableBase]:
+    def __iter__(self) -> Iterator[ProductInstallable]:
         """Iterate over products in the graph.
 
         Yields:
@@ -375,10 +381,12 @@ class DependencyGraph:
         """
         return len(self.products)
 
+    @override
     def __str__(self) -> str:
         """Return string representation of DependencyGraph."""
         return f"DependencyGraph(products={len(self.products)}, dependencies={len(self.dependencies)})"
 
+    @override
     def __repr__(self) -> str:
         """Detailed string representation of DependencyGraph."""
         return f"DependencyGraph(products={[p.name for p in self.products]})"

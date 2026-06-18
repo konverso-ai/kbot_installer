@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from auth.pygit_authentication import PyGitAuthenticationBase
+from auth.base import HttpAuthBase
 from provider.github_provider import GithubProvider
 from provider.provider_base import ProviderBase
 
@@ -16,7 +16,7 @@ class TestGithubProvider:
 
     def test_initialization_with_auth(self) -> None:
         """Test proper initialization of GithubProvider with authentication."""
-        mock_auth = MagicMock(spec=PyGitAuthenticationBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         provider = GithubProvider("test_account", mock_auth)
 
         assert provider.account_name == "test_account"
@@ -45,7 +45,7 @@ class TestGithubProvider:
 
     def test_get_auth_with_auth(self) -> None:
         """Test that _get_auth returns the authentication object when provided."""
-        mock_auth = MagicMock(spec=PyGitAuthenticationBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         provider = GithubProvider("test_account", mock_auth)
 
         assert provider._get_auth() == mock_auth
@@ -96,7 +96,7 @@ class TestGithubProvider:
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-            mock_versioner.check_remote_repository_exists.return_value = True
+            mock_versioner.remote_exists.return_value = True
             mock_get_versioner.return_value = mock_versioner
 
             result = provider.check_remote_repository_exists("test_repo")
@@ -110,7 +110,7 @@ class TestGithubProvider:
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-            mock_versioner.check_remote_repository_exists.return_value = False
+            mock_versioner.remote_exists.return_value = False
             mock_get_versioner.return_value = mock_versioner
 
             result = provider.check_remote_repository_exists("test_repo")
@@ -124,7 +124,7 @@ class TestGithubProvider:
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-            mock_versioner.check_remote_repository_exists.side_effect = RuntimeError(
+            mock_versioner.remote_exists.side_effect = RuntimeError(
                 "Network error"
             )
             mock_get_versioner.return_value = mock_versioner

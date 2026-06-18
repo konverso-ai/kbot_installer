@@ -13,6 +13,7 @@ from provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProvidersConfig,
 )
+from typing_extensions import override
 from provider.credential_manager import CredentialManager
 from provider.factory import create_provider
 from provider.provider_base import ProviderBase, ProviderError
@@ -128,6 +129,7 @@ class SelectorProvider(ProviderBase):
             )
             return None
 
+    @override
     def clone_and_checkout(
         self,
         target_path: str | Path,
@@ -159,6 +161,7 @@ class SelectorProvider(ProviderBase):
         if repository_url:
             self._clone_by_url(repository_url, target_path, branch)
         else:
+            assert repository_name is not None
             self._clone_by_name(repository_name, target_path, branch)
 
     def _print_clone_results_table(self, results: list[tuple[str, str, str]]) -> None:
@@ -252,6 +255,7 @@ class SelectorProvider(ProviderBase):
             return parts[-1].strip()
         return error_message
 
+    @override
     def __str__(self) -> str:
         """Return string representation of the selector provider.
 
@@ -592,6 +596,7 @@ class SelectorProvider(ProviderBase):
         """
         self._clone_with_providers(repository_name, target_path, branch)
 
+    @override
     def check_remote_repository_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using the first available provider.
 
@@ -632,6 +637,7 @@ class SelectorProvider(ProviderBase):
         logger.debug("Repository not found with any provider")
         return False
 
+    @override
     def __repr__(self) -> str:
         """Return detailed string representation of the selector provider.
 
@@ -643,6 +649,7 @@ class SelectorProvider(ProviderBase):
             f"SelectorProvider(providers={self.providers}, base_url='{self.base_url}')"
         )
 
+    @override
     def get_name(self) -> str:
         """Get the name of the provider.
 
@@ -652,6 +659,7 @@ class SelectorProvider(ProviderBase):
         """
         return self.name
 
+    @override
     def get_branch(self) -> str:
         """Get the branch of the provider.
 

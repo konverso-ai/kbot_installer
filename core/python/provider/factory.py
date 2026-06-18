@@ -1,6 +1,9 @@
 """Factory functions for creating provider instances."""
 
+from typing import cast
+
 from utils.factory.factory import factory_method
+
 from provider.provider_base import ProviderBase
 
 
@@ -25,4 +28,4 @@ def create_provider(name: str, **kwargs: object) -> ProviderBase:
         NexusProvider(https://nexus.example.com)
 
     """
-    return factory_method(name, __package__, **kwargs)
+    return cast(ProviderBase, factory_method(name, "provider", **kwargs))

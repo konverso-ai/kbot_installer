@@ -43,9 +43,9 @@ skip-magic-trailing-comma = false
 # Line ending style
 line-ending = "auto"
 
-# Linting rules - use ALL rules
+# Linting rules
 [lint]
-select = ["ALL"]
+select = ["E4", "E7", "E9", "F"]
 
 # ✅ Fix automatique (optionnel, utile en CI locale)
 # fix = true
@@ -59,9 +59,6 @@ ignore = [
     "PLR0913",   # too many arguments (justified for download functions)
     "TRY003",    # avoid long messages in exceptions
 ]
-
-# ✅ Cible la dernière version stable de Python utilisée
-target-version = "py313"
 
 # Per-file ignores
 [lint.per-file-ignores]

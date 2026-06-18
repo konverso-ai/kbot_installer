@@ -9,12 +9,9 @@ objects without hardcoding credentials in the code.
 import logging
 import os
 
-from auth.http_auth import create_http_auth
-from auth.http_auth.http_auth_base import HttpAuthBase
-from auth.pygit_authentication import (
-    PyGitAuthenticationBase,
-    create_pygit_authentication,
-)
+from auth.base import HttpAuthBase
+from auth.factory import create_auth
+
 from provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProviderConfig,
@@ -75,7 +72,7 @@ class CredentialManager:
 
     def _create_auth_object(
         self, provider_config: ProviderConfig
-    ) -> HttpAuthBase | PyGitAuthenticationBase | None:
+    ) -> HttpAuthBase | None:
         """Create authentication object based on configuration.
 
         Args:
@@ -98,9 +95,9 @@ class CredentialManager:
 
             # Create appropriate auth object
             if provider_config.auth_type == "http_auth":
-                result = create_http_auth("basic", **env_values)
+                result = create_auth("basic", **env_values)
             elif provider_config.auth_type == "pygit_auth":
-                result = create_pygit_authentication("user_pass", **env_values)
+                result = create_auth("basic", **env_values)
             else:
                 logger.warning("Unknown auth type: %s", provider_config.auth_type)
                 result = None
@@ -135,14 +132,14 @@ class CredentialManager:
 
     def get_auth_for_provider(
         self, provider_name: str
-    ) -> HttpAuthBase | PyGitAuthenticationBase | None:
+    ) -> HttpAuthBase | None:
         """Get authentication object for a specific provider.
 
         Args:
             provider_name: Name of the provider to get authentication for.
 
         Returns:
-            HttpAuthBase | PyGitAuthenticationBase | None: Authentication object if available, None otherwise.
+            HttpAuthBase | None: Authentication object if available, None otherwise.
 
         """
         if not self.has_credentials(provider_name):

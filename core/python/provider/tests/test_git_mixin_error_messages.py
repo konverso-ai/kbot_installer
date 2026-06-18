@@ -6,7 +6,7 @@ import pytest
 
 from provider.git_mixin import GitMixin
 from provider.provider_base import ProviderError
-from versioner.versioner_base import VersionerError
+from versioner.base import VersionerError
 
 
 class TestGitMixinErrorMessages:

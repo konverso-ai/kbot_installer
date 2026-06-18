@@ -6,13 +6,15 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Annotated, Self, TypeAlias
+from typing import Annotated, TypeAlias
+from typing_extensions import Self
 
 import httpx
 from pydantic import Field, PrivateAttr, SecretStr, model_validator
 
 from auth.auth_mixin import AuthMixin
 from auth.base import RemoteKwargs
+from typing_extensions import override
 
 GitUsername: TypeAlias = Annotated[str, Field(default="git")]
 StrictHostKeyChecking: TypeAlias = Annotated[str, Field(default="accept-new")]
@@ -63,11 +65,16 @@ class SshAuth(AuthMixin):
             raise RuntimeError("No SSH private key path is available in agent mode")
         if self._key_path is None:
             self._resolve_key_path()
+        if self._key_path is None:
+            msg = "No SSH private key path found"
+            raise RuntimeError(msg)
         return self._key_path
 
+    @override
     def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
         yield request
 
+    @override
     def remote_kwargs(self) -> RemoteKwargs:
         kwargs: RemoteKwargs = {
             "username": self.username,

@@ -7,13 +7,12 @@ operations specific to Nexus repositories using the Nexus API.
 import logging
 from pathlib import Path
 
-from auth.http_auth.http_auth_base import HttpAuthBase
+from auth.base import HttpAuthBase
+from installer_support.installer_utils import optimized_download_and_extract_ter
+from typing_extensions import override
+from storage.nexus_storage import NexusStorage
+
 from provider.provider_base import ProviderBase, ProviderError
-from installer_support.installer_utils import (
-    optimized_download_and_extract_ter,
-)
-from versioner.factory import create_versioner
-from versioner.versioner_base import VersionerBase, VersionerError
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +78,7 @@ class NexusProvider(ProviderBase):
         # URL correcte pour Nexus avec branch et nom complet du fichier
         return f"https://{self.domain}/repository/{self.repository}/{branch}/{repo_name}/{repo_name}_latest.tar.gz"
 
+    @override
     def clone_and_checkout(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
@@ -103,7 +103,7 @@ class NexusProvider(ProviderBase):
         try:
             # Use streaming download and extract for minimal RAM usage
             auth = self._get_auth()
-            auth_obj = auth.get_auth() if auth else None
+            auth_obj = auth
 
             # Build the correct Nexus URL
             branch_to_use = branch or "master"
@@ -130,6 +130,7 @@ class NexusProvider(ProviderBase):
             )
             raise ProviderError(error_msg) from e
 
+    @override
     def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on Nexus.
 
@@ -144,16 +145,13 @@ class NexusProvider(ProviderBase):
             "Checking if remote repository exists on Nexus: %s", repository_name
         )
         try:
-            # Use the versioner to check if repository exists
-            versioner = self._get_versioner()
-            return versioner.check_remote_repository_exists(repository_name)
-        except VersionerError:
+            storage = self._get_storage()
+            return storage.exists(f"{repository_name}.tar.gz")
+        except Exception:
             logger.exception("Error checking if repository exists on Nexus")
             return False
-        except Exception:
-            logger.exception("Unexpected error checking if repository exists on Nexus")
-            return False
 
+    @override
     def get_name(self) -> str:
         """Get the name of the provider.
 
@@ -163,6 +161,7 @@ class NexusProvider(ProviderBase):
         """
         return self.name
 
+    @override
     def get_branch(self) -> str:
         """Get the branch of the provider.
 
@@ -172,13 +171,15 @@ class NexusProvider(ProviderBase):
         """
         return self.branch_used or self.branch
 
-    def _get_versioner(self) -> VersionerBase:
-        """Get the versioner for the provider.
+    def _get_storage(self) -> NexusStorage:
+        """Get the storage backend for the provider.
 
         Returns:
-            VersionerBase: The versioner for the provider.
+            NexusStorage: The storage backend for the provider.
 
         """
-        return create_versioner(
-            "nexus", domain=self.domain, repository=self.repository, auth=self._auth
+        return NexusStorage(
+            domain=self.domain,
+            repository=self.repository,
+            auth=self._auth,
         )

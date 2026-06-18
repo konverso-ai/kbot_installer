@@ -1,0 +1,307 @@
+"""Azure Blob Storage implementation of bucket storage."""
+
+import logging
+import time
+from collections.abc import Iterator
+from typing import Any
+
+from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
+from azure.storage.blob import BlobPrefix
+from backend.azure_backend import AzureBackend
+from more_itertools import chunked
+from storage.base import StorageBase
+from typing_extensions import override
+
+log = logging.getLogger(__name__)
+
+
+class AzureStorage(StorageBase):
+    """``StorageBase`` backend backed by Azure Blob Storage."""
+
+    name = "azure"
+
+    def __init__(self, backend: AzureBackend, container_name: str) -> None:
+        """Initialize Azure storage from an existing backend.
+
+        Args:
+            backend: Pre-configured Azure Blob backend.
+            container_name: Blob container name.
+
+        """
+        self._backend = backend
+        self.container_name = container_name
+        log.debug(
+            "Creating AzureStorage(account_url='%s', container_name='%s')",
+            self._backend.account_url,
+            self.container_name,
+        )
+
+    @override
+    def get_name(self) -> str:
+        """Return the name of the storage."""
+        return self.name
+
+    def _get_backend(self) -> AzureBackend:
+        """Return the Azure backend used by this storage."""
+        return self._backend
+
+    def _get_container_client(self) -> Any | None:
+        """Return the container client for the configured container."""
+        blob_service_client = self._get_backend().get_client()
+        if blob_service_client is None:
+            return None
+        return blob_service_client.get_container_client(self.container_name)
+
+    def get_container_name(self) -> str | None:
+        """Return the currently configured container name."""
+        return self.container_name
+
+    def set_container_name(self, container_name: str) -> None:
+        """Switch the active container."""
+        container_name = container_name.strip()
+        if container_name:
+            self.container_name = container_name
+
+    @override
+    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8") -> None:
+        """Upload an object to Azure Blob Storage."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error("Container client unavailable. Upload aborted.")
+            return
+        try:
+            content = value.encode(encoding) if isinstance(value, str) else value
+            container_client.upload_blob(name=key, data=content, overwrite=True)
+            log.debug("Object '%s' uploaded successfully to Azure Blob Storage.", key)
+        except Exception as e:
+            log.error("Upload failed for '%s': %s", key, e, exc_info=True)
+
+    @override
+    def get(self, key: str, encoding: str = "utf-8") -> str | None:
+        """Retrieve and decode an object from Azure Blob Storage."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error(
+                "Container client unavailable. Retrieval aborted. '%s'",
+                self.container_name,
+            )
+            return None
+        try:
+            blob_client = container_client.get_blob_client(key)
+            log.debug("CONTAINER = %s :: %s", key, self.container_name)
+            data = blob_client.download_blob().readall()
+            log.debug(
+                "Successfully retrieved object from Azure Blob Storage: %s; encoding: %s",
+                key,
+                encoding,
+            )
+            return data.decode(encoding)
+        except ResourceNotFoundError:
+            log.error("Path %s was not found in Bucket storage", key)
+        except Exception as e:
+            log.error(
+                "Retrieval failed for key='%s'; encoding=%s: %s",
+                key,
+                encoding,
+                e,
+                exc_info=True,
+            )
+        return None
+
+    @override
+    def download(self, key: str, local_file_path: str) -> None:
+        """Download a storage object to a local file."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error(
+                "Container client unavailable. Retrieval aborted. '%s'",
+                self.container_name,
+            )
+            return
+
+        blob_client = container_client.get_blob_client(key)
+        with open(local_file_path, "wb") as local_file:
+            blob_data = blob_client.download_blob()
+            blob_data.readinto(local_file)
+
+    @override
+    def list(self, prefix: str = "") -> Iterator[str]:
+        """List blob names under the given prefix."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error(
+                "Container client unavailable. Cannot list objects with prefix '%s'",
+                prefix,
+            )
+            return
+
+        try:
+            if prefix and not prefix.endswith("/"):
+                prefix += "/"
+
+            blob_list = container_client.list_blobs(name_starts_with=prefix)
+            yield from [blob.name for blob in blob_list]
+
+        except Exception as e:
+            log.error("Failed to list objects with prefix '%s': %s", prefix, str(e))
+
+    @override
+    def list_files_in_folder(self, folder_path: str = "") -> Iterator[str]:
+        """List blob names contained in a folder."""
+        yield from self.list(folder_path)
+
+    @override
+    def list_folders(self, path: str = "") -> Iterator[str]:
+        """List folders directly inside the given path."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error(
+                "Container client unavailable. Cannot list folders in path '%s'",
+                path,
+            )
+            return
+
+        try:
+            if path and not path.endswith("/"):
+                path += "/"
+
+            folder_count = 0
+            blob_hierarchy = container_client.walk_blobs(
+                name_starts_with=path,
+                delimiter="/",
+            )
+
+            for item in blob_hierarchy:
+                if isinstance(item, BlobPrefix):
+                    folder_name = item.prefix[len(path):].rstrip("/")
+                    if folder_name:
+                        folder_count += 1
+                        yield folder_name
+
+            log.debug("Successfully listed %d folders in path '%s'", folder_count, path)
+
+        except Exception as e:
+            log.error("Failed to list folders in path '%s': %s", path, str(e))
+
+    @override
+    def delete(self, key: str) -> None:
+        """Delete a single blob from Azure Blob Storage."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error("Container client unavailable. Retrieval aborted.")
+            return
+        try:
+            container_client.delete_blob(key)
+            log.debug("Successfully deleted object from Azure Blob Storage: %s", key)
+        except Exception:
+            log.exception("Deletion failed for key='%s'", key)
+
+    @override
+    def delete_folder(self, key: str) -> None:
+        """Delete all blobs under a folder prefix."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error("Container client unavailable. Retrieval aborted.")
+            return
+        blobs = chunked(container_client.list_blobs(name_starts_with=key), 20)
+        i_chunk = next(blobs, None)
+
+        if i_chunk is None:
+            log.debug("This key '%s' does not exist.", key)
+            return
+
+        deleted_count = 0
+        while True:
+            if i_chunk is None:
+                break
+            blob_names = [blob.name for blob in i_chunk]
+            deleted_count += len(blob_names)
+            container_client.delete_blobs(*blob_names)
+            i_chunk = next(blobs, None)
+        log.debug(
+            "The key '%s' contained '%d' elements. All were deleted.",
+            key,
+            deleted_count,
+        )
+
+    @override
+    def restore_soft_deleted_blob(self, key: str) -> bool:
+        """Restore a soft-deleted blob."""
+        container_client = self._get_container_client()
+        if not container_client:
+            log.error("Container client unavailable. Restore aborted.")
+            return False
+
+        try:
+            blob_client = container_client.get_blob_client(key)
+        except Exception as e:
+            log.debug("Failed to get blob client for '%s': %s", key, e, exc_info=True)
+            return False
+
+        try:
+            blob_properties = blob_client.get_blob_properties()
+            if not blob_properties.deleted:
+                log.info("Blob '%s' is not deleted, no restoration needed.", key)
+                return True
+        except Exception:
+            return False
+
+        try:
+            blob_client.undelete_blob()
+            blob_properties = blob_client.get_blob_properties()
+            log.debug("Successfully restored soft-deleted blob: %s", key)
+            return not blob_properties.deleted
+        except ResourceNotFoundError:
+            log.debug(
+                "Blob '%s' not found (may have been permanently deleted or never existed).",
+                key,
+            )
+            return False
+        except Exception as e:
+            log.debug(
+                "Failed to restore soft-deleted blob '%s': %s",
+                key,
+                e,
+                exc_info=True,
+            )
+            return False
+
+    def check_authorization(self) -> None:
+        """Validate Azure credentials and container access permissions."""
+        container_client = self._get_container_client()
+        if container_client is None:
+            raise RuntimeError(
+                "Authentication failed. Ensure the SAS token, Authorization "
+                "header and Container Information are correct."
+            )
+
+        try:
+            start_time = time.time()
+            container_client.upload_blob(
+                name="temp_blob_for_checking",
+                data=b"Hi",
+                overwrite=True,
+            )
+            container_client.delete_blob("temp_blob_for_checking")
+            log.debug(
+                "Authorization check passed. Connected to Azure Blob Storage in "
+                "duration %.3f(s)",
+                time.time() - start_time,
+            )
+        except ClientAuthenticationError as e:
+            log.error(
+                "Authentication failed. Check the SAS token and Authorization header. Error: %s",
+                e,
+                exc_info=True,
+            )
+            raise RuntimeError(
+                "Authentication failed. Ensure the SAS token and Authorization "
+                "header are correct."
+            ) from e
+        except Exception as e:
+            log.error(
+                "Unexpected error during authorization check. Error: %s",
+                e,
+                exc_info=True,
+            )
+            raise RuntimeError("Unexpected error during authorization check") from e

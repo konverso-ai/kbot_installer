@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Self, TypeAlias
+from typing import Annotated, Any, TypeAlias
+from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from service.nexus_file import NexusFile
+from typing_extensions import override
 
 NexusFileItems: TypeAlias = Annotated[list[NexusFile], Field(default_factory=list)]
 ContinuationToken: TypeAlias = Annotated[str | None, Field(default=None, alias="continuationToken")]
@@ -95,6 +97,7 @@ class NexusFiles(BaseModel):
             return None
         return sorted(self.files, key=lambda item: item.last_modified or "", reverse=True)[0]
 
+    @override
     def __iter__(self):
         return iter(self.files)
 

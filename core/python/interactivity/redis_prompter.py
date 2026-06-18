@@ -2,6 +2,7 @@
 
 import socket
 from pathlib import Path
+from typing import Any
 
 from interactivity.base import InteractivePrompter
 
@@ -11,7 +12,7 @@ class RedisPrompter(InteractivePrompter):
 
     def prompt_redis_parameters(
         self,
-        config: dict,
+        config: dict[str, Any],
         *,
         basic_installation: bool,
         cachedir: str | Path | None = None,
@@ -24,7 +25,7 @@ class RedisPrompter(InteractivePrompter):
         redis_tls_cert_file: str | None = None,
         redis_tls_key_file: str | None = None,
         redis_tls_ca_cert_file: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Prompt and validate Redis parameters.
 
         Args:

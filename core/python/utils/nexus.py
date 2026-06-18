@@ -1,7 +1,9 @@
 import shutil
 from base64 import b64encode
+from typing import Any
 
 import requests
+from typing_extensions import override
 
 class HttpError(Exception):
     def __init__(self, response, message=""):
@@ -13,10 +15,11 @@ class HttpError(Exception):
         self.response = response
         self.message = message
 
+    @override
     def __str__(self):
         return "HttpError(%s, %s)" % (self.response.status_code, self.message)
 
-class NexusFiles(list):
+class NexusFiles(list[Any]):
     """
         A list of Nexus files, with utility functions to filter out things
     """
@@ -115,9 +118,11 @@ class NexusFile:
         # JSON of the file
         self.js = js
 
+    @override
     def __str__(self):
         return f"NexusFile({self.js.get('path')})"
 
+    @override
     def __repr__(self):
         return str(self)
 

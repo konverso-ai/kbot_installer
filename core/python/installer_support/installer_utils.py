@@ -10,7 +10,9 @@ from pathlib import Path
 from queue import Queue
 from tempfile import SpooledTemporaryFile
 from threading import Event, Thread
-from typing import Literal
+from typing import IO, Literal, cast
+
+from auth.base import HttpAuthBase
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,7 @@ def ensure_directory(path: str | Path) -> Path:
 
 
 def optimized_download_and_extract(
-    url: str, target_dir: Path, auth_obj: object | None = None
+    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
 ) -> None:
     """Optimized download and extract using benchmark results.
 
@@ -126,7 +128,7 @@ def optimized_download_and_extract(
 
 
 def optimized_download_and_extract_bis(
-    url: str, target_dir: Path, auth_obj: object | None = None
+    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
 ) -> None:
     """Télécharge et extrait en parallèle avec threading.
 
@@ -200,7 +202,7 @@ def calculate_relative_path(src: Path, dst: Path) -> Path:
 
 
 def optimized_download_and_extract_ter(  # noqa: C901
-    url: str, target_dir: Path, auth_obj: object | None = None
+    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
 ) -> None:
     """Download and extract a tar.gz file with true streaming and minimal memory.
 
@@ -310,8 +312,9 @@ def optimized_download_and_extract_ter(  # noqa: C901
                     result = self.buffer.read(size)
                     self.buffer_pos = self.buffer.tell()
 
-                if download_error and not result:
-                    raise download_error
+                if not result:
+                    if download_error is not None:
+                        raise download_error
                 return result
 
             def close(self) -> None:
@@ -319,7 +322,7 @@ def optimized_download_and_extract_ter(  # noqa: C901
 
         # Extract using pipe mode for sequential reading
         reader = StreamingReader()
-        with tarfile.open(fileobj=reader, mode="r|gz") as tar:
+        with tarfile.open(fileobj=cast(IO[bytes], reader), mode="r|gz") as tar:
             for member in tar:
                 tar.extract(member, path=target_dir, filter="data")
 

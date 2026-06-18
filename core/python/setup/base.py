@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from interactivity.base import InteractivePrompter
 from installer_support.installer_utils import ensure_directory as ensure_dir_util
+from interactivity.base import InteractivePrompter
 
 
 class BaseSetupManager:

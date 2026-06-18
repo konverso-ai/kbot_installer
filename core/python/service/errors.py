@@ -1,3 +1,4 @@
+from typing_extensions import override
 """Service errors."""
 
 
@@ -9,5 +10,6 @@ class NexusHttpError(Exception):
         self.message = message
         super().__init__(f"HttpError({status_code}, {message})")
 
+    @override
     def __str__(self) -> str:
         return f"HttpError({self.status_code}, {self.message})"

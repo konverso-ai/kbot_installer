@@ -4,17 +4,19 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import cast
 
-from installable import InstallableBase
+from installable.product_installable import ProductInstallable
 from installable.dependency_graph import DependencyGraph
 from installable.product_collection import ProductCollection
-from installable.product_installable import ProductInstallable
 from installable.renderer import DependencyTreeRenderer
-from installer_support.installation_table import InstallationTable
 from provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
 )
+from provider.selector_provider import SelectorProvider
+
+from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
 
 logger = logging.getLogger(__name__)
@@ -50,10 +52,13 @@ class InstallerService:
         self.providers = providers or ["nexus", "github", "bitbucket"]
 
         # Initialize services
-        self.selector_provider = create_provider(
-            name="selector",
-            providers=self.providers,
-            config=DEFAULT_PROVIDERS_CONFIG,
+        self.selector_provider = cast(
+            SelectorProvider,
+            create_provider(
+                name="selector",
+                providers=self.providers,
+                config=DEFAULT_PROVIDERS_CONFIG,
+            ),
         )
         self.installation_table = InstallationTable()
 
@@ -192,7 +197,7 @@ class InstallerService:
         return repaired_products
 
     def _repair_products(
-        self, target_products: list[InstallableBase], version: str | None
+        self, target_products: list[ProductInstallable], version: str | None
     ) -> list[str]:
         """Repair products that need fixing."""
         repaired_products = []
@@ -223,7 +228,7 @@ class InstallerService:
         return False, ""
 
     def _repair_single_product(
-        self, product_dir: Path, product: InstallableBase, version: str
+        self, product_dir: Path, product: ProductInstallable, version: str
     ) -> None:
         """Repair a single product by removing and reinstalling."""
         # Remove existing directory if it exists
@@ -342,7 +347,7 @@ class InstallerService:
                     # Continue with other dependencies
                     continue
 
-    def _get_product(self, product_name: str) -> InstallableBase:
+    def _get_product(self, product_name: str) -> ProductInstallable:
         """Get a product by name from the installer directory."""
         product_dir = self.installer_dir / product_name
         product = ProductInstallable.from_installer_folder(product_dir)
@@ -353,7 +358,7 @@ class InstallerService:
 
     def _get_products_with_dependencies(
         self, product_name: str
-    ) -> list[InstallableBase]:
+    ) -> list[ProductInstallable]:
         """Get a product and all its dependencies."""
         # Load all products from installer directory
         product_collection = self._load_products_from_installer_directory()
@@ -539,7 +544,7 @@ class InstallerService:
 
         return "unknown"
 
-    def _install_single_product(self, product: InstallableBase, version: str) -> None:
+    def _install_single_product(self, product: ProductInstallable, version: str) -> None:
         """Install a single product."""
         logger.debug(
             "Installing single product: %s (version: %s)", product.name, version

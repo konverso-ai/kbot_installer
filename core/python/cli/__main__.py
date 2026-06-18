@@ -14,13 +14,15 @@ from cli.commands import cli
 def main() -> NoReturn:
     """Main CLI entry point."""
     try:
-        cli()
+        cli()  # pylint: disable=no-value-for-parameter
     except KeyboardInterrupt:
         click.echo("\nOperation cancelled by the user.")
         sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}")
         sys.exit(1)
+    else:
+        sys.exit(0)
 
 
 if __name__ == "__main__":

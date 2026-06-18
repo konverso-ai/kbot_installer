@@ -5,10 +5,11 @@ from collections.abc import Iterator
 import httpx
 from pydantic import computed_field
 
-from auth.base import AuthBase, RemoteKwargs
+from auth.base import HttpAuthBase, RemoteKwargs
+from typing_extensions import override
 
 
-class AuthMixin(AuthBase):
+class AuthMixin(HttpAuthBase):
     """Authentication behaviour shared by all auth implementations."""
 
     @computed_field  # type: ignore[prop-decorator]
@@ -19,10 +20,12 @@ class AuthMixin(AuthBase):
             return f"{self.prefix} {secret}"
         return secret
 
+    @override
     def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
         request.headers[self.header_name] = self.header_value
         yield request
 
+    @override
     def remote_kwargs(self) -> RemoteKwargs:
         """Return keyword arguments for Dulwich remote operations."""
         return {}

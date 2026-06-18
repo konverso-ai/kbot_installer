@@ -5,12 +5,11 @@ import subprocess
 from pathlib import Path
 
 import click
-
 from installable.factory import create_installable
 from installable.workarea_installable import WorkareaInstallable
 from installer_support.installer_service import InstallerService
-from interactivity.database_prompter import DatabasePrompter
 from installer_support.logging_config import setup_logging
+from interactivity.database_prompter import DatabasePrompter
 
 # Setup logging from configuration file
 setup_logging()
@@ -129,16 +128,15 @@ def init(
             raise click.Abort from e  # noqa: TRY301
 
         uv_executable = shutil.which("uv")
-        if not uv_executable:
+        if uv_executable is None:
             _abort_uv_not_found()
+        assert uv_executable is not None
 
         try:
             subprocess.run(  # noqa: S603
                 [uv_executable, "init"],
-                cwd=workarea_path,
+                cwd=str(workarea_path),
                 check=True,
-                capture_output=True,
-                text=True,
             )
             click.echo("✅ UV workspace initialized successfully")
         except subprocess.CalledProcessError as e:
@@ -502,7 +500,7 @@ def list_products(*, tree: bool = False, installer_dir: str) -> None:
     "-p", "--product", required=True, type=str, help="Name of the product to repair"
 )
 def repair(
-    installer_dir: str, version: str | None = None, product: str | None = None
+    installer_dir: str, version: str | None = None, product: str = ""
 ) -> None:
     """Repair a kbot product by reinstalling missing dependencies.
 

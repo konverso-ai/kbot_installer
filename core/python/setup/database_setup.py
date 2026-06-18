@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from interactivity.base import InteractivePrompter
+
 from setup.base import BaseSetupManager
+from typing_extensions import override
 
 
 class InternalDatabaseSetupManager(BaseSetupManager):
@@ -57,6 +59,7 @@ class InternalDatabaseSetupManager(BaseSetupManager):
         self.db_password = db_password
         self.pg_ctl = None
 
+    @override
     def setup(self) -> None:
         """Set up internal PostgreSQL database."""
         pg_dir = os.environ.get("PG_DIR")
@@ -428,6 +431,7 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
         self.db_user = db_user
         self.db_password = db_password
 
+    @override
     def setup(self) -> None:
         """Load database schema into external database."""
         pg_dir = os.environ.get("PG_DIR")
@@ -591,7 +595,10 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
             sys.stdout.flush()
         else:
             # Create user if it doesn't exist
-            env["PGPASSWORD"] = superuser_password
+            assert superuser is not None
+            pg_env = env
+            if superuser_password is not None:
+                pg_env["PGPASSWORD"] = superuser_password
             user_exists = subprocess.run(
                 [
                     str(pg_psql),
@@ -608,9 +615,9 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
                     "-c",
                     f"SELECT count(*) FROM pg_user WHERE usename = '{self.db_user}'",  # noqa: S608
                 ],
-                env=env,
+                env=pg_env,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
                 check=False,
             )
 
@@ -632,7 +639,7 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
                         "-c",
                         f"CREATE USER {self.db_user} PASSWORD '{self.db_password}'",
                     ],
-                    env=env,
+                    env=pg_env,
                     check=False,
                 )
             else:
@@ -658,9 +665,9 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
                     "-c",
                     f"SELECT count(*) FROM pg_database WHERE datname = '{self.db_name}'",  # noqa: S608
                 ],
-                env=env,
+                env=pg_env,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
                 check=False,
             )
 
@@ -682,7 +689,7 @@ class ExternalDatabaseSetupManager(BaseSetupManager):
                         "-c",
                         f"CREATE DATABASE {self.db_name} ENCODING 'UTF8' OWNER {self.db_user}",
                     ],
-                    env=env,
+                    env=pg_env,
                     check=False,
                 )
                 # Set schema owner

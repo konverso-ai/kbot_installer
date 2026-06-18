@@ -926,7 +926,7 @@ class Installer:
                 if os.path.exists(description_xml_path):
                     # Use the installer product class to load the product definition
                     product_def =  BaseProduct.from_xml_file(description_xml_path)
-                    json_def = json.loads(product_def.to_json())
+                    json_def = product_def.to_json()
 
                     # Create a kbot product instance
                     product = Product()

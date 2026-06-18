@@ -4,13 +4,10 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-from xml.dom.minidom import parse
-
 from xml.etree import ElementTree as ET
 
-
 from defusedxml import ElementTree as defused_ET
+from typing_extensions import override
 
 
 @dataclass
@@ -293,14 +290,14 @@ class Product:
 
         return ET.tostring(root, encoding="unicode")
 
-    def to_json(self) -> str:
-        """Convert Product to JSON string.
+    def to_json(self) -> dict[str, Any]:
+        """Convert Product to a JSON-serializable dictionary.
 
         Returns:
-            JSON string representation.
+            Dictionary representation of the product.
 
         """
-        data = {
+        data: dict[str, Any] = {
             "name": self.name,
             "version": self.version,
             "type": self.type,
@@ -319,14 +316,16 @@ class Product:
         if self.build_details:
             data["build"] = self.build_details
 
-        return json.dumps(data, indent=2, ensure_ascii=False)
+        return data
 
+    @override
     def __str__(self) -> str:
         """Return string representation of Product."""
         return (
             f"Product(name='{self.name}', version='{self.version}', type='{self.type}')"
         )
 
+    @override
     def __repr__(self) -> str:
         """Detailed string representation of Product."""
         return (

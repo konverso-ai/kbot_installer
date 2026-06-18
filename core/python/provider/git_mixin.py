@@ -6,12 +6,14 @@ that can be shared across different repository providers.
 
 from pathlib import Path
 
-from provider.provider_base import ProviderBase, ProviderError
+from typing_extensions import override
 from versioner import (
     VersionerBase,
     VersionerError,
     create_versioner,
 )
+
+from provider.provider_base import ProviderBase, ProviderError
 
 
 class GitMixin(ProviderBase):
@@ -54,6 +56,7 @@ class GitMixin(ProviderBase):
             self._versioner = create_versioner("pygit", auth=self._get_auth())
         return self._versioner
 
+    @override
     def clone_and_checkout(
         self, repository_url: str, target_path: str | Path, branch: str | None = None
     ) -> None:
@@ -97,6 +100,7 @@ class GitMixin(ProviderBase):
             error_msg = f"Unexpected error: {e}"
             raise ProviderError(error_msg) from e
 
+    @override
     def get_branch(self) -> str:
         """Get the branch of the provider.
 

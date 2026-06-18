@@ -9,9 +9,9 @@ import os
 import tempfile
 from pathlib import Path
 
+from auth.factory import create_auth
 from dotenv import load_dotenv
 
-from auth.pygit_authentication import create_pygit_authentication
 from provider.factory import create_provider
 
 # Charger les variables d'environnement depuis le fichier .env
@@ -48,8 +48,8 @@ async def example_nexus_github_bitbucket() -> None:
     print("\n2. Clonage depuis GitHub...")
     try:
         # Configuration de l'authentification GitHub (clé SSH)
-        github_auth = create_pygit_authentication(
-            "user_pass",
+        github_auth = create_auth(
+            "basic",
             username=os.getenv("GITHUB_USERNAME", "mon-username"),
             password=os.getenv("GITHUB_TOKEN", "mon-app-password"),
         )
@@ -73,8 +73,8 @@ async def example_nexus_github_bitbucket() -> None:
     print("\n3. Clonage depuis Bitbucket...")
     try:
         # Configuration de l'authentification Bitbucket (nom d'utilisateur/mot de passe)
-        bitbucket_auth = create_pygit_authentication(
-            "user_pass",
+        bitbucket_auth = create_auth(
+            "basic",
             username=os.getenv("BITBUCKET_USERNAME", "mon-username"),
             password=os.getenv("BITBUCKET_APP_PASSWORD", "mon-app-password"),
         )
@@ -128,8 +128,8 @@ async def example_github_bitbucket_only() -> None:
     print("\n2. Clonage depuis Bitbucket...")
     try:
         # Configuration de l'authentification Bitbucket (clé SSH)
-        bitbucket_auth = create_pygit_authentication(
-            "key_pair",
+        bitbucket_auth = create_auth(
+            "ssh",
             username="git",
             private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
             public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
@@ -165,8 +165,8 @@ async def example_bitbucket_only() -> None:
     # 1. Bitbucket Provider (authentification par nom d'utilisateur/mot de passe)
     print("\n1. Clonage depuis Bitbucket (nom d'utilisateur/mot de passe)...")
     try:
-        bitbucket_auth_userpass = create_pygit_authentication(
-            "user_pass",
+        bitbucket_auth_userpass = create_auth(
+            "basic",
             username=os.getenv("BITBUCKET_USERNAME", "mon-username"),
             password=os.getenv("BITBUCKET_APP_PASSWORD", "mon-app-password"),
         )
@@ -190,8 +190,8 @@ async def example_bitbucket_only() -> None:
     # 2. Bitbucket Provider (authentification par clé SSH)
     print("\n2. Clonage depuis Bitbucket (clé SSH)...")
     try:
-        bitbucket_auth_ssh = create_pygit_authentication(
-            "key_pair",
+        bitbucket_auth_ssh = create_auth(
+            "ssh",
             username="git",
             private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
             public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
@@ -275,8 +275,8 @@ async def example_nexus_bitbucket() -> None:
     print("\n2. Opérations avec Bitbucket (code source)...")
     try:
         # Configuration de l'authentification Bitbucket
-        bitbucket_auth = create_pygit_authentication(
-            "user_pass",
+        bitbucket_auth = create_auth(
+            "basic",
             username=os.getenv("BITBUCKET_USERNAME", "mon-username"),
             password=os.getenv("BITBUCKET_APP_PASSWORD", "mon-app-password"),
         )

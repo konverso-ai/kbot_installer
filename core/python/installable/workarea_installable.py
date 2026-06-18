@@ -1,19 +1,21 @@
 """WorkareaInstallable class for managing workarea installations."""
 
-import json
 import logging
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from installable.installable_base import InstallableBase
-from installable.product_collection import ProductCollection
+from installer_support.installer_utils import ensure_directory
 from interactivity.base import InteractivePrompter
 from setup.database_setup import (
     ExternalDatabaseSetupManager,
     InternalDatabaseSetupManager,
 )
-from installer_support.installer_utils import ensure_directory
+from typing_extensions import override
+
+from installable.installable_base import InstallableBase
+from installable.product_collection import ProductCollection
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ class WorkareaInstallable(InstallableBase):
     prompter: InteractivePrompter | None = None
     silent_mode: bool = False
 
+    @override
     def load_from_installer_folder(self, folder_path: Path) -> None:
         """Load workarea data from installer folder.
 
@@ -70,6 +73,7 @@ class WorkareaInstallable(InstallableBase):
         self.installer_path = folder_path.resolve()
         self.products = ProductCollection.from_json(str(lock_file))
 
+    @override
     def to_xml(self) -> str:
         """Convert Workarea to XML string.
 
@@ -95,14 +99,15 @@ class WorkareaInstallable(InstallableBase):
 
         return ET.tostring(root, encoding="unicode")
 
-    def to_json(self) -> str:
-        """Convert Workarea to JSON string.
+    @override
+    def to_json(self) -> dict[str, Any]:
+        """Convert Workarea to a JSON-serializable dictionary.
 
         Returns:
-            JSON string representation.
+            Dictionary representation of the workarea.
 
         """
-        data = {
+        return {
             "name": self.name,
             "target": str(self.target),
             "installer_path": str(self.installer_path) if self.installer_path else None,
@@ -116,8 +121,8 @@ class WorkareaInstallable(InstallableBase):
             },
             "products_count": len(self.products.products),
         }
-        return json.dumps(data, indent=2)
 
+    @override
     def clone(self, path: Path, *, dependencies: bool = True) -> None:
         """Clone is not applicable for workarea.
 
@@ -132,6 +137,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Clone is not applicable for workarea. Use install() instead."
         raise NotImplementedError(msg)
 
+    @override
     def get_dependencies(self) -> ProductCollection:
         """Get ProductCollection containing all products in workarea.
 
@@ -141,6 +147,7 @@ class WorkareaInstallable(InstallableBase):
         """
         return self.products
 
+    @override
     def install(self, path: Path, *, _dependencies: bool = True) -> None:
         """Install the workarea and set up database.
 
@@ -240,6 +247,7 @@ class WorkareaInstallable(InstallableBase):
             "Database initialized (without schema) for workarea at %s", self.target
         )
 
+    @override
     def update(self, path: Path, *, dependencies: bool = True) -> None:
         """Update the workarea.
 
@@ -251,6 +259,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Update is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def uninstall(self, path: Path) -> None:
         """Uninstall the workarea.
 
@@ -261,6 +270,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Uninstall is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def repair(self, path: Path, *, dependencies: bool = True) -> None:
         """Repair the workarea.
 
@@ -272,6 +282,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Repair is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def upgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Upgrade the workarea.
 
@@ -283,6 +294,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Upgrade is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def downgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Downgrade the workarea.
 
@@ -294,6 +306,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Downgrade is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def backup(self, path: Path) -> None:
         """Backup the workarea.
 
@@ -304,6 +317,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Backup is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def restore(self, path: Path) -> None:
         """Restore the workarea.
 
@@ -314,6 +328,7 @@ class WorkareaInstallable(InstallableBase):
         msg = "Restore is not implemented yet"
         raise NotImplementedError(msg)
 
+    @override
     def delete(self, path: Path) -> None:
         """Delete the workarea.
 

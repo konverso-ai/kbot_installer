@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Self, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
+from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 from service.checksum import Checksum
 from service.errors import NexusHttpError
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from service.nexus_service import NexusService
@@ -66,9 +68,11 @@ class NexusFile(BaseModel):
         instance._service = service
         return instance
 
+    @override
     def __str__(self) -> str:
         return f"NexusFile({self.path})"
 
+    @override
     def __repr__(self) -> str:
         return str(self)
 

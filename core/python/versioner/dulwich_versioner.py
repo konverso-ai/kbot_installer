@@ -7,16 +7,19 @@ operations using Dulwich for any git repository.
 import logging
 import shutil
 from pathlib import Path
+from typing import Any, cast
 
+from auth.base import HttpAuthBase, RemoteKwargs
 from dulwich import porcelain
 from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
+from dulwich.refs import Ref
 from dulwich.repo import Repo
+from typing_extensions import override
 
-from auth.base import AuthBase, RemoteKwargs
 from versioner.author import Author
-from versioner.str_repr_mixin import StrReprMixin
 from versioner.base import VersionerError
+from versioner.str_repr_mixin import StrReprMixin
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +42,14 @@ class DulwichVersioner(StrReprMixin):
     all necessary git functionality including clone, add, pull, commit, and push.
 
     Attributes:
-        auth (AuthBase | None): Authentication object for git operations.
+        auth (HttpAuthBase | None): Authentication object for git operations.
         author (Author): Author identity used for commit metadata.
 
     """
 
     def __init__(
         self,
-        auth: AuthBase | None = None,
+        auth: HttpAuthBase | None = None,
         author: Author = DEFAULT_AUTHOR,
     ) -> None:
         """Initialize the Dulwich versioner.
@@ -60,11 +63,12 @@ class DulwichVersioner(StrReprMixin):
         self._auth = auth
         self._author = author
 
-    def _get_auth(self) -> AuthBase | None:
+    @override
+    def _get_auth(self) -> HttpAuthBase | None:
         """Get the authentication object for git operations.
 
         Returns:
-            AuthBase | None: The authentication object or None.
+            HttpAuthBase | None: The authentication object or None.
 
         """
         return self._auth
@@ -81,6 +85,10 @@ class DulwichVersioner(StrReprMixin):
             return {}
 
         return auth.remote_kwargs()
+
+    def _dulwich_remote_kwargs(self) -> dict[str, Any]:
+        """Return remote kwargs typed for Dulwich porcelain calls."""
+        return cast(dict[str, Any], self._get_remote_kwargs())
 
     def _get_repository(self, repository_path: str | Path) -> Repo:
         """Get a Dulwich Repo object from the given path.
@@ -130,12 +138,13 @@ class DulwichVersioner(StrReprMixin):
             VersionerError: If HEAD does not point to a local branch.
 
         """
-        _, branch_ref = repo.refs.follow(b"HEAD")
+        _, branch_ref = repo.refs.follow(cast(Ref, b"HEAD"))
         if branch_ref is None or not branch_ref.startswith(_LOCAL_BRANCH_PREFIX):
             error_msg = "No current branch found"
             raise VersionerError(error_msg)
         return branch_ref[len(_LOCAL_BRANCH_PREFIX) :].decode()
 
+    @override
     def add(
         self,
         repository_path: str | Path,
@@ -161,6 +170,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to add files to repository: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def fetch(self, repository_path: str | Path, branch: str) -> None:
         """Fetch latest changes from the remote repository using Dulwich.
 
@@ -174,8 +184,7 @@ class DulwichVersioner(StrReprMixin):
         """
         try:
             repo = self._get_repository(repository_path)
-            remote_kwargs = self._get_remote_kwargs()
-            remote_branch_ref = _REMOTE_BRANCH_PREFIX + branch.encode()
+            remote_kwargs = self._dulwich_remote_kwargs()
 
             try:
                 porcelain.fetch(repo, b"origin", **remote_kwargs)
@@ -192,6 +201,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to fetch from remote repository: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def pull(self, repository_path: str | Path, branch: str) -> None:
         """Pull latest changes from the remote repository using Dulwich.
 
@@ -205,7 +215,7 @@ class DulwichVersioner(StrReprMixin):
         """
         try:
             repo = self._get_repository(repository_path)
-            remote_kwargs = self._get_remote_kwargs()
+            remote_kwargs = self._dulwich_remote_kwargs()
             remote_branch_ref = _REMOTE_BRANCH_PREFIX + branch.encode()
 
             try:
@@ -230,6 +240,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to pull from remote repository: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def commit(self, repository_path: str | Path, message: str) -> None:
         """Commit staged changes using Dulwich.
 
@@ -257,6 +268,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to commit changes: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def push(self, repository_path: str | Path, branch: str) -> None:
         """Push commits to the remote repository using Dulwich.
 
@@ -271,7 +283,7 @@ class DulwichVersioner(StrReprMixin):
         try:
             repo = self._get_repository(repository_path)
             current_branch = self._get_current_branch_name(repo)
-            remote_kwargs = self._get_remote_kwargs()
+            remote_kwargs = self._dulwich_remote_kwargs()
             refspec = f"refs/heads/{current_branch}:refs/heads/{branch}"
             porcelain.push(repo, b"origin", refspecs=[refspec], **remote_kwargs)
         except _DULWICH_ERRORS as e:
@@ -283,6 +295,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to push to remote repository: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def clone(self, repository_url: str, target_path: str | Path) -> None:
         """Clone a repository using Dulwich.
 
@@ -307,7 +320,7 @@ class DulwichVersioner(StrReprMixin):
                 )
                 raise VersionerError(error_msg)
 
-            remote_kwargs = self._get_remote_kwargs()
+            remote_kwargs = self._dulwich_remote_kwargs()
             porcelain.clone(repository_url, str(target_path), **remote_kwargs)
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to clone repository from {repository_url}: {e}"
@@ -392,6 +405,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to checkout local branch '{branch}': {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def checkout(self, repository_path: str | Path, branch: str) -> None:
         """Checkout a specific branch in the repository using Dulwich.
 
@@ -422,6 +436,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to checkout branch '{branch}': {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def select_branch(
         self, repository_path: str | Path, branches: list[str]
     ) -> str | None:
@@ -460,6 +475,7 @@ class DulwichVersioner(StrReprMixin):
 
         return None
 
+    @override
     def stash(self, repository_path: str | Path, message: str | None = None) -> bool:
         """Stash current changes in the repository using Dulwich.
 
@@ -487,6 +503,7 @@ class DulwichVersioner(StrReprMixin):
 
         return True
 
+    @override
     def safe_pull(self, repository_path: str | Path, branch: str) -> None:
         """Safely pull latest changes, stashing any local changes first using Dulwich.
 
@@ -544,6 +561,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to apply stash: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def remote_exists(self, repository_url: str) -> bool:
         """Check if a remote repository exists using ls-remote.
 
@@ -555,7 +573,7 @@ class DulwichVersioner(StrReprMixin):
 
         """
         try:
-            remote_kwargs = self._get_remote_kwargs()
+            remote_kwargs = self._dulwich_remote_kwargs()
             porcelain.ls_remote(repository_url, **remote_kwargs)
         except Exception:
             logger.debug("Repository does not exist or is not accessible")

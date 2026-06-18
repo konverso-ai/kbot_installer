@@ -1,6 +1,9 @@
 """Factory functions for creating versioner instances."""
 
+from typing import cast
+
 from utils.factory.factory import factory_method
+
 from versioner.base import VersionerBase
 
 
@@ -25,4 +28,4 @@ def create_versioner(name: str, **kwargs: object) -> VersionerBase:
         PyGitVersioner()
 
     """
-    return factory_method(name, __package__, **kwargs)
+    return cast(VersionerBase, factory_method(name, "versioner", **kwargs))

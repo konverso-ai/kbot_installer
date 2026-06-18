@@ -1,16 +1,23 @@
 """ProductCollection class for managing collections of products."""
 
+from __future__ import annotations
+
 import fnmatch
 import importlib
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from defusedxml import ElementTree as defused_ET
+from typing_extensions import override
 
 from installable.dependency_graph import DependencyGraph
 from installable.factory import create_installable
-from installable.installable_base import InstallableBase
+from installer_support.installer_utils import version_to_branch
+
+if TYPE_CHECKING:
+    from installable.product_installable import ProductInstallable
 
 # Access underlying ElementTree for creation (safe - we control the content)
 # defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
@@ -27,7 +34,7 @@ class ProductCollection:
 
     """
 
-    def __init__(self, products: list[InstallableBase] | None = None) -> None:
+    def __init__(self, products: list[ProductInstallable] | None = None) -> None:
         """Initialize collection with products.
 
         Args:
@@ -36,7 +43,7 @@ class ProductCollection:
         """
         self.products = products or []
 
-    def add_product(self, product: InstallableBase) -> None:
+    def add_product(self, product: ProductInstallable) -> None:
         """Add a product to the collection.
 
         Args:
@@ -61,7 +68,7 @@ class ProductCollection:
                 return True
         return False
 
-    def get_product(self, name: str) -> InstallableBase | None:
+    def get_product(self, name: str) -> ProductInstallable | None:
         """Get a product by name.
 
         Args:
@@ -76,7 +83,7 @@ class ProductCollection:
                 return product
         return None
 
-    def get_all_products(self) -> list[InstallableBase]:
+    def get_all_products(self) -> list[ProductInstallable]:
         """Get all products in the collection.
 
         Returns:
@@ -85,7 +92,7 @@ class ProductCollection:
         """
         return self.products.copy()
 
-    def get_products_by_type(self, product_type: str) -> list[InstallableBase]:
+    def get_products_by_type(self, product_type: str) -> list[ProductInstallable]:
         """Get products filtered by type.
 
         Args:
@@ -97,7 +104,7 @@ class ProductCollection:
         """
         return [p for p in self.products if p.type == product_type]
 
-    def get_products_by_category(self, category: str) -> list[InstallableBase]:
+    def get_products_by_category(self, category: str) -> list[ProductInstallable]:
         """Get products filtered by category.
 
         Args:
@@ -118,7 +125,7 @@ class ProductCollection:
         """
         return [p.name for p in self.products]
 
-    def filter_products(self, **filters: str) -> list[InstallableBase]:
+    def filter_products(self, **filters: str) -> list[ProductInstallable]:
         """Filter products by various criteria.
 
         Args:
@@ -158,9 +165,9 @@ class ProductCollection:
             ValueError: If installer is invalid.
 
         """
-        installer_path = Path(installer_path).resolve()
-        if not installer_path.is_dir():
-            msg = f"Installer path is not a directory: {installer_path}"
+        resolved_path = Path(installer_path).resolve()
+        if not resolved_path.is_dir():
+            msg = f"Installer path is not a directory: {resolved_path}"
             raise NotADirectoryError(msg)
 
         products = []
@@ -169,14 +176,14 @@ class ProductCollection:
         # Find product folders
         product_folders = sorted(
             item.name
-            for item in installer_path.iterdir()
+            for item in resolved_path.iterdir()
             if item.is_dir() and (item / "description.xml").exists()
         )
 
         for product_name in product_folders:
             try:
                 product = create_installable(name=product_name)
-                product.load_from_installer_folder(installer_path / product_name)
+                product.load_from_installer_folder(resolved_path / product_name)
                 products.append(product)
             except (ValueError, FileNotFoundError) as e:
                 failed_products.append(f"{product_name}: {e}")
@@ -210,19 +217,19 @@ class ProductCollection:
             List of product folder names.
 
         """
-        installer_path = Path(installer_path).resolve()
-        if not installer_path.is_dir():
+        resolved_path = Path(installer_path).resolve()
+        if not resolved_path.is_dir():
             return []
 
         return sorted(
             item.name
-            for item in installer_path.iterdir()
+            for item in resolved_path.iterdir()
             if item.is_dir() and (item / "description.xml").exists()
         )
 
     def load_product(
         self, installer_path: str, product_name: str
-    ) -> InstallableBase | None:
+    ) -> ProductInstallable | None:
         """Load a specific product from installer directory.
 
         Args:
@@ -233,8 +240,8 @@ class ProductCollection:
             Product instance or None if not found.
 
         """
-        installer_path = Path(installer_path).resolve()
-        product_folder = installer_path / product_name
+        resolved_path = Path(installer_path).resolve()
+        product_folder = resolved_path / product_name
 
         if (
             not product_folder.exists()
@@ -260,8 +267,8 @@ class ProductCollection:
             Tuple of (is_valid, error_messages).
 
         """
-        installer_path = Path(installer_path).resolve()
-        if not installer_path.is_dir():
+        resolved_path = Path(installer_path).resolve()
+        if not resolved_path.is_dir():
             return False, ["Installer path is not a directory"]
 
         errors = []
@@ -393,10 +400,15 @@ class ProductCollection:
 
         for product in bfs_products:
             product_path = base_path / product.name
-            product.provider.clone_and_checkout(product_path, product.version)
+            branch = product.branch
+            if not branch and product.version:
+                branch = version_to_branch(product.version, env=product.env)
+            product.provider.clone_and_checkout(
+                product_path, branch, repository_name=product.name
+            )
             product.load_from_installer_folder(product_path)
 
-    def to_bfs_ordered_dict(self, root_product_name: str) -> dict[str, str]:
+    def to_bfs_ordered_dict(self, root_product_name: str) -> dict[str, Any]:
         """Convert collection to BFS-ordered dictionary.
 
         Args:
@@ -424,7 +436,7 @@ class ProductCollection:
         with Path(file_path).open("w", encoding="utf-8") as f:
             json.dump(bfs_dict, f, indent=2, ensure_ascii=False)
 
-    def __iter__(self) -> Iterator[InstallableBase]:
+    def __iter__(self) -> Iterator[ProductInstallable]:
         """Iterate over products in the collection.
 
         Yields:
@@ -454,6 +466,7 @@ class ProductCollection:
         """
         return self.get_product(product_name) is not None
 
+    @override
     def __str__(self) -> str:
         """Return string representation of ProductCollection."""
         return f"ProductCollection(products={len(self.products)})"
@@ -514,6 +527,7 @@ class ProductCollection:
             if file_path.is_file() and (exts is None or file_path.suffix in exts)
         ]
 
+    @override
     def __repr__(self) -> str:
         """Detailed string representation of ProductCollection."""
         return f"ProductCollection(products={[p.name for p in self.products]})"

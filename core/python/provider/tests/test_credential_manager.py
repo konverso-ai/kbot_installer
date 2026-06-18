@@ -3,10 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from auth.http_auth.http_auth_base import HttpAuthBase
-from auth.pygit_authentication.pygit_authentication_base import (
-    PyGitAuthenticationBase,
-)
+from auth.base import HttpAuthBase
 from provider.credential_manager import CredentialManager
 
 
@@ -97,7 +94,7 @@ class TestCredentialManager:
     @patch.dict(
         os.environ, {"NEXUS_USERNAME": "test_user", "NEXUS_PASSWORD": "test_pass"}
     )
-    @patch("provider.credential_manager.create_http_auth")
+    @patch("provider.credential_manager.create_auth")
     def test_get_auth_for_provider_nexus_success(self, mock_create_auth) -> None:
         """Test get_auth_for_provider returns authentication object for Nexus when credentials are available."""
         manager = CredentialManager()
@@ -124,7 +121,7 @@ class TestCredentialManager:
     @patch.dict(
         os.environ, {"NEXUS_USERNAME": "test_user", "NEXUS_PASSWORD": "test_pass"}
     )
-    @patch("provider.credential_manager.create_http_auth")
+    @patch("provider.credential_manager.create_auth")
     def test_get_auth_for_provider_nexus_import_error(self, mock_create_auth) -> None:
         """Test get_auth_for_provider handles ImportError gracefully for Nexus."""
         manager = CredentialManager()
@@ -137,7 +134,7 @@ class TestCredentialManager:
     @patch.dict(
         os.environ, {"NEXUS_USERNAME": "test_user", "NEXUS_PASSWORD": "test_pass"}
     )
-    @patch("provider.credential_manager.create_http_auth")
+    @patch("provider.credential_manager.create_auth")
     def test_get_auth_for_provider_nexus_general_exception(
         self, mock_create_auth
     ) -> None:
@@ -151,20 +148,20 @@ class TestCredentialManager:
 
     @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
     @patch(
-        "provider.credential_manager.create_pygit_authentication"
+        "provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_github_success(self, mock_create_auth) -> None:
         """Test get_auth_for_provider returns authentication object for GitHub when token is available."""
         manager = CredentialManager()
-        mock_auth = MagicMock(spec=PyGitAuthenticationBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
 
         result = manager.get_auth_for_provider("github")
 
         assert result is not None
-        assert isinstance(result, PyGitAuthenticationBase)
+        assert isinstance(result, HttpAuthBase)
         mock_create_auth.assert_called_once_with(
-            "user_pass", username="git", password="test_token"
+            "basic", username="git", password="test_token"
         )
 
     @patch.dict(os.environ, {}, clear=True)
@@ -178,7 +175,7 @@ class TestCredentialManager:
 
     @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
     @patch(
-        "provider.credential_manager.create_pygit_authentication"
+        "provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_github_import_error(self, mock_create_auth) -> None:
         """Test get_auth_for_provider handles ImportError gracefully for GitHub."""
@@ -194,20 +191,20 @@ class TestCredentialManager:
         {"BITBUCKET_USERNAME": "test_user", "BITBUCKET_APP_PASSWORD": "test_pass"},
     )
     @patch(
-        "provider.credential_manager.create_pygit_authentication"
+        "provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_bitbucket_success(self, mock_create_auth) -> None:
         """Test get_auth_for_provider returns authentication object for Bitbucket when credentials are available."""
         manager = CredentialManager()
-        mock_auth = MagicMock(spec=PyGitAuthenticationBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
 
         result = manager.get_auth_for_provider("bitbucket")
 
         assert result is not None
-        assert isinstance(result, PyGitAuthenticationBase)
+        assert isinstance(result, HttpAuthBase)
         mock_create_auth.assert_called_once_with(
-            "user_pass", username="test_user", password="test_pass"
+            "basic", username="test_user", password="test_pass"
         )
 
     @patch.dict(os.environ, {}, clear=True)
@@ -224,7 +221,7 @@ class TestCredentialManager:
         {"BITBUCKET_USERNAME": "test_user", "BITBUCKET_APP_PASSWORD": "test_pass"},
     )
     @patch(
-        "provider.credential_manager.create_pygit_authentication"
+        "provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_bitbucket_import_error(
         self, mock_create_auth

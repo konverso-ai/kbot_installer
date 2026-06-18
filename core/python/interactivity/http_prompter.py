@@ -1,5 +1,7 @@
 """HTTP and hostname parameter prompter."""
 
+from typing import Any
+
 from interactivity.base import InteractivePrompter
 
 
@@ -8,13 +10,13 @@ class HttpPrompter(InteractivePrompter):
 
     def prompt_http_ports(
         self,
-        config: dict,
+        config: dict[str, Any],
         *,
         basic_installation: bool,
         http_interface: str | None = None,
         http_port: str | None = None,
         https_port: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Prompt and validate HTTP/HTTPS port parameters.
 
         Args:
@@ -83,11 +85,11 @@ class HttpPrompter(InteractivePrompter):
 
     def prompt_hostname(
         self,
-        config: dict,
+        config: dict[str, Any],
         *,
         hostname: str | None = None,
         https_port: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Prompt and validate hostname and external URL.
 
         Args:

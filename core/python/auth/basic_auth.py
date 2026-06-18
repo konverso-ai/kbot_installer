@@ -1,7 +1,9 @@
 """Basic HTTP authentication (username and password)."""
 
 import base64
-from typing import Annotated, Self, TypeAlias
+from typing import Annotated, TypeAlias
+
+from typing_extensions import Self, override
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,6 +47,7 @@ class BasicAuth(AuthMixin, BaseSettings):
         self.secret = SecretStr(encoded)
         return self
 
+    @override
     def remote_kwargs(self) -> RemoteKwargs:
         return {
             "username": self.username,

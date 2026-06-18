@@ -7,7 +7,7 @@ must implement to provide a unified interface for full git operations.
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from auth.base import AuthBase
+from auth.base import HttpAuthBase
 
 
 class VersionerError(Exception):
@@ -30,11 +30,11 @@ class VersionerBase(ABC):
     """
 
     @abstractmethod
-    def _get_auth(self) -> AuthBase | None:
+    def _get_auth(self) -> HttpAuthBase | None:
         """Get the authentication object for git operations.
 
         Returns:
-            AuthBase | None: The authentication object or None.
+            HttpAuthBase | None: The authentication object or None.
 
         """
 

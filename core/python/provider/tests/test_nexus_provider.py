@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from auth.http_auth.http_auth_base import HttpAuthBase
+from collections.abc import Iterator
+
+import httpx
+
+from auth.base import HttpAuthBase, RemoteKwargs
 from provider.nexus_provider import NexusProvider
 from provider.provider_base import ProviderBase, ProviderError
 
@@ -13,9 +17,13 @@ from provider.provider_base import ProviderBase, ProviderError
 class MockHttpAuth(HttpAuthBase):
     """Mock HTTP authentication for testing."""
 
-    def get_auth(self) -> MagicMock:
-        """Return a mock authentication object for testing."""
-        return MagicMock()
+    def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
+        """Apply authentication to an outgoing HTTP request."""
+        yield request
+
+    def remote_kwargs(self) -> RemoteKwargs:
+        """Return keyword arguments for Dulwich remote operations."""
+        return {}
 
 
 class TestNexusProvider:

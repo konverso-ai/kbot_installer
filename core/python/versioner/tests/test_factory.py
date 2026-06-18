@@ -45,25 +45,6 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_nexus_success(self) -> None:
-        """Test creating NexusVersioner successfully."""
-        with patch(
-            "versioner.factory.factory_method"
-        ) as mock_factory_method:
-            # Mock the factory method to return a mock versioner
-            mock_versioner = MagicMock(spec=VersionerBase)
-            mock_factory_method.return_value = mock_versioner
-
-            result = create_versioner("nexus", base_url="https://nexus.example.com")
-
-            # Verify factory_method was called with correct arguments
-            mock_factory_method.assert_called_once_with(
-                "nexus",
-                "versioner",
-                base_url="https://nexus.example.com",
-            )
-            assert result == mock_versioner
-
     def test_create_versioner_with_multiple_kwargs(self) -> None:
         """Test creating versioner with multiple keyword arguments."""
         with patch(

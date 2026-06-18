@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from installable.product_collection import ProductCollection
@@ -37,11 +37,11 @@ class InstallableBase(ABC):
         """
 
     @abstractmethod
-    def to_json(self) -> str:
-        """Convert Product to JSON string.
+    def to_json(self) -> dict[str, Any]:
+        """Convert product data to a JSON-serializable dictionary.
 
         Returns:
-            JSON string representation.
+            Dictionary representation of the product.
 
         """
 

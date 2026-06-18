@@ -9,12 +9,9 @@ import os
 import tempfile
 from pathlib import Path
 
+from auth.factory import create_auth
 from dotenv import load_dotenv
 
-from auth.pygit_authentication import (
-    KeyPairPygitAuthentication,
-    UserPassPygitAuthentication,
-)
 from provider.factory import create_provider
 
 # Charger les variables d'environnement depuis le fichier .env
@@ -47,12 +44,7 @@ async def example_nexus_github_bitbucket() -> None:
     # 2. GitHub Provider (avec authentification par clé SSH)
     try:
         # Configuration de l'authentification GitHub (clé SSH)
-        github_auth = KeyPairPygitAuthentication(
-            username="git",
-            private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
-            public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
-            passphrase="",
-        )
+        github_auth = create_auth("ssh", username="git")
 
         github_provider = create_provider(
             "github",
@@ -71,7 +63,8 @@ async def example_nexus_github_bitbucket() -> None:
     # 3. Bitbucket Provider (avec authentification par nom d'utilisateur/mot de passe)
     try:
         # Configuration de l'authentification Bitbucket (nom d'utilisateur/mot de passe)
-        bitbucket_auth = UserPassPygitAuthentication(
+        bitbucket_auth = create_auth(
+            "basic",
             username=os.getenv("BITBUCKET_USERNAME", "mon-username"),
             password=os.getenv("BITBUCKET_APP_PASSWORD", "mon-app-password"),
         )
@@ -118,12 +111,7 @@ async def example_github_bitbucket_only() -> None:
     # 2. Bitbucket Provider (avec authentification par clé SSH)
     try:
         # Configuration de l'authentification Bitbucket (clé SSH)
-        bitbucket_auth = KeyPairPygitAuthentication(
-            username="git",
-            private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
-            public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
-            passphrase="",
-        )
+        bitbucket_auth = create_auth("ssh", username="git")
 
         bitbucket_provider = create_provider(
             "bitbucket", account_name="mon-workspace", auth=bitbucket_auth
@@ -151,7 +139,8 @@ async def example_bitbucket_only() -> None:
 
     # 1. Bitbucket Provider (authentification par nom d'utilisateur/mot de passe)
     try:
-        bitbucket_auth_userpass = UserPassPygitAuthentication(
+        bitbucket_auth_userpass = create_auth(
+            "basic",
             username=os.getenv("BITBUCKET_USERNAME", "mon-username"),
             password=os.getenv("BITBUCKET_APP_PASSWORD", "mon-app-password"),
         )
@@ -174,12 +163,7 @@ async def example_bitbucket_only() -> None:
 
     # 2. Bitbucket Provider (authentification par clé SSH)
     try:
-        bitbucket_auth_ssh = KeyPairPygitAuthentication(
-            username="git",
-            private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
-            public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
-            passphrase="",
-        )
+        bitbucket_auth_ssh = create_auth("ssh", username="git")
 
         bitbucket_provider_ssh = create_provider(
             "bitbucket",

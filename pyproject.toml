@@ -4,6 +4,9 @@ version = "2.0.0"
 requires-python = ">=3.10"
 dependencies = [
     "aiofiles",
+    "azure-identity>=1.25.3",
+    "azure-storage-blob>=12.30.0",
+    "boto3>=1.43.32",
     "click",
     "colorama",
     "defusedxml",
@@ -18,6 +21,8 @@ dependencies = [
     "python-dotenv",
     "requests",
     "rich",
+    "tomli; python_version < '3.11'",
+    "typing_extensions",
     "tqdm",
 ]
 
@@ -70,3 +75,60 @@ dev = [
     { include-group = "typecheck" },
     { include-group = "test" },
 ]
+
+[tool.deptry]
+extend_exclude = [
+    "installer_tests",
+    "core/python/utils/setup_workarea.py",
+    "core/python/utils/kbot.py",
+    "core/python/utils/deps.py",
+]
+known_first_party = [
+    "auth",
+    "backend",
+    "cli",
+    "config",
+    "installable",
+    "installer_support",
+    "interactivity",
+    "provider",
+    "service",
+    "setup",
+    "storage",
+    "utils",
+    "versioner",
+]
+
+[tool.deptry.optional_dependencies_dev_groups]
+dev = ["lint", "typecheck", "test", "deps"]
+
+[tool.deptry.per_rule_ignores]
+DEP001 = ["tomllib"]
+DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm"]
+DEP003 = ["botocore", "pydantic"]
+DEP004 = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["core/python"]
+
+[tool.ty.environment]
+extra-paths = ["core/python"]
+
+[tool.ty.src]
+exclude = [
+    "core/python/**/tests/**",
+    "core/python/installer_tests/**",
+    "core/python/examples.py",
+    "core/python/simple_examples.py",
+    "core/python/provider/examples.py",
+    "core/python/provider/simple_examples.py",
+    "core/python/utils/setup_workarea.py",
+    "core/python/utils/kbot.py",
+]
+
+[tool.ty.rules]
+all = "warn"
+invalid-method-override = "ignore"
+unresolved-import = "ignore"
+possibly-missing-import = "ignore"
+missing-argument = "ignore"

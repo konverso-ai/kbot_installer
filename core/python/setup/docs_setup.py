@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from setup.base import BaseSetupManager
+from typing_extensions import override
 
 
 class PythonDocsSetupManager(BaseSetupManager):
@@ -12,6 +13,7 @@ class PythonDocsSetupManager(BaseSetupManager):
     if the documentation is not available.
     """
 
+    @override
     def setup(self) -> None:
         """Set up Python documentation placeholder."""
         kbot_product = self.get_kbot_product()

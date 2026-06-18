@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from installer_support.installation_table import (
     InstallationResult,
     InstallationTable,

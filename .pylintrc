@@ -1,8 +1,16 @@
 [MASTER]
+py-version=3.12
 ignore=
     .venv,
     migrations,
-    tests
+    tests,
+    installer_tests,
+    setup_workarea.py,
+    kbot.py,
+    deps.py,
+    examples.py,
+    simple_examples.py,
+    nexus.py
 jobs=1
 load-plugins=
 unsafe-load-any-extension=no

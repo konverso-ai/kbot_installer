@@ -5,6 +5,7 @@ for versioner classes using the _get_auth() method.
 """
 
 from versioner.base import VersionerBase
+from typing_extensions import override
 
 
 class StrReprMixin(VersionerBase):
@@ -16,6 +17,7 @@ class StrReprMixin(VersionerBase):
 
     """
 
+    @override
     def __str__(self) -> str:
         """Return string representation of the versioner.
 
@@ -27,6 +29,7 @@ class StrReprMixin(VersionerBase):
         auth_status = auth is not None
         return f"{self.__class__.__name__}(auth={auth_status})"
 
+    @override
     def __repr__(self) -> str:
         """Return detailed string representation of the versioner.
 

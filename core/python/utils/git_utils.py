@@ -9,6 +9,7 @@ def parse_release_branch_name(branch_name: str) -> tuple[int, int, bool] | None:
 
     Returns:
         A ``(year, seq, is_dev)`` tuple for the release, or ``None`` if no matching branch exists.
+
     """
     match = re.match(r"^release-(\d{4})\.(\d+)(-dev)?$", branch_name or "")
     if not match:

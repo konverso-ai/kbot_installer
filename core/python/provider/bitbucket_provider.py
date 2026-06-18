@@ -7,8 +7,10 @@ from Bitbucket using pygit2.
 
 from pathlib import Path
 
-from auth.pygit_authentication import PyGitAuthenticationBase
+from auth.base import HttpAuthBase
+
 from provider.git_mixin import GitMixin
+from typing_extensions import override
 
 
 class BitbucketProvider(GitMixin):
@@ -20,7 +22,7 @@ class BitbucketProvider(GitMixin):
     Attributes:
         base_url (str): Base URL of the Bitbucket instance.
         account_name (str): Name of the Bitbucket account.
-        auth (PyGitAuthenticationBase | None): PyGit authentication object.
+        auth (HttpAuthBase | None): Authentication object for repository operations.
 
     """
 
@@ -30,7 +32,7 @@ class BitbucketProvider(GitMixin):
     def __init__(
         self,
         account_name: str,
-        auth: PyGitAuthenticationBase | None = None,
+        auth: HttpAuthBase | None = None,
         **kwargs,  # noqa: ARG002, ANN003
     ) -> None:
         """Initialize the Bitbucket provider.
@@ -46,15 +48,17 @@ class BitbucketProvider(GitMixin):
         self.account_name = account_name
         self._auth = auth
 
-    def _get_auth(self) -> PyGitAuthenticationBase | None:
+    @override
+    def _get_auth(self) -> HttpAuthBase | None:
         """Get authentication object for Bitbucket.
 
         Returns:
-            PyGitAuthenticationBase | None: Authentication object for Bitbucket operations.
+            HttpAuthBase | None: Authentication object for Bitbucket operations.
 
         """
         return self._auth
 
+    @override
     def clone_and_checkout(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
     ) -> None:
@@ -77,6 +81,7 @@ class BitbucketProvider(GitMixin):
         # Use the parent clone_and_checkout method which handles authentication
         super().clone_and_checkout(repository_url, target_path, branch)
 
+    @override
     def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on Bitbucket.
 
@@ -95,10 +100,11 @@ class BitbucketProvider(GitMixin):
             )
             # Use the versioner to check if repository exists
             versioner = self._get_versioner()
-            return versioner.check_remote_repository_exists(repository_url)
+            return versioner.remote_exists(repository_url)
         except Exception:
             return False
 
+    @override
     def get_name(self) -> str:
         """Get the name of the provider.
 

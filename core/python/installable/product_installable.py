@@ -10,17 +10,25 @@ import os
 import shutil
 import site
 import sys
-import tomllib
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
+
+from typing_extensions import Self, override
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+from installer_support.installer_utils import ensure_directory, version_to_branch
+from provider import create_provider
+from provider.selector_provider import SelectorProvider
 
 from installable.factory import create_installable
 from installable.installable_base import InstallableBase
 from installable.product_collection import ProductCollection
-from provider import create_provider
-from installer_support.installer_utils import ensure_directory, version_to_branch
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +99,14 @@ class ProductInstallable(InstallableBase):
     branch_used: str | None = None
     # Specific branch to use (overrides version_to_branch calculation)
     branch: str | None = None
+    provider: SelectorProvider = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Initialize provider after instance creation."""
-        self.provider = create_provider(name="selector", providers=self.providers)
+        self.provider = cast(
+            SelectorProvider,
+            create_provider(name="selector", providers=self.providers),
+        )
 
     @staticmethod
     def _parse_comma_separated_string(value: str) -> list[str]:
@@ -116,7 +128,7 @@ class ProductInstallable(InstallableBase):
         product_name: str,
         base_path: Path | None = None,
         default_version: str | None = None,
-    ) -> InstallableBase:
+    ) -> Self:
         """Load a product by its name.
 
         Args:
@@ -151,17 +163,20 @@ class ProductInstallable(InstallableBase):
                 # If description.xml doesn't specify a version, keep the default version
                 if not product.version and version:
                     product.version = version
-                return product
+                return cast(Self, product)
 
         # Otherwise, create a minimal product instance with just the name using factory
         # The provider will handle the actual loading when cloning
         # Pass providers, version, and branch to ensure dependencies use the same as the main product
-        return create_installable(
-            name=product_name, providers=providers, version=version, branch=branch
+        return cast(
+            Self,
+            create_installable(
+                name=product_name, providers=providers, version=version, branch=branch
+            ),
         )
 
     @classmethod
-    def from_xml(cls, xml_content: str) -> InstallableBase:
+    def from_xml(cls, xml_content: str) -> Self:
         """Create Product from XML content.
 
         Args:
@@ -233,7 +248,7 @@ class ProductInstallable(InstallableBase):
         )
 
     @classmethod
-    def from_json(cls, json_content: str) -> InstallableBase:
+    def from_json(cls, json_content: str) -> Self:
         """Create Product from JSON content.
 
         Args:
@@ -281,7 +296,7 @@ class ProductInstallable(InstallableBase):
         )
 
     @classmethod
-    def from_xml_file(cls, xml_path: str | Path) -> InstallableBase:
+    def from_xml_file(cls, xml_path: str | Path) -> Self:
         """Create Product from XML file.
 
         Args:
@@ -303,7 +318,7 @@ class ProductInstallable(InstallableBase):
         return cls.from_xml(xml_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_json_file(cls, json_path: str | Path) -> InstallableBase:
+    def from_json_file(cls, json_path: str | Path) -> Self:
         """Create Product from JSON file.
 
         Args:
@@ -325,7 +340,7 @@ class ProductInstallable(InstallableBase):
         return cls.from_json(json_path.read_text(encoding="utf-8"))
 
     @classmethod
-    def from_installer_folder(cls, folder_path: Path) -> InstallableBase:
+    def from_installer_folder(cls, folder_path: Path) -> Self:
         """Create ProductInstallable from installer folder (XML + optional JSON).
 
         Args:
@@ -352,6 +367,7 @@ class ProductInstallable(InstallableBase):
 
         return xml_product
 
+    @override
     def load_from_installer_folder(self, folder_path: Path) -> None:
         """Load product data from installer folder (XML + optional JSON) into current instance.
 
@@ -378,7 +394,7 @@ class ProductInstallable(InstallableBase):
         else:
             self._update_from_product(xml_product)
 
-    def _update_from_product(self, source_product: InstallableBase) -> None:
+    def _update_from_product(self, source_product: Self) -> None:
         """Update current instance with data from another product.
 
         This method copies all relevant data from the source product to the current
@@ -414,8 +430,8 @@ class ProductInstallable(InstallableBase):
 
     @classmethod
     def merge_xml_json(
-        cls, xml_product: InstallableBase, json_product: InstallableBase
-    ) -> InstallableBase:
+        cls, xml_product: Self, json_product: Self
+    ) -> Self:
         """Merge XML and JSON products, with JSON taking precedence.
 
         Args:
@@ -459,6 +475,7 @@ class ProductInstallable(InstallableBase):
             branch=branch,
         )
 
+    @override
     def to_xml(self) -> str:
         """Convert Product to XML string.
 
@@ -503,11 +520,12 @@ class ProductInstallable(InstallableBase):
 
         return ET.tostring(root, encoding="unicode")
 
-    def to_json(self) -> str:
-        """Convert Product to JSON dictionary.
+    @override
+    def to_json(self) -> dict[str, Any]:
+        """Convert Product to a JSON-serializable dictionary.
 
         Returns:
-            JSON dictionary.
+            Dictionary representation of the product.
 
         """
         return {
@@ -528,6 +546,7 @@ class ProductInstallable(InstallableBase):
             "branch": self.branch,
         }
 
+    @override
     def clone(self, path: Path, *, dependencies: bool = True) -> None:
         """Clone the product to the given path using breadth-first traversal.
 
@@ -615,7 +634,7 @@ class ProductInstallable(InstallableBase):
         logger.debug("Exported product collection to %s", lock_file)
 
     def _clone_dependency_product(
-        self, product: InstallableBase, base_path: Path, processed: set[str]
+        self, product: Self, base_path: Path, processed: set[str]
     ) -> bool:
         """Clone a dependency product.
 
@@ -663,8 +682,8 @@ class ProductInstallable(InstallableBase):
 
     def _discover_and_queue_parents(
         self,
-        current_product: InstallableBase,
-        queue: deque,
+        current_product: Self,
+        queue: deque[Self],
         processed: set[str],
         base_path: Path,
     ) -> None:
@@ -702,6 +721,7 @@ class ProductInstallable(InstallableBase):
                     )
                     queue.append(parent_product)
 
+    @override
     def get_dependencies(self, base_path: Path | None = None) -> ProductCollection:
         """Get a ProductCollection containing this product and all its dependencies.
 
@@ -1293,7 +1313,7 @@ class ProductInstallable(InstallableBase):
 
     def _load_products_from_lock(
         self, lock_file: Path, installer_path: Path, *, dependencies: bool
-    ) -> list[InstallableBase]:
+    ) -> list[Self]:
         """Load products from lock file.
 
         Args:
@@ -1321,7 +1341,7 @@ class ProductInstallable(InstallableBase):
             logger.warning("Failed to load products.lock.json: %s", e)
             products = []
         else:
-            return products
+            return cast(list[Self], products)
         return []
 
     def _ensure_installer_complete(
@@ -1329,7 +1349,7 @@ class ProductInstallable(InstallableBase):
         installer_path: Path,
         *,
         dependencies: bool,
-    ) -> list[InstallableBase]:
+    ) -> list[Self]:
         """Ensure installer is complete, cloning if needed.
 
         Args:
@@ -1352,7 +1372,7 @@ class ProductInstallable(InstallableBase):
 
     def _process_product_work_config(
         self,
-        product: InstallableBase,
+        product: Self,
         workarea_root: Path,
         processed: set[Path],
     ) -> None:
@@ -1394,13 +1414,13 @@ class ProductInstallable(InstallableBase):
             logger.warning("Processing init section for product %s", product.name)
             self._handle_work_init(workarea_root, init_config, processed)
 
-        if copy_config:
+        if copy_config and product.dirname is not None:
             logger.warning("Processing copy section for product %s", product.name)
             self._handle_work_copy(
                 workarea_root, product.dirname, copy_config, ignore_config, processed
             )
 
-        if link_config:
+        if link_config and product.dirname is not None:
             logger.warning("Processing link section for product %s", product.name)
             self._handle_work_link(
                 workarea_root, product.dirname, link_config, ignore_config, processed
@@ -1414,6 +1434,7 @@ class ProductInstallable(InstallableBase):
                 workarea_root, link_external_config, processed
             )
 
+    @override
     def install(
         self,
         path: Path,
@@ -1486,6 +1507,7 @@ class ProductInstallable(InstallableBase):
 
             self._process_product_work_config(product, path, processed)
 
+    @override
     def update(self, path: Path, *, dependencies: bool = True) -> None:
         """Update the product in the workarea.
 
@@ -1497,6 +1519,7 @@ class ProductInstallable(InstallableBase):
         msg = "Update is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def uninstall(self, path: Path) -> None:
         """Uninstall the product from the workarea.
 
@@ -1507,6 +1530,7 @@ class ProductInstallable(InstallableBase):
         msg = "Uninstall is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def repair(self, path: Path, *, dependencies: bool = True) -> None:
         """Repair the product in the workarea.
 
@@ -1518,6 +1542,7 @@ class ProductInstallable(InstallableBase):
         msg = "Repair is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def upgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Upgrade the product in the workarea.
 
@@ -1529,6 +1554,7 @@ class ProductInstallable(InstallableBase):
         msg = "Upgrade is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def downgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Downgrade the product in the workarea.
 
@@ -1540,6 +1566,7 @@ class ProductInstallable(InstallableBase):
         msg = "Downgrade is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def backup(self, path: Path) -> None:
         """Backup the product in the given path.
 
@@ -1550,6 +1577,7 @@ class ProductInstallable(InstallableBase):
         msg = "Backup is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def restore(self, path: Path) -> None:
         """Restore the product in the given path.
 
@@ -1560,6 +1588,7 @@ class ProductInstallable(InstallableBase):
         msg = "Restore is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def delete(self, path: Path) -> None:
         """Delete the product in the given path.
 
@@ -1570,10 +1599,12 @@ class ProductInstallable(InstallableBase):
         msg = "Delete is not implemented yet"
         raise NotImplementedError(msg) from None
 
+    @override
     def __str__(self) -> str:
         """Return string representation of ProductInstallable."""
         return f"ProductInstallable(name='{self.name}', version='{self.version}', type='{self.type}')"
 
+    @override
     def __repr__(self) -> str:
         """Detailed string representation of ProductInstallable."""
         return (

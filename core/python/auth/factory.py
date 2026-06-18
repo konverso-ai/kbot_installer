@@ -1,10 +1,13 @@
 """Factory functions for authentication classes."""
 
-from auth.auth_mixin import AuthMixin
+from typing import cast
+
 from utils.factory.factory import factory_method
 
+from auth.base import HttpAuthBase
 
-def create_auth(name: str, **kwargs: object) -> AuthMixin:
+
+def create_auth(name: str, **kwargs: object) -> HttpAuthBase:
     """Create an authentication instance by name.
 
     Naming convention:
@@ -19,4 +22,4 @@ def create_auth(name: str, **kwargs: object) -> AuthMixin:
         An instance of the specified authentication class.
 
     """
-    return factory_method(name, "auth", **kwargs)
+    return cast(HttpAuthBase, factory_method(name, "auth", **kwargs))

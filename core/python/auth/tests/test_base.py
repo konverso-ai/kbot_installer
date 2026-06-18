@@ -3,11 +3,11 @@
 import pytest
 from pydantic import SecretStr
 
-from auth.base import AuthBase
+from auth.base import HttpAuthBase
 from utils.utils_for_unit_tests import compare
 
 
-class _ConcreteAuth(AuthBase):
+class _ConcreteHttpAuth(HttpAuthBase):
     def auth_flow(self, request):
         yield request
 
@@ -25,13 +25,13 @@ class _ConcreteAuth(AuthBase):
         ),
     ],
 )
-def test_authbase_valid_default_fields(params: dict, expected: dict) -> None:
-    auth = _ConcreteAuth(**params)
+def test_httpauthbase_valid_default_fields(params: dict, expected: dict) -> None:
+    auth = _ConcreteHttpAuth(**params)
     assert compare("eq", auth.header_name, expected["header_name"])
     assert compare("eq", auth.prefix, expected["prefix"])
     assert compare("eq", auth.secret.get_secret_value(), expected["secret"])
 
 
-def test_authbase_invalid_cannot_instantiate_without_implementations() -> None:
+def test_httpauthbase_invalid_cannot_instantiate_without_implementations() -> None:
     with pytest.raises(TypeError):
-        _ = AuthBase()
+        _ = HttpAuthBase()

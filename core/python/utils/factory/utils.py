@@ -45,7 +45,7 @@ def build_module_name(name: str, package: str) -> str:
 
     """
     # Extract the rightmost part after the last dot for nested packages
-    package_name = package.split(".")[-1]
+    package_name = package.rsplit(".", maxsplit=1)[-1]
     return f"{name}_{package_name}"
 
 

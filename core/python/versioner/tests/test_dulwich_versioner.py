@@ -7,7 +7,7 @@ import pytest
 from dulwich.errors import NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
 
-from auth.base import AuthBase
+from auth.base import HttpAuthBase
 from versioner.dulwich_versioner import DulwichVersioner
 from versioner.base import VersionerBase, VersionerError
 
@@ -23,13 +23,13 @@ class TestDulwichVersioner:
     @pytest.fixture
     def versioner_with_auth(self) -> DulwichVersioner:
         """Create a DulwichVersioner with authentication for testing."""
-        mock_auth = MagicMock(spec=AuthBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         return DulwichVersioner(mock_auth)
 
     @pytest.fixture
     def mock_auth(self) -> MagicMock:
         """Create mock authentication with username/password remote kwargs."""
-        mock_auth = MagicMock(spec=AuthBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         mock_auth.remote_kwargs.return_value = {
             "username": "user",
             "password": "pass",
@@ -65,7 +65,7 @@ class TestDulwichVersioner:
 
     def test_get_remote_kwargs_with_keypair(self) -> None:
         """Test remote kwargs from SSH key authentication."""
-        mock_auth = MagicMock(spec=AuthBase)
+        mock_auth = MagicMock(spec=HttpAuthBase)
         mock_auth.remote_kwargs.return_value = {
             "username": "git",
             "key_filename": "/priv",

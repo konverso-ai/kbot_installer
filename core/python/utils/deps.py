@@ -1,28 +1,29 @@
-import os
-import json
 import argparse
+import json
+import os
 
 # FUTURE: WITH GIT HUB and KB
-# FIX LATER: 
+# FIX LATER:
 # 1) from core import product
 # 2) Move this file in the new "product" package (github / Korantin)
 from product import Product
 
-def build_dependency_file_rec(product_name, installer_path, products, visit_status=None): 
+
+def build_dependency_file_rec(product_name, installer_path, products, visit_status=None):
     visit_status = visit_status or {}
     product_path = os.path.join(installer_path, product_name)
     description_xml_path = os.path.join(product_path, "description.xml")
 
     product_start =  Product.from_xml_file(description_xml_path)
 
-    json_def = json.loads(product_start.to_json())
+    json_def = product_start.to_json()
     json_def["path"] = product_path
     json_def["description"] = description_xml_path
 
     graph_object_status = visit_status.get(product_name, "unseen")
     if graph_object_status == "open":
         return False
-    elif graph_object_status == "closed":
+    if graph_object_status == "closed":
         return True
 
     for parent in json_def["parents"]:

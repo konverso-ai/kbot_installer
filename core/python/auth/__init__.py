@@ -1,9 +1,9 @@
 """Authentication module."""
 
-from auth.base import AuthBase
+from auth.base import HttpAuthBase
 from auth.factory import create_auth
 
 __all__ = [
-    "AuthBase",
+    "HttpAuthBase",
     "create_auth",
 ]
