@@ -38,3 +38,12 @@ class KB11111(ErrorCode):
     level = "warning"
     code = "KB11111"
     message = "Database running out of threads"
+
+
+class LLM00001(ErrorCode):
+    """
+    Indicates that the prompt was blocked by a guardrail
+    """
+    level = "debug"
+    code = "LLM00001"
+    message = "Prompt blocked by a guardrail"
