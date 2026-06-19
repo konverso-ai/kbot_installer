@@ -11,8 +11,8 @@ from versioner.base import VersionerBase
 class TestCreateVersioner:
     """Test cases for create_versioner function."""
 
-    def test_create_versioner_pygit_success(self) -> None:
-        """Test creating PygitVersioner successfully."""
+    def test_create_versioner_dulwich_success(self) -> None:
+        """Test creating DulwichVersioner successfully."""
         with patch(
             "versioner.factory.factory_method"
         ) as mock_factory_method:
@@ -20,11 +20,11 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("pygit", auth=None)
+            result = create_versioner("dulwich", auth=None)
 
             # Verify factory_method was called with correct arguments
             mock_factory_method.assert_called_once_with(
-                "pygit", "versioner", auth=None
+                "dulwich", "versioner", auth=None
             )
             assert result == mock_versioner
 
@@ -56,11 +56,11 @@ class TestCreateVersioner:
 
             kwargs = {"auth": "test_auth", "timeout": 30, "retries": 3}
 
-            result = create_versioner("pygit", **kwargs)
+            result = create_versioner("dulwich", **kwargs)
 
             # Verify factory_method was called with all kwargs
             mock_factory_method.assert_called_once_with(
-                "pygit", "versioner", **kwargs
+                "dulwich", "versioner", **kwargs
             )
             assert result == mock_versioner
 
@@ -73,11 +73,11 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("pygit")
+            result = create_versioner("dulwich")
 
             # Verify factory_method was called with only name and package
             mock_factory_method.assert_called_once_with(
-                "pygit", "versioner"
+                "dulwich", "versioner"
             )
             assert result == mock_versioner
 
@@ -112,7 +112,7 @@ class TestCreateVersioner:
             mock_factory_method.side_effect = TypeError("Invalid arguments")
 
             with pytest.raises(TypeError, match="Invalid arguments"):
-                create_versioner("pygit", invalid_arg="test")
+                create_versioner("dulwich", invalid_arg="test")
 
     def test_create_versioner_passes_through_exceptions(self) -> None:
         """Test that create_versioner passes through all exceptions from factory_method."""
@@ -131,7 +131,7 @@ class TestCreateVersioner:
                 mock_factory_method.side_effect = exception
 
                 with pytest.raises(type(exception), match=str(exception)):
-                    create_versioner("pygit")
+                    create_versioner("dulwich")
 
     def test_create_versioner_function_signature(self) -> None:
         """Test that create_versioner has the correct function signature."""
@@ -156,17 +156,17 @@ class TestCreateVersioner:
         ) as mock_factory_method:
             # Mock the factory method to return a mock versioner
             mock_versioner = MagicMock(spec=VersionerBase)
-            mock_versioner.__str__ = MagicMock(return_value="PygitVersioner()")
+            mock_versioner.__str__ = MagicMock(return_value="DulwichVersioner()")
             mock_factory_method.return_value = mock_versioner
 
             # Test the example from docstring
-            versioner = create_versioner("pygit", auth="test_auth")
+            versioner = create_versioner("dulwich", auth="test_auth")
             result = str(versioner)
 
             # Verify the example works
-            assert result == "PygitVersioner()"
+            assert result == "DulwichVersioner()"
             mock_factory_method.assert_called_once_with(
-                "pygit", "versioner", auth="test_auth"
+                "dulwich", "versioner", auth="test_auth"
             )
 
     def test_create_versioner_with_none_values(self) -> None:
@@ -180,11 +180,11 @@ class TestCreateVersioner:
 
             kwargs = {"auth": None, "timeout": None}
 
-            result = create_versioner("pygit", **kwargs)
+            result = create_versioner("dulwich", **kwargs)
 
             # Verify factory_method was called with None values
             mock_factory_method.assert_called_once_with(
-                "pygit", "versioner", **kwargs
+                "dulwich", "versioner", **kwargs
             )
             assert result == mock_versioner
 

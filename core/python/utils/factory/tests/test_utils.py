@@ -25,8 +25,8 @@ class TestSnakeToPascal:
     def test_four_words(self) -> None:
         """Test conversion of four words."""
         assert (
-            snake_to_pascal("key_pair_pygit_authentication")
-            == "KeyPairPygitAuthentication"
+            snake_to_pascal("azure_blob_bucket_storage")
+            == "AzureBlobBucketStorage"
         )
 
     def test_empty_string(self) -> None:
@@ -64,8 +64,8 @@ class TestBuildModuleName:
     def test_nested_package(self) -> None:
         """Test building module name with nested package."""
         assert (
-            build_module_name("key_pair", "auth.pygit_authentication")
-            == "key_pair_pygit_authentication"
+            build_module_name("bearer", "auth.http_auth")
+            == "bearer_http_auth"
         )
 
     def test_triple_nested_package(self) -> None:
@@ -99,8 +99,8 @@ class TestBuildClassName:
     def test_nested_package(self) -> None:
         """Test building class name with nested package."""
         assert (
-            build_class_name("key_pair", "auth.pygit_authentication")
-            == "KeyPairPygitAuthentication"
+            build_class_name("bearer", "auth.http_auth")
+            == "BearerHttpAuth"
         )
 
     def test_triple_nested_package(self) -> None:

@@ -30,7 +30,7 @@ def build_module_name(name: str, package: str) -> str:
 
     Args:
         name: Base name (e.g., "nexus", "github").
-        package: Package name (e.g., "provider", "versioner", "auth.pygit_authentication").
+        package: Package name (e.g., "provider", "versioner", "auth.http_auth").
 
     Returns:
         Module name in snake_case format.
@@ -38,10 +38,10 @@ def build_module_name(name: str, package: str) -> str:
     Example:
         >>> build_module_name("nexus", "provider")
         "nexus_provider"
-        >>> build_module_name("github", "versioner")
-        "github_versioner"
-        >>> build_module_name("key_pair", "auth.pygit_authentication")
-        "key_pair_pygit_authentication"
+        >>> build_module_name("dulwich", "versioner")
+        "dulwich_versioner"
+        >>> build_module_name("bearer", "auth.http_auth")
+        "bearer_http_auth"
 
     """
     # Extract the rightmost part after the last dot for nested packages
@@ -54,7 +54,7 @@ def build_class_name(name: str, package: str) -> str:
 
     Args:
         name: Base name (e.g., "nexus", "github").
-        package: Package name (e.g., "provider", "versioner", "auth.pygit_authentication").
+        package: Package name (e.g., "provider", "versioner", "auth.http_auth").
 
     Returns:
         Class name in PascalCase format.
@@ -62,10 +62,10 @@ def build_class_name(name: str, package: str) -> str:
     Example:
         >>> build_class_name("nexus", "provider")
         "NexusProvider"
-        >>> build_class_name("github", "versioner")
-        "GithubVersioner"
-        >>> build_class_name("key_pair", "auth.pygit_authentication")
-        "KeyPairPygitAuthentication"
+        >>> build_class_name("dulwich", "versioner")
+        "DulwichVersioner"
+        >>> build_class_name("bearer", "auth.http_auth")
+        "BearerHttpAuth"
 
     """
     module_name = build_module_name(name, package)

@@ -2,7 +2,7 @@
 
 This module implements the GithubProvider class that handles repository
 operations specific to GitHub repositories. It supports cloning repositories
-from GitHub using pygit2.
+from GitHub using dulwich.
 """
 
 import logging

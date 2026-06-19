@@ -9,6 +9,7 @@ import logging
 import re
 from pathlib import Path
 
+from installer_support.env_loader import format_missing_env_vars_message
 from provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProvidersConfig,
@@ -516,7 +517,7 @@ class SelectorProvider(ProviderBase):
                         )
                     )
                     cause = (
-                        f"Missing credentials: {', '.join(missing_creds)}"
+                        format_missing_env_vars_message(missing_creds)
                         if missing_creds
                         else "Provider not available"
                     )

@@ -1,5 +1,6 @@
 """Utility functions for kbot-installer."""
 
+import copy
 import logging
 import os
 import tarfile
@@ -15,6 +16,77 @@ from typing import IO, Literal, cast
 from auth.base import HttpAuthBase
 
 logger = logging.getLogger(__name__)
+
+
+def _case_insensitive_path_exists(path: Path) -> bool:
+    """Return True if path exists, including case-insensitive matches on macOS."""
+    if path.exists():
+        return True
+
+    parent = path.parent
+    if not parent.is_dir():
+        return False
+
+    target_name = path.name.casefold()
+    return any(entry.name.casefold() == target_name for entry in parent.iterdir())
+
+
+def _rewrite_absolute_symlink(member: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Rewrite absolute symlink targets as relative paths for tarfile extraction."""
+    if not member.issym() or not member.linkname.startswith("/"):
+        return member
+
+    link_path = Path(member.linkname)
+    member_parent = Path(member.name).parent
+
+    if member_parent.name and link_path.parent.name == member_parent.name:
+        new_linkname = link_path.name
+    else:
+        new_linkname = link_path.name
+
+    if new_linkname == member.linkname:
+        return member
+
+    logger.debug(
+        "Rewriting absolute symlink for %s: %s -> %s",
+        member.name,
+        member.linkname,
+        new_linkname,
+    )
+    fixed = copy.copy(member)
+    fixed.linkname = new_linkname
+    return fixed
+
+
+def extract_tar_member(
+    tar: tarfile.TarFile, member: tarfile.TarInfo, target_dir: Path
+) -> None:
+    """Extract one tar member, skipping case-insensitive duplicates."""
+    destination = target_dir / member.name
+    if _case_insensitive_path_exists(destination):
+        logger.debug(
+            "Skipping tar member because destination already exists: %s",
+            member.name,
+        )
+        return
+
+    member_to_extract = _rewrite_absolute_symlink(member)
+
+    try:
+        tar.extract(member_to_extract, path=target_dir, filter="data")
+    except FileExistsError:
+        if _case_insensitive_path_exists(destination):
+            logger.debug(
+                "Skipping tar member after FileExistsError (case conflict): %s",
+                member.name,
+            )
+            return
+        raise
+    except tarfile.FilterError:
+        rewritten = _rewrite_absolute_symlink(member)
+        if rewritten.linkname == member.linkname:
+            raise
+        tar.extract(rewritten, path=target_dir, filter="data")
 
 
 def version_to_branch(version: str, env: Literal["dev", "prod"] = "dev") -> str:
@@ -115,7 +187,7 @@ def optimized_download_and_extract(
             # Extract from temp file
             with tarfile.open(temp_file.name, mode="r:gz") as tar:
                 for member in tar:
-                    tar.extract(member, path=target_dir, filter="data")
+                    extract_tar_member(tar, member, target_dir)
 
             # Clean up temp file
             Path(temp_file.name).unlink()
@@ -171,7 +243,7 @@ def optimized_download_and_extract_bis(
     buffer.seek(0)
     with tarfile.open(fileobj=buffer, mode="r:gz") as tar:
         for member in tar:
-            tar.extract(member, path=target_dir, filter="data")
+            extract_tar_member(tar, member, target_dir)
 
     # Attendre la fin du téléchargement
     download_thread.join()
@@ -324,7 +396,7 @@ def optimized_download_and_extract_ter(  # noqa: C901
         reader = StreamingReader()
         with tarfile.open(fileobj=cast(IO[bytes], reader), mode="r|gz") as tar:
             for member in tar:
-                tar.extract(member, path=target_dir, filter="data")
+                extract_tar_member(tar, member, target_dir)
 
         # Wait for download to complete
         download_thread.join(timeout=10.0)

@@ -2,7 +2,7 @@
 
 This module implements the BitbucketProvider class that handles repository
 operations specific to Bitbucket repositories. It supports cloning repositories
-from Bitbucket using pygit2.
+from Bitbucket using Dulwich.
 """
 
 from pathlib import Path

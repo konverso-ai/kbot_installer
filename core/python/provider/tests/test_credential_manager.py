@@ -4,6 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 from auth.base import HttpAuthBase
+from provider.config import ProvidersConfig
 from provider.credential_manager import CredentialManager
 
 
@@ -37,6 +38,12 @@ class TestCredentialManager:
     )
     def test_has_credentials_nexus_success(self) -> None:
         """Test has_credentials returns True when all Nexus credentials are available."""
+        manager = CredentialManager()
+        assert manager.has_credentials("nexus") is True
+
+    @patch.dict(os.environ, {"NEXUS_USER": "test_user", "NEXUS_PASSWORD": "test_pass"})
+    def test_has_credentials_nexus_legacy_user_alias(self) -> None:
+        """Test legacy NEXUS_USER alias is accepted for NEXUS_USERNAME."""
         manager = CredentialManager()
         assert manager.has_credentials("nexus") is True
 
@@ -364,7 +371,9 @@ class TestCredentialManager:
         # First call to has_credentials will return False, but we need to test the second call
         # where provider_config is None in _create_auth_object
         with patch.object(manager, "has_credentials", return_value=True):
-            with patch.object(manager.config, "get_provider_config", return_value=None):
+            with patch.object(
+                ProvidersConfig, "get_provider_config", return_value=None
+            ):
                 result = manager.get_auth_for_provider("unknown")
 
         assert result is None

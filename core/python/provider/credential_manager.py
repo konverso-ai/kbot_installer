@@ -7,10 +7,10 @@ objects without hardcoding credentials in the code.
 """
 
 import logging
-import os
 
 from auth.base import HttpAuthBase
 from auth.factory import create_auth
+from installer_support.env_loader import get_env_var
 
 from provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
@@ -57,7 +57,9 @@ class CredentialManager:
             logger.warning("Unknown provider: %s", provider_name)
             return False
 
-        missing_vars = [var for var in provider_config.env_vars if not os.getenv(var)]
+        missing_vars = [
+            var for var in provider_config.env_vars if not get_env_var(var)
+        ]
 
         if missing_vars:
             logger.debug(
@@ -88,7 +90,7 @@ class CredentialManager:
             for param, value in provider_config.auth_params.items():
                 # If value is a known environment variable, get it from env
                 if value in provider_config.env_vars:
-                    env_values[param] = os.getenv(value)
+                    env_values[param] = get_env_var(value)
                 else:
                     # Otherwise, use the value as-is (fixed value like "git")
                     env_values[param] = value
@@ -179,4 +181,4 @@ class CredentialManager:
         if not provider_config:
             return [f"Unknown provider: {provider_name}"]
 
-        return [var for var in provider_config.env_vars if not os.getenv(var)]
+        return [var for var in provider_config.env_vars if not get_env_var(var)]

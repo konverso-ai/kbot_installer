@@ -1,6 +1,7 @@
 """Tests for utils module."""
 
 import io
+import os
 import tarfile
 import tempfile
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 from installer_support.installer_utils import (
     calculate_relative_path,
     ensure_directory,
+    extract_tar_member,
     optimized_download_and_extract,
     optimized_download_and_extract_bis,
     optimized_download_and_extract_ter,
@@ -531,3 +533,54 @@ class TestOptimizedDownloadAndExtractTer:
 
                 assert target_dir.exists()
                 assert target_dir.is_dir()
+
+
+class TestExtractTarMember:
+    """Test cases for extract_tar_member helper."""
+
+    def test_extract_tar_member_skips_case_insensitive_duplicate(self) -> None:
+        """Skip members that collide on case-insensitive filesystems (macOS)."""
+        tar_data = io.BytesIO()
+        with tarfile.open(fileobj=tar_data, mode="w:gz") as tar:
+            first = tarfile.TarInfo(name="man3/OSSL_TRACE_ENABLED.3ossl")
+            first.type = tarfile.SYMTYPE
+            first.linkname = "OSSL_trace_enabled.3ossl"
+            tar.addfile(first)
+
+            second = tarfile.TarInfo(name="man3/OSSL_trace_enabled.3ossl")
+            second.type = tarfile.SYMTYPE
+            second.linkname = "OSSL_trace_enabled.3ossl"
+            tar.addfile(second)
+
+        tar_data.seek(0)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir)
+            with tarfile.open(fileobj=tar_data, mode="r:gz") as tar:
+                for member in tar:
+                    extract_tar_member(tar, member, target_dir)
+
+            man_dir = target_dir / "man3"
+            assert man_dir.is_dir()
+            assert len(list(man_dir.iterdir())) == 1
+
+    def test_extract_tar_member_rewrites_absolute_symlink(self) -> None:
+        """Rewrite absolute symlinks such as bzip2 bzegrep -> bzgrep."""
+        tar_data = io.BytesIO()
+        with tarfile.open(fileobj=tar_data, mode="w:gz") as tar:
+            wrapper = tarfile.TarInfo(name="3rdparty/bzip2-1.0.6/bin/bzegrep")
+            wrapper.type = tarfile.SYMTYPE
+            wrapper.linkname = "/opt/kbot/3rdparty/bzip2-1.0.6/bin/bzgrep"
+            tar.addfile(wrapper)
+
+        tar_data.seek(0)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir)
+            with tarfile.open(fileobj=tar_data, mode="r:gz") as tar:
+                for member in tar:
+                    extract_tar_member(tar, member, target_dir)
+
+            link_path = target_dir / "3rdparty/bzip2-1.0.6/bin/bzegrep"
+            assert link_path.is_symlink()
+            assert os.readlink(link_path) == "bzgrep"

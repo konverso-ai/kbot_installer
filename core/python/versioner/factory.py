@@ -11,7 +11,7 @@ def create_versioner(name: str, **kwargs: object) -> VersionerBase:
     """Create a versioner instance by name.
 
     Args:
-        name: Name of the versioner to create (e.g., "pygit").
+        name: Name of the versioner to create (e.g., "dulwich").
         **kwargs: Additional arguments to pass to the versioner constructor.
 
     Returns:
@@ -23,9 +23,9 @@ def create_versioner(name: str, **kwargs: object) -> VersionerBase:
         TypeError: If the versioner cannot be instantiated with the provided arguments.
 
     Example:
-        >>> versioner = create_versioner("pygit", auth=your_auth)
+        >>> versioner = create_versioner("dulwich", auth=your_auth)
         >>> print(versioner)
-        PyGitVersioner()
+        DulwichVersioner()
 
     """
     return cast(VersionerBase, factory_method(name, "versioner", **kwargs))

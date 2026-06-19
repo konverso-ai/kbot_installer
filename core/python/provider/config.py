@@ -1,37 +1,46 @@
 """Configuration structures for providers."""
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+import json
+from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class ProviderConfig:
-    """Configuration for a single provider.
+DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH = Path("conf") / "default_providers_config.json"
 
-    Attributes:
-        kwargs: Default parameters for provider creation
-        env_vars: Required environment variables
-        auth_type: Type of authentication (http_auth, pygit_auth)
-        auth_params: Mapping of auth parameters to environment variables
-        branches: List of default branches to try in order
 
-    """
+def _resolve_default_providers_config_path() -> Path:
+    """Locate the default providers config file in dev or installed layouts."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH
+        if candidate.is_file():
+            return candidate
 
-    kwargs: dict[str, Any]
+    msg = f"Could not find {DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH}"
+    raise FileNotFoundError(msg)
+
+
+DEFAULT_PROVIDERS_CONFIG_PATH = _resolve_default_providers_config_path()
+
+
+class ProviderConfig(BaseModel):
+    """Configuration for a single provider."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kwargs: dict[str, Any] = Field(default_factory=dict)
     env_vars: list[str]
     auth_type: str
     auth_params: dict[str, str]
     branches: list[str]
 
 
-@dataclass
-class ProvidersConfig:
-    """Configuration for all providers.
+class ProvidersConfig(BaseModel):
+    """Configuration for all providers."""
 
-    Attributes:
-        providers: Dictionary mapping provider names to their configurations
-
-    """
+    model_config = ConfigDict(extra="forbid")
 
     providers: dict[str, ProviderConfig]
 
@@ -57,32 +66,22 @@ class ProvidersConfig:
         return list(self.providers.keys())
 
 
-# Default configuration for all providers
-DEFAULT_PROVIDERS_CONFIG = ProvidersConfig(
-    providers={
-        "nexus": ProviderConfig(
-            kwargs={"domain": "nexus.konverso.ai", "repository": "kbot_raw"},
-            env_vars=["NEXUS_USERNAME", "NEXUS_PASSWORD"],
-            auth_type="http_auth",
-            auth_params={"username": "NEXUS_USERNAME", "password": "NEXUS_PASSWORD"},
-            branches=["master", "dev"],
-        ),
-        "github": ProviderConfig(
-            kwargs={"account_name": "konverso-ai"},
-            env_vars=["GITHUB_TOKEN"],
-            auth_type="pygit_auth",
-            auth_params={"username": "git", "password": "GITHUB_TOKEN"},
-            branches=["main", "dev"],
-        ),
-        "bitbucket": ProviderConfig(
-            kwargs={"account_name": "konversoai"},
-            env_vars=["BITBUCKET_USERNAME", "BITBUCKET_APP_PASSWORD"],
-            auth_type="pygit_auth",
-            auth_params={
-                "username": "BITBUCKET_USERNAME",
-                "password": "BITBUCKET_APP_PASSWORD",
-            },
-            branches=["master", "dev"],
-        ),
-    }
-)
+def load_default_providers_config(
+    path: Path | None = None,
+) -> ProvidersConfig:
+    """Load provider configuration from a JSON file.
+
+    Args:
+        path: Path to the JSON configuration file.
+            Defaults to ``conf/default_providers_config.json``.
+
+    Returns:
+        Parsed provider configuration.
+
+    """
+    config_path = path or DEFAULT_PROVIDERS_CONFIG_PATH
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    return ProvidersConfig.model_validate(data)
+
+
+DEFAULT_PROVIDERS_CONFIG = load_default_providers_config()

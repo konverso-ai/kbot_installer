@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
 version = "2.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.13"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
@@ -33,10 +33,14 @@ kbot-installer = "cli.__main__:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+only-include = ["core/python"]
+
 [tool.hatch.build.targets.wheel.sources]
 "core/python" = "."
 
 [tool.hatch.build.targets.wheel.force-include]
+"conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from provider.config import ProvidersConfig
 from provider.selector_provider import SelectorProvider
 
 
@@ -13,8 +14,6 @@ class TestSelectorProviderExtended:
 
     def test_init_with_custom_config(self) -> None:
         """Test SelectorProvider initialization with custom config."""
-        from provider.config import ProvidersConfig
-
         custom_config = ProvidersConfig(providers={})
         providers = ["nexus", "github"]
 
@@ -43,7 +42,7 @@ class TestSelectorProviderExtended:
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
             ),
-            patch.object(selector.config, "get_provider_config") as mock_get_config,
+            patch.object(ProvidersConfig, "get_provider_config") as mock_get_config,
             patch.object(
                 selector.credential_manager,
                 "get_auth_for_provider",
@@ -84,7 +83,7 @@ class TestSelectorProviderExtended:
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
             ),
-            patch.object(selector.config, "get_provider_config", return_value=None),
+            patch.object(ProvidersConfig, "get_provider_config", return_value=None),
         ):
             result = selector._create_provider_with_credentials("nexus")
             assert result is None
@@ -97,7 +96,7 @@ class TestSelectorProviderExtended:
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
             ),
-            patch.object(selector.config, "get_provider_config") as mock_get_config,
+            patch.object(ProvidersConfig, "get_provider_config") as mock_get_config,
             patch.object(
                 selector.credential_manager,
                 "get_auth_for_provider",
@@ -342,7 +341,7 @@ class TestSelectorProviderExtended:
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
             ),
-            patch.object(selector.config, "get_provider_config") as mock_get_config,
+            patch.object(ProvidersConfig, "get_provider_config") as mock_get_config,
             patch.object(
                 selector.credential_manager, "get_auth_for_provider", return_value=None
             ),

@@ -53,7 +53,7 @@ class GitMixin(ProviderBase):
 
         """
         if self._versioner is None:
-            self._versioner = create_versioner("pygit", auth=self._get_auth())
+            self._versioner = create_versioner("dulwich", auth=self._get_auth())
         return self._versioner
 
     @override
