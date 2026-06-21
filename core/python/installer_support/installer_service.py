@@ -94,7 +94,7 @@ class InstallerService:
     ) -> None:
         """Install a product and optionally its dependencies.
 
-        This method corresponds to the 'installer' CLI command.
+        This method corresponds to the 'download' CLI command.
         - Downloads the specified product
         - If include_dependencies=True, downloads all parent dependencies
         - If include_dependencies=False, downloads only the specified product

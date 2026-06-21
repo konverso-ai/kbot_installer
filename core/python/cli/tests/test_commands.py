@@ -22,10 +22,10 @@ class TestCLI:
         options = [option.name for option in cli.params]
         assert "version" in options
 
-    def test_installer_command_exists(self) -> None:
-        """Test that installer command exists."""
+    def test_download_command_exists(self) -> None:
+        """Test that download command exists."""
         commands = [cmd.name for cmd in cli.commands.values()]
-        assert "installer" in commands
+        assert "download" in commands
 
     def test_list_command_exists(self) -> None:
         """Test that list command exists."""
@@ -33,8 +33,8 @@ class TestCLI:
         assert "list" in commands
 
 
-class TestInstallerCommand:
-    """Test cases for the 'installer' command."""
+class TestDownloadCommand:
+    """Test cases for the 'download' command."""
 
     def setup_method(self) -> None:
         """Set up test fixtures."""
@@ -56,7 +56,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 installer_dir,
                 "--version",
@@ -87,7 +87,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 "/test/installer",
                 "--version",
@@ -119,7 +119,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 installer_dir,
                 "--version",
@@ -151,7 +151,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 "/test/installer",
                 "--version",
@@ -172,7 +172,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 "/test/installer",
                 "--version",
@@ -203,7 +203,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 installer_dir,
                 "--version",
@@ -243,7 +243,7 @@ class TestInstallerCommand:
         result = self.runner.invoke(
             cli,
             [
-                "installer",
+                "download",
                 "--installer-dir",
                 installer_dir,
                 "--version",
@@ -405,14 +405,14 @@ class TestCommandIntegration:
         result = self.runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "Kbot Installer" in result.output
-        assert "installer" in result.output
+        assert "download" in result.output
         assert "list" in result.output
 
-    def test_installer_help(self) -> None:
-        """Test installer command help."""
-        result = self.runner.invoke(cli, ["installer", "--help"])
+    def test_download_help(self) -> None:
+        """Test download command help."""
+        result = self.runner.invoke(cli, ["download", "--help"])
         assert result.exit_code == 0
-        assert "Install a kbot product" in result.output
+        assert "Download a kbot product" in result.output
 
     def test_list_help(self) -> None:
         """Test list command help."""

@@ -72,7 +72,7 @@ def init(
 
     This command creates a UV workspace in the specified directory and initializes
     an empty PostgreSQL database (without schema). Products should be installed
-    separately using the 'installer' command.
+    separately using the 'download' command.
 
     \b
     Examples:
@@ -336,7 +336,7 @@ def add(
         raise click.Abort from e
 
 
-@cli.command()
+@cli.command(name="download")
 @click.option(
     "-p", "--product", required=True, type=str, help="Name of the product to install"
 )
@@ -384,7 +384,7 @@ def add(
     default=False,
     help="Show detailed output (skipped products, provider download details).",
 )
-def installer(
+def download(
     installer_dir: str,
     version: str,
     product: str,
@@ -394,18 +394,18 @@ def installer(
     storage: str = StorageBackend.NEXUS.value,
     verbose: bool = False,
 ) -> None:
-    """Install a kbot product with specified version.
+    """Download a kbot product with specified version.
 
-    This command installs the specified product at the given version.
-    By default, it will also install all dependencies unless --no-rec is used.
-    Use --provider to specify which providers to use for installation.
+    This command downloads the specified product at the given version.
+    By default, it will also download all dependencies unless --no-rec is used.
+    Use --provider to specify which providers to use for download.
 
     Examples:
-        kbot-installer installer -v 2025.03 -p jira
-        kbot-installer installer -v dev -p jira --no-rec
-        kbot-installer installer -i /custom/path -v master -p ithd
-        kbot-installer installer -v 2025.03 -p jira --provider github --provider bitbucket
-        kbot-installer installer -v dev -p kbot-latest-dev --provider storage --storage s3
+        kbot-installer download -v 2025.03 -p jira
+        kbot-installer download -v dev -p jira --no-rec
+        kbot-installer download -i /custom/path -v master -p ithd
+        kbot-installer download -v 2025.03 -p jira --provider github --provider bitbucket
+        kbot-installer download -v dev -p kbot-latest-dev --provider storage --storage s3
 
     """
     try:
