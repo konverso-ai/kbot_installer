@@ -4,17 +4,16 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
-from typing import cast
 
 from installable.product_installable import ProductInstallable
 from installable.dependency_graph import DependencyGraph
 from installable.product_collection import ProductCollection
 from installable.renderer import DependencyTreeRenderer
-from provider import (
+from git.provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
 )
-from provider.selector_provider import SelectorProvider
+from git.provider.base import ProviderBase
 
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
@@ -45,20 +44,17 @@ class InstallerService:
 
         Args:
             installer_dir: Path to the installer directory.
-            providers: List of provider names to try. Defaults to ["nexus", "github", "bitbucket"].
+            providers: List of provider names to try. Defaults to ["storage", "github", "bitbucket"].
 
         """
         self.installer_dir = Path(installer_dir)
-        self.providers = providers or ["nexus", "github", "bitbucket"]
+        self.providers = providers or ["storage", "github", "bitbucket"]
 
         # Initialize services
-        self.selector_provider = cast(
-            SelectorProvider,
-            create_provider(
-                name="selector",
-                providers=self.providers,
-                config=DEFAULT_PROVIDERS_CONFIG,
-            ),
+        self.selector_provider: ProviderBase = create_provider(
+            name="selector",
+            providers=self.providers,
+            config=DEFAULT_PROVIDERS_CONFIG,
         )
         self.installation_table = InstallationTable()
 
@@ -531,16 +527,16 @@ class InstallerService:
         """Detect Nexus provider based on file indicators."""
         # Check for archive files
         if any(product_dir.glob("*.tar.gz")) or any(product_dir.glob("*.zip")):
-            return "nexus"
+            return "storage"
 
-        # Check for common product files that indicate Nexus installation
-        nexus_indicators = [
+        # Check for common product files that indicate storage installation
+        storage_indicators = [
             "description.json",
             "description.xml",
             "requirements.txt",
         ]
-        if any((product_dir / indicator).exists() for indicator in nexus_indicators):
-            return "nexus"
+        if any((product_dir / indicator).exists() for indicator in storage_indicators):
+            return "storage"
 
         return "unknown"
 

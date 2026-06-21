@@ -1,10 +1,7 @@
 {
-  "providers": {
-    "nexus": {
-      "kwargs": {
-        "domain": "nexus.konverso.ai",
-        "repository": "kbot_raw"
-      },
+  "provider": {
+    "storage": {
+      "kwargs": {},
       "env_vars": ["NEXUS_USERNAME", "NEXUS_PASSWORD"],
       "auth_type": "http_auth",
       "auth_params": {
@@ -36,6 +33,25 @@
         "password": "BITBUCKET_APP_PASSWORD"
       },
       "branches": ["master", "dev"]
+    }
+  },
+  "storage": {
+    "backend": "nexus",
+    "nexus": {
+      "domain": "nexus.konverso.ai",
+      "repository": "kbot_raw"
+    },
+    "s3": {
+      "bucket_name": "",
+      "cluster_name": "",
+      "region_name": "eu-west-1",
+      "env_vars": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+    },
+    "azure": {
+      "account_url": "",
+      "container_name": "",
+      "credential_type": "default_azure",
+      "env_vars": ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
     }
   }
 }

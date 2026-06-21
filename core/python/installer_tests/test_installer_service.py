@@ -18,7 +18,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             assert service.installer_dir == Path(temp_dir)
-            assert service.providers == ["nexus", "github", "bitbucket"]
+            assert service.providers == ["storage", "github", "bitbucket"]
             assert service.selector_provider is not None
             # product_collection property no longer exists
             # dependency_graph property no longer exists
@@ -26,7 +26,7 @@ class TestInstallerService:
     def test_init_with_custom_providers(self) -> None:
         """Test InstallerService initialization with custom providers."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            custom_providers = ["nexus", "github"]
+            custom_providers = ["storage", "github"]
             service = InstallerService(temp_dir, providers=custom_providers)
 
             assert service.installer_dir == Path(temp_dir)
@@ -58,7 +58,7 @@ class TestInstallerService:
             mock_create_provider.assert_called_once()
             call_args = mock_create_provider.call_args
             assert call_args[1]["name"] == "selector"
-            assert call_args[1]["providers"] == ["nexus", "github", "bitbucket"]
+            assert call_args[1]["providers"] == ["storage", "github", "bitbucket"]
 
     def test_load_products_from_repository_success(self) -> None:
         """Test successful loading of products from repository."""
@@ -247,7 +247,7 @@ class TestInstallerService:
         with tempfile.TemporaryDirectory() as temp_dir:
             service = InstallerService(temp_dir)
 
-            assert service.providers == ["nexus", "github", "bitbucket"]
+            assert service.providers == ["storage", "github", "bitbucket"]
 
     def test_selector_provider_property(self) -> None:
         """Test selector_provider property."""
@@ -532,7 +532,7 @@ class TestInstallerService:
             with (
                 patch.object(service, "_get_product", side_effect=mock_get_product),
                 patch.object(service, "_is_product_installed", return_value=False),
-                patch.object(service, "_detect_cached_provider", return_value="nexus"),
+                patch.object(service, "_detect_cached_provider", return_value="storage"),
                 patch.object(
                     service.installation_table, "add_result"
                 ) as mock_add_result,
@@ -734,8 +734,8 @@ class TestInstallerService:
                 # Verify
                 assert result == "github"
 
-    def test_detect_cached_provider_nexus(self) -> None:
-        """Test detecting Nexus provider."""
+    def test_detect_cached_provider_storage(self) -> None:
+        """Test detecting storage provider."""
         with tempfile.TemporaryDirectory() as temp_dir:
             service = InstallerService(temp_dir)
 
@@ -748,7 +748,7 @@ class TestInstallerService:
             result = service._detect_cached_provider("test-product")
 
             # Verify
-            assert result == "nexus"
+            assert result == "storage"
 
     def test_detect_cached_provider_unknown(self) -> None:
         """Test detecting unknown provider."""

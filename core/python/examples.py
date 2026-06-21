@@ -6,12 +6,12 @@ et des versioners pour démontrer toutes les fonctionnalités disponibles.
 
 import asyncio
 
-from provider.examples import (
+from git.provider.examples import (
     example_bitbucket_only,
     example_github_bitbucket_only,
     example_nexus_github_bitbucket,
 )
-from versioner.examples import (
+from git.versioner.examples import (
     example_bitbucket_operations,
     example_github_operations,
     example_mixed_authentication,
@@ -92,8 +92,8 @@ async def main() -> None:
     print("=" * 60)
     print("\nPour exécuter d'autres exemples, modifiez la fonction main()")
     print("ou exécutez directement les modules d'exemples:")
-    print("- uv run python -B core/python/provider/examples.py")
-    print("- uv run python -B core/python/versioner/examples.py")
+    print("- uv run python -B core/python/git/provider/examples.py")
+    print("- uv run python -B core/python/git/versioner/examples.py")
 
 
 if __name__ == "__main__":

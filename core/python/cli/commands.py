@@ -35,18 +35,21 @@ def _parse_providers(uses: str | None) -> list[str] | None:
     providers_list = [p.strip() for p in uses.split(",")]
 
     # Validate providers
-    valid_providers = {"nexus", "github", "bitbucket"}
+    valid_providers = {"storage", "github", "bitbucket", "nexus"}
     invalid_providers = [p for p in providers_list if p.lower() not in valid_providers]
     if invalid_providers:
         click.echo(
             f"Error: Invalid providers: {', '.join(invalid_providers)}",
             err=True,
         )
-        click.echo("Valid providers are: nexus, github, bitbucket", err=True)
+        click.echo("Valid providers are: storage, github, bitbucket", err=True)
         raise click.Abort
 
     # Convert to lowercase for consistency
-    return [p.lower() for p in providers_list]
+    providers_list = [p.lower() for p in providers_list]
+
+    # Legacy alias: nexus was renamed to storage
+    return ["storage" if p == "nexus" else p for p in providers_list]
 
 
 @click.group(invoke_without_command=True)

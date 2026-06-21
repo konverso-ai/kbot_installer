@@ -95,9 +95,12 @@ class TestNexusStorage:
         self, storage: NexusStorage
     ) -> None:
         """Test get returns None when download fails."""
-        with patch.object(storage, "exists", return_value=True):
-            with patch.object(storage, "download", side_effect=RuntimeError("boom")):
-                assert compare("eq", storage.get("file.txt"), None)
+        mock_service = MagicMock()
+        mock_service.file_exists = AsyncMock(return_value=True)
+        mock_service.get_file = AsyncMock(side_effect=RuntimeError("boom"))
+        storage._service = mock_service
+
+        assert compare("eq", storage.get("file.txt"), None)
 
     def test_list_files_in_folder_valid_yields_direct_children(
         self, storage: NexusStorage
@@ -163,46 +166,33 @@ class TestNexusStorage:
         assert compare("eq", storage.exists("missing.tar.gz"), False)
 
     def test_download_valid_calls_service(self, storage: NexusStorage) -> None:
-        """Test download delegates to NexusService.get_file."""
-        mock_service = MagicMock()
-        mock_service.get_file = AsyncMock(return_value=None)
-        storage._service = mock_service
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            local_path = str(Path(temp_dir) / "archive.tar.gz")
-            storage.download("test_repo.tar.gz", local_path)
-
-        mock_service.get_file.assert_awaited_once_with(
-            "/kbot_raw/test_repo.tar.gz",
-            local_path,
-        )
-
-    def test_download_and_extract_valid_calls_service(
-        self, storage: NexusStorage
-    ) -> None:
-        """Test download_and_extract delegates to NexusService."""
+        """Test download delegates to NexusService.download_and_extract."""
         mock_service = MagicMock()
         mock_service.download_and_extract = AsyncMock(return_value=None)
         storage._service = mock_service
 
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = Path(temp_dir) / "extracted"
-            storage.download_and_extract("test_repo.tar.gz", target_dir)
+            target_dir.mkdir()
+            storage.download("test_repo.tar.gz", str(target_dir))
 
         mock_service.download_and_extract.assert_awaited_once_with(
             "/kbot_raw/test_repo.tar.gz",
-            target_dir,
+            str(target_dir),
         )
 
     def test_get_valid_returns_content(self, storage: NexusStorage) -> None:
         """Test get returns decoded object content."""
-        with patch.object(storage, "exists", return_value=True):
-            with patch.object(storage, "download") as mock_download:
-                def write_file(_key: str, local_path: str) -> None:
-                    Path(local_path).write_text("hello", encoding="utf-8")
+        mock_service = MagicMock()
+        mock_service.file_exists = AsyncMock(return_value=True)
 
-                mock_download.side_effect = write_file
-                assert compare("eq", storage.get("file.txt"), "hello")
+        def write_file(_path: str, local_path: str) -> None:
+            Path(local_path).write_text("hello", encoding="utf-8")
+
+        mock_service.get_file = AsyncMock(side_effect=write_file)
+        storage._service = mock_service
+
+        assert compare("eq", storage.get("file.txt"), "hello")
 
     def test_get_valid_returns_none_when_missing(
         self, storage: NexusStorage
@@ -260,10 +250,10 @@ class TestNexusStorage:
             else:
                 method("key")
 
-    def test_download_and_extract_invalid_propagates_http_error(
+    def test_download_invalid_propagates_http_error(
         self, storage: NexusStorage
     ) -> None:
-        """Test download_and_extract propagates Nexus HTTP errors."""
+        """Test download propagates Nexus HTTP errors."""
         mock_service = MagicMock()
         mock_service.download_and_extract = AsyncMock(
             side_effect=NexusHttpError(404, "Not found")
@@ -272,4 +262,4 @@ class TestNexusStorage:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             with pytest.raises(NexusHttpError):
-                storage.download_and_extract("missing.tar.gz", temp_dir)
+                storage.download("missing.tar.gz", temp_dir)

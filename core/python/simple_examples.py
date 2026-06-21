@@ -6,12 +6,12 @@ et des versioners pour démontrer toutes les fonctionnalités disponibles.
 
 import asyncio
 
-from provider.simple_examples import (
+from git.provider.simple_examples import (
     example_bitbucket_only,
     example_github_bitbucket_only,
     example_nexus_github_bitbucket,
 )
-from versioner.simple_examples import (
+from git.versioner.simple_examples import (
     example_bitbucket_operations,
     example_github_operations,
     example_mixed_authentication,

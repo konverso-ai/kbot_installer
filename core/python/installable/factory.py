@@ -68,7 +68,7 @@ def create_installable(
         "license": license_info,
         "display": display,
         "build_details": build_details,
-        "providers": providers or ["nexus", "github", "bitbucket"],
+        "providers": providers or ["storage", "github", "bitbucket"],
         "branch": branch,
     }
 

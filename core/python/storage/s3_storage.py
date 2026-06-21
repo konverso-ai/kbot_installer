@@ -3,12 +3,15 @@
 import logging
 import time
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
-from backend.s3_backend import S3Backend
+from backend.base import BackendBase
+from backend.factory import create_backend
 from botocore.exceptions import ClientError, NoCredentialsError
 from more_itertools import chunked
 from storage.base import StorageBase
+from storage.download_utils import download_and_extract_tar_gz
 from typing_extensions import override
 
 log = logging.getLogger(__name__)
@@ -18,6 +21,7 @@ class S3Storage(StorageBase):
     """``StorageBase`` backend backed by Amazon S3."""
 
     name = "s3"
+    _backend: BackendBase
 
     @override
     def get_name(self) -> str:
@@ -26,19 +30,33 @@ class S3Storage(StorageBase):
 
     def __init__(
         self,
-        backend: S3Backend,
         bucket_name: str,
         cluster_name: str | None = None,
+        region_name: str = "eu-west-1",
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        backend: BackendBase | None = None,
     ) -> None:
-        """Initialize S3 storage from an existing backend.
+        """Initialize S3 storage.
 
         Args:
-            backend: Pre-configured S3 backend.
             bucket_name: S3 bucket name.
             cluster_name: Optional root directory prefix inside the bucket.
+            region_name: AWS region name.
+            aws_access_key_id: AWS access key ID. Defaults to the environment.
+            aws_secret_access_key: AWS secret access key. Defaults to the environment.
+            backend: Pre-configured S3 backend. Used mainly in tests.
 
         """
-        self._backend = backend
+        if backend is None:
+            self._backend = create_backend(
+                "s3",
+                region_name=region_name,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+            )
+        else:
+            self._backend = backend
         self.bucket_name = bucket_name
         self.cluster_name = cluster_name
         log.debug(
@@ -47,8 +65,8 @@ class S3Storage(StorageBase):
             self.cluster_name,
         )
 
-    def _get_backend(self) -> S3Backend:
-        """Return the S3 backend used by this storage."""
+    def _get_backend(self) -> BackendBase:
+        """Return the backend used by this storage."""
         return self._backend
 
     def get_bucket_name(self) -> str | None:
@@ -143,6 +161,14 @@ class S3Storage(StorageBase):
 
     @override
     def download(self, key: str, local_file_path: str) -> None:
+        """Download a storage object to a local file or extract an archive to a directory."""
+        path = Path(local_file_path)
+        if path.is_dir():
+            download_and_extract_tar_gz(self._download_file, key, path)
+            return
+        self._download_file(key, local_file_path)
+
+    def _download_file(self, key: str, local_file_path: str) -> None:
         """Download a storage object to a local file."""
         key = self._prefixed_key(key)
         s3_client = self._get_backend().get_client()

@@ -12,18 +12,19 @@ dependencies = [
     "defusedxml",
     "dulwich>=1.2.6",
     "furl",
-    "gitpython",
     "httpx",
     "more-itertools>=11.1.0",
+    "packaging",
     "psutil",
     "pydantic-settings",
     "pygit2",
     "python-dotenv",
     "requests",
     "rich",
-    "tomli; python_version < '3.11'",
     "typing_extensions",
     "tqdm",
+    "xmltodict>=1.0.4",
+    "tomlkit>=0.15.0",
 ]
 
 [project.scripts]
@@ -92,15 +93,17 @@ known_first_party = [
     "backend",
     "cli",
     "config",
+    "credentials",
+    "git",
     "installable",
     "installer_support",
     "interactivity",
-    "provider",
+    "publisher",
     "service",
     "setup",
     "storage",
     "utils",
-    "versioner",
+    "writer",
 ]
 
 [tool.deptry.optional_dependencies_dev_groups]
@@ -124,8 +127,8 @@ exclude = [
     "core/python/installer_tests/**",
     "core/python/examples.py",
     "core/python/simple_examples.py",
-    "core/python/provider/examples.py",
-    "core/python/provider/simple_examples.py",
+    "core/python/git/provider/examples.py",
+    "core/python/git/provider/simple_examples.py",
     "core/python/utils/setup_workarea.py",
     "core/python/utils/kbot.py",
 ]

@@ -43,8 +43,8 @@ class TestParseProviders:
 
     def test_parse_providers_all_providers(self) -> None:
         """Test parsing all valid providers."""
-        result = _parse_providers("nexus,github,bitbucket")
-        assert result == ["nexus", "github", "bitbucket"]
+        result = _parse_providers("storage,github,bitbucket")
+        assert result == ["storage", "github", "bitbucket"]
 
     def test_parse_providers_invalid_provider(self) -> None:
         """Test parsing with invalid provider raises click.Abort."""

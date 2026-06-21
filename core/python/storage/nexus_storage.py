@@ -97,7 +97,9 @@ class NexusStorage(StorageBase):
             tmp_path = tmp_file.name
 
         try:
-            self.download(key, tmp_path)
+            self._run_async(
+                self._service.get_file(self._repository_path(key), tmp_path)
+            )
             return Path(tmp_path).read_text(encoding=encoding)
         except Exception:
             logger.exception("Failed to retrieve object '%s' from Nexus", key)
@@ -107,20 +109,11 @@ class NexusStorage(StorageBase):
 
     @override
     def download(self, key: str, local_file_path: str) -> None:
-        """Download a repository object to a local file."""
-        self._run_async(
-            self._service.get_file(
-                self._repository_path(key),
-                local_file_path,
-            )
-        )
-
-    def download_and_extract(self, key: str, target_dir: str | Path) -> None:
-        """Download a gzipped tar archive and extract it."""
+        """Download a gzipped tar archive and extract it to a directory."""
         self._run_async(
             self._service.download_and_extract(
                 self._repository_path(key),
-                target_dir,
+                local_file_path,
             )
         )
 

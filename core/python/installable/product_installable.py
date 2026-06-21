@@ -17,14 +17,12 @@ from typing import Any, Literal, TypedDict, cast
 
 from typing_extensions import Self, override
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
+import tomlkit
+from tomlkit.exceptions import TOMLKitError
 
 from installer_support.installer_utils import ensure_directory, version_to_branch
-from provider import create_provider
-from provider.selector_provider import SelectorProvider
+from git.provider.base import ProviderBase
+from git.provider import create_provider
 
 from installable.factory import create_installable
 from installable.installable_base import InstallableBase
@@ -89,7 +87,7 @@ class ProductInstallable(InstallableBase):
     display: dict[str, dict[str, str]] | None = None
     build_details: BuildDetails | None = None
     providers: list[str] = field(
-        default_factory=lambda: ["nexus", "github", "bitbucket"]
+        default_factory=lambda: ["storage", "github", "bitbucket"]
     )
     # Directory path where product is located
     dirname: Path | None = None
@@ -99,14 +97,11 @@ class ProductInstallable(InstallableBase):
     branch_used: str | None = None
     # Specific branch to use (overrides version_to_branch calculation)
     branch: str | None = None
-    provider: SelectorProvider = field(init=False, repr=False, compare=False)
+    provider: ProviderBase = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Initialize provider after instance creation."""
-        self.provider = cast(
-            SelectorProvider,
-            create_provider(name="selector", providers=self.providers),
-        )
+        self.provider = create_provider(name="selector", providers=self.providers)
 
     @staticmethod
     def _parse_comma_separated_string(value: str) -> list[str]:
@@ -1391,24 +1386,23 @@ class ProductInstallable(InstallableBase):
             return
 
         try:
-            with pyproject_file.open("rb") as f:
-                pyproject_data = tomllib.load(f)
-        except (OSError, tomllib.TOMLDecodeError):
+            with pyproject_file.open(encoding="utf-8") as f:
+                pyproject_data = tomlkit.load(f)
+        except (OSError, TOMLKitError):
             logger.warning("Failed to load pyproject.toml for product %s", product.name)
             return
 
-        work_config = pyproject_data.get("work", {})
-        if not work_config:
+        work_raw = pyproject_data.get("work")
+        if not work_raw:
             return
 
+        work_config = work_raw.unwrap()
         init_config = work_config.get("init", {})
         copy_config = work_config.get("copy", {})
         ignore_config = work_config.get("ignore", {})
         link_config = work_config.get("link", {})
         link_section = work_config.get("link", {})
-        link_external_config = (
-            link_section.get("external", {}) if isinstance(link_section, dict) else {}
-        )
+        link_external_config = link_section.get("external", {})
 
         if init_config:
             logger.warning("Processing init section for product %s", product.name)

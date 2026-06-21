@@ -3,13 +3,16 @@
 import logging
 import time
 from collections.abc import Iterator
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
 from azure.storage.blob import BlobPrefix
-from backend.azure_backend import AzureBackend
+from backend.base import BackendBase
+from backend.factory import create_backend
 from more_itertools import chunked
 from storage.base import StorageBase
+from storage.download_utils import download_and_extract_tar_gz
 from typing_extensions import override
 
 log = logging.getLogger(__name__)
@@ -19,20 +22,50 @@ class AzureStorage(StorageBase):
     """``StorageBase`` backend backed by Azure Blob Storage."""
 
     name = "azure"
+    _backend: BackendBase
 
-    def __init__(self, backend: AzureBackend, container_name: str) -> None:
-        """Initialize Azure storage from an existing backend.
+    def __init__(
+        self,
+        container_name: str,
+        account_url: str = "",
+        credential_type: Literal["default_azure", "client_secret"] = "default_azure",
+        tenant_id: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        backend: BackendBase | None = None,
+    ) -> None:
+        """Initialize Azure storage.
 
         Args:
-            backend: Pre-configured Azure Blob backend.
             container_name: Blob container name.
+            account_url: Azure Blob Storage account URL.
+            credential_type: Azure credential strategy.
+            tenant_id: Azure tenant ID for client-secret auth.
+            client_id: Azure client ID for client-secret auth.
+            client_secret: Azure client secret for client-secret auth.
+            backend: Pre-configured Azure backend. Used mainly in tests.
 
         """
-        self._backend = backend
+        if backend is None:
+            if not account_url:
+                msg = "account_url is required when backend is not provided"
+                raise ValueError(msg)
+            self._backend = create_backend(
+                "azure",
+                account_url=account_url,
+                credential_type=credential_type,
+                tenant_id=tenant_id,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+            logged_account_url = account_url
+        else:
+            self._backend = backend
+            logged_account_url = account_url or getattr(backend, "account_url", "")
         self.container_name = container_name
         log.debug(
             "Creating AzureStorage(account_url='%s', container_name='%s')",
-            self._backend.account_url,
+            logged_account_url,
             self.container_name,
         )
 
@@ -41,8 +74,8 @@ class AzureStorage(StorageBase):
         """Return the name of the storage."""
         return self.name
 
-    def _get_backend(self) -> AzureBackend:
-        """Return the Azure backend used by this storage."""
+    def _get_backend(self) -> BackendBase:
+        """Return the backend used by this storage."""
         return self._backend
 
     def _get_container_client(self) -> Any | None:
@@ -110,6 +143,14 @@ class AzureStorage(StorageBase):
 
     @override
     def download(self, key: str, local_file_path: str) -> None:
+        """Download a storage object to a local file or extract an archive to a directory."""
+        path = Path(local_file_path)
+        if path.is_dir():
+            download_and_extract_tar_gz(self._download_file, key, path)
+            return
+        self._download_file(key, local_file_path)
+
+    def _download_file(self, key: str, local_file_path: str) -> None:
         """Download a storage object to a local file."""
         container_client = self._get_container_client()
         if not container_client:
