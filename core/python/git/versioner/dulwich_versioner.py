@@ -329,12 +329,21 @@ class DulwichVersioner(StrReprMixin):
             raise VersionerError(error_msg) from e
 
     @override
-    def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(
+        self,
+        repository_url: str,
+        target_path: str | Path,
+        *,
+        branch: str | None = None,
+        depth: int | None = None,
+    ) -> None:
         """Clone a repository using Dulwich.
 
         Args:
             repository_url: URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
+            branch: Optional branch to clone and check out.
+            depth: Optional shallow clone depth.
 
         Raises:
             VersionerError: If the clone operation fails.
@@ -354,7 +363,12 @@ class DulwichVersioner(StrReprMixin):
                 raise VersionerError(error_msg)
 
             remote_kwargs = self._dulwich_remote_kwargs()
-            porcelain.clone(repository_url, str(target_path), **remote_kwargs)
+            clone_kwargs = dict(remote_kwargs)
+            if branch is not None:
+                clone_kwargs["branch"] = branch
+            if depth is not None:
+                clone_kwargs["depth"] = depth
+            porcelain.clone(repository_url, str(target_path), **clone_kwargs)
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to clone repository from {repository_url}: {e}"
             raise VersionerError(error_msg) from e
@@ -363,6 +377,40 @@ class DulwichVersioner(StrReprMixin):
         except Exception as e:
             error_msg = f"Failed to clone repository from {repository_url}: {e}"
             raise VersionerError(error_msg) from e
+
+    def list_remote_branches(self, repository_url: str) -> list[str]:
+        """List branch names available on the remote repository.
+
+        Args:
+            repository_url: URL of the remote repository.
+
+        Returns:
+            Sorted unique branch names reported by ``ls-remote``.
+
+        Raises:
+            VersionerError: If the remote cannot be queried.
+
+        """
+        try:
+            remote_kwargs = self._dulwich_remote_kwargs()
+            refs = porcelain.ls_remote(repository_url, **remote_kwargs)
+        except _DULWICH_ERRORS as e:
+            error_msg = (
+                f"Failed to list remote branches for {repository_url}: {e}"
+            )
+            raise VersionerError(error_msg) from e
+        except Exception as e:
+            error_msg = (
+                f"Failed to list remote branches for {repository_url}: {e}"
+            )
+            raise VersionerError(error_msg) from e
+
+        branches: list[str] = []
+        for ref in refs:
+            ref_bytes = ref if isinstance(ref, bytes) else ref.encode()
+            if ref_bytes.startswith(_LOCAL_BRANCH_PREFIX):
+                branches.append(ref_bytes[len(_LOCAL_BRANCH_PREFIX) :].decode())
+        return sorted(set(branches))
 
     def _get_available_branches(self, repo: Repo) -> list[str]:
         """Get all available branches (local and remote) from repository.

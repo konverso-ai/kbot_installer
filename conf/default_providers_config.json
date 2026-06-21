@@ -3,11 +3,7 @@
     "storage": {
       "kwargs": {},
       "env_vars": ["NEXUS_USERNAME", "NEXUS_PASSWORD"],
-      "auth_type": "http_auth",
-      "auth_params": {
-        "username": "NEXUS_USERNAME",
-        "password": "NEXUS_PASSWORD"
-      },
+      "auth_type": "basic",
       "branches": ["master", "dev"]
     },
     "github": {
@@ -15,11 +11,7 @@
         "account_name": "konverso-ai"
       },
       "env_vars": ["GITHUB_TOKEN"],
-      "auth_type": "pygit_auth",
-      "auth_params": {
-        "username": "git",
-        "password": "GITHUB_TOKEN"
-      },
+      "auth_type": "basic",
       "branches": ["main", "dev"]
     },
     "bitbucket": {
@@ -27,11 +19,7 @@
         "account_name": "konversoai"
       },
       "env_vars": ["BITBUCKET_USERNAME", "BITBUCKET_APP_PASSWORD"],
-      "auth_type": "pygit_auth",
-      "auth_params": {
-        "username": "BITBUCKET_USERNAME",
-        "password": "BITBUCKET_APP_PASSWORD"
-      },
+      "auth_type": "basic",
       "branches": ["master", "dev"]
     }
   },

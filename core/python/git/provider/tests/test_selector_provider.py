@@ -51,7 +51,7 @@ class TestSelectorProvider:
 
             result = selector._create_provider_with_credentials("storage")
 
-            mock_create.assert_called_once_with(name="storage", auth=ANY)
+            mock_create.assert_called_once_with(name="storage", config=selector.config, auth=ANY)
             assert result is mock_provider
 
     def test_create_provider_with_defaults_github(self) -> None:
@@ -425,6 +425,53 @@ class TestSelectorProvider:
         selector = SelectorProvider(["storage", "github"])
         # Before clone, branch_used is None, so should return empty string
         assert selector.get_branch() == ""
+
+    def test_get_branches_to_try_explicit_branch_only(self) -> None:
+        """Test explicit branch does not append provider fallback branches."""
+        selector = SelectorProvider(["github"])
+        assert selector._get_branches_to_try("github", "master") == ["master"]
+
+    def test_get_branches_to_try_default_uses_config_branches(self) -> None:
+        """Test missing branch uses configured provider branches."""
+        selector = SelectorProvider(["github"])
+        assert selector._get_branches_to_try("github", None) == ["main", "dev"]
+
+    @patch("git.provider.selector_provider.create_provider")
+    def test_clone_git_fails_fast_when_branch_missing_on_remote(
+        self, mock_create: MagicMock
+    ) -> None:
+        """Test git clone fails before download when branch is absent remotely."""
+        from git.provider.bitbucket_provider import BitbucketProvider
+
+        provider = BitbucketProvider(account_name="konversoai")
+        mock_create.return_value = provider
+
+        with (
+            patch.object(
+                provider,
+                "list_remote_branches",
+                return_value=["master", "dev"],
+            ),
+            patch.object(provider, "clone_and_checkout") as mock_clone,
+            patch(
+                "git.provider.selector_provider.CredentialManager"
+            ) as mock_cred_mgr,
+        ):
+            mock_cred_mgr.return_value.get_auth_for_provider.return_value = MagicMock()
+            mock_cred_mgr.return_value.has_credentials.return_value = True
+
+            selector = SelectorProvider(["bitbucket"])
+            with pytest.raises(
+                ProviderError,
+                match="Branch\\(es\\) 'release-2025.02-dev' not found on remote repository",
+            ):
+                selector.clone_and_checkout(
+                    "/tmp/test",
+                    "release-2025.02-dev",
+                    repository_name="snow",
+                )
+
+            mock_clone.assert_not_called()
 
     @patch("git.provider.selector_provider.create_provider")
     def test_get_branch_returns_used_branch_after_clone(

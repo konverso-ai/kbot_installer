@@ -38,8 +38,7 @@ class ProviderConfig(BaseModel):
 
     kwargs: dict[str, Any] = Field(default_factory=dict)
     env_vars: list[str]
-    auth_type: str
-    auth_params: dict[str, str]
+    auth_type: Literal["basic", "ssh"] = "basic"
     branches: list[str]
 
 

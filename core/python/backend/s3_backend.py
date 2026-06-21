@@ -33,7 +33,7 @@ class S3Backend(BackendBase):
 
     _client: S3Client | None = PrivateAttr(default=None)
 
-    def model_post_init(self, __context: Any, __config: Any) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Initialize the S3 backend."""
         self._client = boto3.client(
             "s3",

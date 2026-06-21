@@ -5,51 +5,25 @@ import subprocess
 from pathlib import Path
 
 import click
+from git.models import GitProvider
 from installable.factory import create_installable
 from installable.workarea_installable import WorkareaInstallable
 from installer_support.installer_service import InstallerService
 from installer_support.logging_config import setup_logging
 from interactivity.database_prompter import DatabasePrompter
+from storage.base import StorageBackend
 
 # Setup logging from configuration file
 setup_logging()
 
-
-def _parse_providers(uses: str | None) -> list[str] | None:
-    """Parse comma-separated provider string into a list of providers.
-
-    Args:
-        uses: Comma-separated string of providers (e.g., 'github,bitbucket' or 'nexus').
-
-    Returns:
-        List of provider names in lowercase, or None if uses is None.
-
-    Raises:
-        click.Abort: If any provider is invalid.
-
-    """
-    if not uses:
-        return None
-
-    # Split by comma and strip whitespace
-    providers_list = [p.strip() for p in uses.split(",")]
-
-    # Validate providers
-    valid_providers = {"storage", "github", "bitbucket", "nexus"}
-    invalid_providers = [p for p in providers_list if p.lower() not in valid_providers]
-    if invalid_providers:
-        click.echo(
-            f"Error: Invalid providers: {', '.join(invalid_providers)}",
-            err=True,
-        )
-        click.echo("Valid providers are: storage, github, bitbucket", err=True)
-        raise click.Abort
-
-    # Convert to lowercase for consistency
-    providers_list = [p.lower() for p in providers_list]
-
-    # Legacy alias: nexus was renamed to storage
-    return ["storage" if p == "nexus" else p for p in providers_list]
+_PROVIDER_CHOICES = click.Choice(
+    [provider.value for provider in GitProvider],
+    case_sensitive=False,
+)
+_STORAGE_CHOICES = click.Choice(
+    [backend.value for backend in StorageBackend],
+    case_sensitive=False,
+)
 
 
 @click.group(invoke_without_command=True)
@@ -364,11 +338,7 @@ def add(
 
 @cli.command()
 @click.option(
-    "-i",
-    "--installer-dir",
-    type=click.Path(),
-    default=lambda: str(Path.home() / "dev" / "installer"),
-    help="Installation directory (default: $HOME/dev/installer)",
+    "-p", "--product", required=True, type=str, help="Name of the product to install"
 )
 @click.option(
     "-v",
@@ -378,7 +348,11 @@ def add(
     help="Version of the product to install (e.g., '2025.03', 'dev', 'master')",
 )
 @click.option(
-    "-p", "--product", required=True, type=str, help="Name of the product to install"
+    "-i",
+    "--installer-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "installer"),
+    help="Installation directory (default: $HOME/dev/installer)",
 )
 @click.option(
     "-r",
@@ -388,9 +362,20 @@ def add(
     help="Skip installing product dependencies (default: False)",
 )
 @click.option(
-    "--uses",
-    type=str,
-    help="Specify which providers to use for installation. Comma-separated list (e.g., 'github,bitbucket' or 'nexus'). If not specified, all providers will be tried in order.",
+    "--provider",
+    type=_PROVIDER_CHOICES,
+    multiple=True,
+    help=(
+        "Specify which providers to use for installation. "
+        "If not specified, all providers will be tried in order."
+    ),
+)
+@click.option(
+    "--storage",
+    type=_STORAGE_CHOICES,
+    default=StorageBackend.NEXUS.value,
+    show_default=True,
+    help="Storage backend to use when the storage provider is selected.",
 )
 def installer(
     installer_dir: str,
@@ -398,27 +383,32 @@ def installer(
     product: str,
     *,
     no_rec: bool = False,
-    uses: str | None = None,
+    provider: tuple[str, ...] = (),
+    storage: str = StorageBackend.NEXUS.value,
 ) -> None:
     """Install a kbot product with specified version.
 
     This command installs the specified product at the given version.
     By default, it will also install all dependencies unless --no-rec is used.
-    Use --uses to specify which providers to use for installation.
+    Use --provider to specify which providers to use for installation.
 
     Examples:
         kbot-installer installer -v 2025.03 -p jira
         kbot-installer installer -v dev -p jira --no-rec
         kbot-installer installer -i /custom/path -v master -p ithd
-        kbot-installer installer -v 2025.03 -p jira --uses github,bitbucket
-        kbot-installer installer -v dev -p kbot-latest-dev --uses nexus
+        kbot-installer installer -v 2025.03 -p jira --provider github --provider bitbucket
+        kbot-installer installer -v dev -p kbot-latest-dev --provider storage --storage s3
 
     """
     try:
-        # Parse comma-separated providers if specified
-        selected_providers = _parse_providers(uses)
+        selected_providers = list(provider) if provider else None
+        storage_backend = StorageBackend(storage)
 
-        service = InstallerService(installer_dir, providers=selected_providers)
+        service = InstallerService(
+            installer_dir,
+            providers=selected_providers,
+            storage_backend=storage_backend,
+        )
 
         click.echo(
             f"Installing product '{product}' version '{version}' to '{installer_dir}'"
@@ -428,7 +418,8 @@ def installer(
         if selected_providers:
             click.echo(f"Using providers: {', '.join(selected_providers)}")
         else:
-            click.echo("Using all available providers: nexus, github, bitbucket")
+            click.echo("Using all available providers: storage, github, bitbucket")
+        click.echo(f"Using storage backend: {storage_backend.value}")
 
         # Install the product (will load products and dependencies automatically)
         include_dependencies = not no_rec

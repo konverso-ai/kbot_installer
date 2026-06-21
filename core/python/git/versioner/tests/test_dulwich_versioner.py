@@ -102,6 +102,36 @@ class TestDulwichVersioner:
                 "/tmp/test",
             )
 
+    def test_clone_with_branch_and_depth(self, versioner: DulwichVersioner) -> None:
+        """Test shallow clone of a specific branch."""
+        with patch("git.versioner.dulwich_versioner.porcelain.clone") as mock_clone:
+            versioner.clone(
+                "https://github.com/test/repo.git",
+                "/tmp/test",
+                branch="main",
+                depth=1,
+            )
+            mock_clone.assert_called_once_with(
+                "https://github.com/test/repo.git",
+                "/tmp/test",
+                branch="main",
+                depth=1,
+            )
+
+    def test_list_remote_branches(self, versioner: DulwichVersioner) -> None:
+        """Test listing remote branch names."""
+        with patch(
+            "git.versioner.dulwich_versioner.porcelain.ls_remote",
+            return_value={
+                b"refs/heads/main": b"sha1",
+                b"refs/heads/master": b"sha2",
+                b"refs/tags/v1": b"sha3",
+            },
+        ):
+            assert versioner.list_remote_branches(
+                "https://github.com/test/repo.git"
+            ) == ["main", "master"]
+
     def test_clone_with_auth(self, mock_auth: MagicMock) -> None:
         """Test clone passes authentication kwargs."""
         versioner = DulwichVersioner(auth=mock_auth)

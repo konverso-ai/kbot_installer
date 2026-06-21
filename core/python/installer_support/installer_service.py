@@ -14,11 +14,29 @@ from git.provider import (
     create_provider,
 )
 from git.provider.base import ProviderBase
+from git.provider.config import ProvidersConfig
+from storage.base import StorageBackend
 
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
 
 logger = logging.getLogger(__name__)
+
+
+def _providers_config_with_storage_backend(
+    storage_backend: StorageBackend | None,
+) -> ProvidersConfig:
+    """Return provider configuration with an optional storage backend override."""
+    if storage_backend is None:
+        return DEFAULT_PROVIDERS_CONFIG
+
+    return DEFAULT_PROVIDERS_CONFIG.model_copy(
+        update={
+            "storage": DEFAULT_PROVIDERS_CONFIG.storage.model_copy(
+                update={"backend": storage_backend.value}
+            )
+        }
+    )
 
 
 class InstallerService:
@@ -39,22 +57,26 @@ class InstallerService:
         self,
         installer_dir: str | Path,
         providers: list[str] | None = None,
+        storage_backend: StorageBackend | None = None,
     ) -> None:
         """Initialize the installer service.
 
         Args:
             installer_dir: Path to the installer directory.
             providers: List of provider names to try. Defaults to ["storage", "github", "bitbucket"].
+            storage_backend: Storage backend override for the storage provider.
+                Defaults to the value from the providers configuration file.
 
         """
         self.installer_dir = Path(installer_dir)
         self.providers = providers or ["storage", "github", "bitbucket"]
+        config = _providers_config_with_storage_backend(storage_backend)
 
         # Initialize services
         self.selector_provider: ProviderBase = create_provider(
             name="selector",
             providers=self.providers,
-            config=DEFAULT_PROVIDERS_CONFIG,
+            config=config,
         )
         self.installation_table = InstallationTable()
 

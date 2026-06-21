@@ -2,63 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
-from cli.commands import _parse_providers, cli
-
-
-class TestParseProviders:
-    """Test cases for _parse_providers function."""
-
-    def test_parse_providers_none(self) -> None:
-        """Test parsing when uses is None."""
-        result = _parse_providers(None)
-        assert result is None
-
-    def test_parse_providers_empty_string(self) -> None:
-        """Test parsing when uses is empty string."""
-        result = _parse_providers("")
-        assert result is None
-
-    def test_parse_providers_single_provider(self) -> None:
-        """Test parsing single provider."""
-        result = _parse_providers("github")
-        assert result == ["github"]
-
-    def test_parse_providers_multiple_providers(self) -> None:
-        """Test parsing multiple providers."""
-        result = _parse_providers("github,bitbucket")
-        assert result == ["github", "bitbucket"]
-
-    def test_parse_providers_with_spaces(self) -> None:
-        """Test parsing providers with spaces."""
-        result = _parse_providers("github, bitbucket")
-        assert result == ["github", "bitbucket"]
-
-    def test_parse_providers_case_insensitive(self) -> None:
-        """Test parsing providers with different cases."""
-        result = _parse_providers("GITHUB,BitBucket")
-        assert result == ["github", "bitbucket"]
-
-    def test_parse_providers_all_providers(self) -> None:
-        """Test parsing all valid providers."""
-        result = _parse_providers("storage,github,bitbucket")
-        assert result == ["storage", "github", "bitbucket"]
-
-    def test_parse_providers_invalid_provider(self) -> None:
-        """Test parsing with invalid provider raises click.Abort."""
-        from click import Abort
-
-        with pytest.raises(Abort):
-            _parse_providers("gitlab")
-
-    def test_parse_providers_mixed_valid_invalid(self) -> None:
-        """Test parsing with mix of valid and invalid providers."""
-        from click import Abort
-
-        with pytest.raises(Abort):
-            _parse_providers("github,gitlab,bitbucket")
+from cli.commands import cli
+from storage.base import StorageBackend
 
 
 class TestCLI:
@@ -121,10 +68,94 @@ class TestInstallerCommand:
 
         # Assertions
         assert result.exit_code == 0
-        mock_service_class.assert_called_once_with(installer_dir, providers=None)
+        mock_service_class.assert_called_once_with(
+            installer_dir,
+            providers=None,
+            storage_backend=StorageBackend.NEXUS,
+        )
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=True
         )
+
+    @patch("cli.commands.InstallerService")
+    def test_installer_with_provider_and_storage(self, mock_service_class) -> None:
+        """Test product installation with provider and storage options."""
+        mock_service = MagicMock()
+        mock_service_class.return_value = mock_service
+
+        installer_dir = "/test/installer"
+        version = "2025.03"
+        product = "jira"
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "installer",
+                "--installer-dir",
+                installer_dir,
+                "--version",
+                version,
+                "--product",
+                product,
+                "--provider",
+                "github",
+                "--provider",
+                "bitbucket",
+                "--storage",
+                "s3",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_service_class.assert_called_once_with(
+            installer_dir,
+            providers=["github", "bitbucket"],
+            storage_backend=StorageBackend.S3,
+        )
+        assert "Using providers: github, bitbucket" in result.output
+        assert "Using storage backend: s3" in result.output
+
+    @patch("cli.commands.InstallerService")
+    def test_installer_rejects_invalid_provider(self, mock_service_class) -> None:
+        """Test installer rejects invalid provider values."""
+        result = self.runner.invoke(
+            cli,
+            [
+                "installer",
+                "--installer-dir",
+                "/test/installer",
+                "--version",
+                "2025.03",
+                "--product",
+                "jira",
+                "--provider",
+                "gitlab",
+            ],
+        )
+
+        assert result.exit_code != 0
+        mock_service_class.assert_not_called()
+
+    @patch("cli.commands.InstallerService")
+    def test_installer_rejects_invalid_storage(self, mock_service_class) -> None:
+        """Test installer rejects invalid storage values."""
+        result = self.runner.invoke(
+            cli,
+            [
+                "installer",
+                "--installer-dir",
+                "/test/installer",
+                "--version",
+                "2025.03",
+                "--product",
+                "jira",
+                "--storage",
+                "minio",
+            ],
+        )
+
+        assert result.exit_code != 0
+        mock_service_class.assert_not_called()
 
     @patch("cli.commands.InstallerService")
     def test_installer_with_no_rec(self, mock_service_class) -> None:
@@ -155,7 +186,11 @@ class TestInstallerCommand:
 
         # Assertions
         assert result.exit_code == 0
-        mock_service_class.assert_called_once_with(installer_dir, providers=None)
+        mock_service_class.assert_called_once_with(
+            installer_dir,
+            providers=None,
+            storage_backend=StorageBackend.NEXUS,
+        )
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=False
         )

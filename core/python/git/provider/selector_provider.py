@@ -19,6 +19,7 @@ from git.provider.credential_manager import CredentialManager
 from git.provider.factory import create_provider
 from git.provider.base import ProviderBase
 from git.provider.errors import ProviderError
+from git.provider.git_mixin import GitMixin
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,9 @@ class SelectorProvider(ProviderBase):
 
         params = provider_config.kwargs.copy()
 
+        if provider_name == "storage":
+            params["config"] = self.config
+
         # Add authentication if available
         auth = self.credential_manager.get_auth_for_provider(provider_name)
         logger.debug("Authentication found for '%s': %s", provider_name, auth)
@@ -120,6 +124,15 @@ class SelectorProvider(ProviderBase):
                 "Failed to create provider '%s': %s", provider_name, type(e).__name__
             )
             return None
+        except ValueError as e:
+            logger.error(  # noqa: TRY400
+                "Failed to create provider '%s': %s",
+                provider_name,
+                e,
+            )
+            raise ProviderError(
+                f"Failed to configure provider '{provider_name}': {e}"
+            ) from e
         except Exception as e:
             # Log error without exposing sensitive information from stack trace
             # Using logger.error() instead of logger.exception() to prevent
@@ -239,8 +252,10 @@ class SelectorProvider(ProviderBase):
 
     def _extract_last_meaningful_part(self, error_message: str) -> str:
         """Extract the last meaningful part of an error message."""
-        # For version not found errors, preserve the full message
-        if "Version" in error_message and "not found" in error_message:
+        # For version/branch not found errors, preserve the full message
+        if (
+            "Version" in error_message or "Branch" in error_message
+        ) and "not found" in error_message:
             return error_message
 
         # For repository not found errors, preserve the full message
@@ -295,11 +310,9 @@ class SelectorProvider(ProviderBase):
             return [branch] if branch else []
 
         if branch:
-            # Try requested branch first, then fallbacks
-            return [branch, *provider_config.branches]
+            return [branch]
 
-        # No branch specified, use first fallback as default
-        return [provider_config.branches[0]] if provider_config.branches else []
+        return list(provider_config.branches) if provider_config.branches else []
 
     def _try_clone_with_branch(
         self,
@@ -417,6 +430,90 @@ class SelectorProvider(ProviderBase):
             return True
         return False
 
+    def _resolve_git_repository_url(
+        self,
+        provider: GitMixin,
+        repository_identifier: str,
+        *,
+        by_url: bool,
+    ) -> str:
+        """Resolve the remote repository URL for a git provider."""
+        if by_url:
+            return repository_identifier
+        return provider.build_repository_url(repository_identifier)
+
+    def _select_remote_branch(
+        self,
+        provider: GitMixin,
+        repository_url: str,
+        branches_to_try: list[str],
+    ) -> str | None:
+        """Pick the first branch that exists on the remote, or raise if none match."""
+        if not branches_to_try:
+            return None
+
+        remote_branches = provider.list_remote_branches(repository_url)
+        for branch in branches_to_try:
+            if branch in remote_branches:
+                return branch
+
+        requested = ", ".join(f"'{branch}'" for branch in branches_to_try)
+        available = ", ".join(remote_branches) if remote_branches else "none"
+        msg = (
+            f"Branch(es) {requested} not found on remote repository "
+            f"'{repository_url}'. Available branches: {available}"
+        )
+        raise ProviderError(msg)
+
+    def _clone_git_with_branch_fallbacks(
+        self,
+        provider: GitMixin,
+        repository_identifier: str,
+        target_path: Path,
+        branches_to_try: list[str],
+        requested_branch: str | None,
+        *,
+        by_url: bool,
+    ) -> tuple[str, str]:
+        """Clone a git repository after verifying the target branch exists remotely.
+
+        Args:
+            provider: Git provider instance to use.
+            repository_identifier: Repository URL or name.
+            target_path: Local path where repository should be cloned.
+            branches_to_try: Branches to attempt, in priority order.
+            requested_branch: Originally requested branch, or None for defaults.
+            by_url: Whether ``repository_identifier`` is a repository URL.
+
+        Returns:
+            Tuple of (branch_used, success_message).
+
+        Raises:
+            ProviderError: If the branch is missing on the remote or clone fails.
+
+        """
+        repository_url = self._resolve_git_repository_url(
+            provider, repository_identifier, by_url=by_url
+        )
+        branch_to_use = self._select_remote_branch(
+            provider, repository_url, branches_to_try
+        )
+
+        self._try_clone_with_branch(
+            provider,
+            repository_identifier,
+            target_path,
+            branch_to_use,
+            by_url=by_url,
+        )
+        self._update_provider_name(provider)
+
+        if not branch_to_use:
+            return "", "Repository cloned successfully (default branch)"
+
+        msg = self._build_success_message(branch_to_use, requested_branch)
+        return branch_to_use, msg
+
     def _clone_with_provider_and_branches(
         self,
         provider: ProviderBase,
@@ -446,6 +543,16 @@ class SelectorProvider(ProviderBase):
         """
         branches_to_try = self._get_branches_to_try(provider_name, requested_branch)
 
+        if isinstance(provider, GitMixin):
+            return self._clone_git_with_branch_fallbacks(
+                provider,
+                repository_identifier,
+                target_path,
+                branches_to_try,
+                requested_branch,
+                by_url=by_url,
+            )
+
         last_error = None
         for branch_to_try in branches_to_try:
             try:
@@ -471,7 +578,8 @@ class SelectorProvider(ProviderBase):
         if last_error:
             raise last_error
         error_msg = (
-            f"Failed to clone with any branch from fallback list: {branches_to_try}"
+            f"Failed to download repository with any branch from fallback list: "
+            f"{branches_to_try}"
         )
         raise ProviderError(error_msg)
 

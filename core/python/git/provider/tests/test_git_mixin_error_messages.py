@@ -30,12 +30,11 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = MagicMock()
-        mock_versioner.checkout = MagicMock()
-
-        # Mock checkout to raise a branch not found error
-        mock_versioner.checkout.side_effect = VersionerError(
-            "Version 'release-2021.03-dev' not found. Available versions: dev, master, release-2025.03"
+        mock_versioner.clone = MagicMock(
+            side_effect=VersionerError(
+                "Version 'release-2021.03-dev' not found. "
+                "Available versions: dev, master, release-2025.03"
+            )
         )
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
@@ -46,11 +45,15 @@ class TestGitMixinErrorMessages:
                     repository_url="test-repo",
                 )
 
-            # Check that the error message is specific to version not found
             error_msg = str(exc_info.value)
-            assert "Version 'release-2021.03-dev' not found" in error_msg
-            assert "test-repo" in error_msg
-            assert "Available versions" in error_msg
+            assert "Failed to clone repository 'test-repo'" in error_msg
+            assert "release-2021.03-dev" in error_msg
+            mock_versioner.clone.assert_called_once_with(
+                "test-repo",
+                "/tmp/test",
+                branch="release-2021.03-dev",
+                depth=1,
+            )
 
     def test_clone_and_checkout_generic_checkout_error(self) -> None:
         """Test that generic checkout errors are handled properly."""
@@ -70,12 +73,8 @@ class TestGitMixinErrorMessages:
 
         # Mock versioner
         mock_versioner = MagicMock()
-        mock_versioner.clone = MagicMock()
-        mock_versioner.checkout = MagicMock()
-
-        # Mock checkout to raise a generic checkout error
-        mock_versioner.checkout.side_effect = VersionerError(
-            "Failed to checkout due to file conflicts"
+        mock_versioner.clone = MagicMock(
+            side_effect=VersionerError("Failed to checkout due to file conflicts")
         )
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
@@ -86,10 +85,8 @@ class TestGitMixinErrorMessages:
                     repository_url="test-repo",
                 )
 
-            # Check that the error message is about checkout failure
             error_msg = str(exc_info.value)
-            assert "Failed to checkout branch 'release-2021.03-dev'" in error_msg
-            assert "test-repo" in error_msg
+            assert "Failed to clone repository 'test-repo'" in error_msg
 
     def test_clone_and_checkout_clone_error(self) -> None:
         """Test that clone errors are handled properly."""
@@ -148,18 +145,19 @@ class TestGitMixinErrorMessages:
         mock_versioner.checkout = MagicMock()
 
         with patch.object(provider, "_get_versioner", return_value=mock_versioner):
-            # Should not raise any exception
             provider.clone_and_checkout(
                 "/tmp/test",
                 "release-2021.03-dev",
                 repository_url="test-repo",
             )
 
-            # Verify both methods were called
-            mock_versioner.clone.assert_called_once_with("test-repo", "/tmp/test")
-            mock_versioner.checkout.assert_called_once_with(
-                "/tmp/test", "release-2021.03-dev"
+            mock_versioner.clone.assert_called_once_with(
+                "test-repo",
+                "/tmp/test",
+                branch="release-2021.03-dev",
+                depth=1,
             )
+            mock_versioner.checkout.assert_not_called()
 
     def test_clone_and_checkout_without_branch(self) -> None:
         """Test clone without checkout."""

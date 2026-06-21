@@ -58,6 +58,105 @@ class GitMixin(ProviderBase):
             self._versioner = create_versioner("dulwich", auth=self._get_auth())
         return self._versioner
 
+    def _perform_checkout(
+        self,
+        versioner: VersionerBase,
+        target_path: str | Path,
+        branch: str,
+        repository_label: str,
+    ) -> None:
+        """Checkout a branch in a local repository.
+
+        Args:
+            versioner: Versioner instance to use.
+            target_path: Path to the local repository.
+            branch: Branch name to checkout.
+            repository_label: Repository URL or path used in error messages.
+
+        Raises:
+            ProviderError: If checkout fails.
+
+        """
+        try:
+            versioner.checkout(target_path, branch)
+            self.branch_used = branch
+        except VersionerError as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "branch" in error_str:
+                error_msg = (
+                    f"Branch '{branch}' not found for '{repository_label}' "
+                    f"(repository cloned successfully). {e}"
+                )
+            else:
+                error_msg = (
+                    f"Failed to checkout branch '{branch}' for "
+                    f"'{repository_label}': {e}"
+                )
+            raise ProviderError(error_msg) from e
+
+    def build_repository_url(self, repository_name: str) -> str:
+        """Build the remote repository URL for a repository name.
+
+        Args:
+            repository_name: Short repository name.
+
+        Returns:
+            Fully qualified repository URL.
+
+        Raises:
+            ValueError: If the provider is missing URL template attributes.
+
+        """
+        base_url = getattr(self, "base_url", None)
+        account_name = getattr(self, "account_name", None)
+        name = getattr(self, "name", None)
+        if not base_url or not account_name or not name:
+            msg = "Provider cannot build a repository URL"
+            raise ValueError(msg)
+        return base_url.format(
+            name=name,
+            account_name=account_name,
+            repository_name=repository_name,
+        )
+
+    def list_remote_branches(self, repository_url: str) -> list[str]:
+        """List branches available on the remote repository.
+
+        Args:
+            repository_url: URL of the remote repository.
+
+        Returns:
+            Branch names reported by the versioner.
+
+        Raises:
+            ProviderError: If the remote cannot be queried.
+
+        """
+        versioner = self._get_versioner()
+        list_remote = getattr(versioner, "list_remote_branches", None)
+        if list_remote is None:
+            msg = "Versioner does not support listing remote branches"
+            raise ProviderError(msg)
+        try:
+            return list_remote(repository_url)
+        except VersionerError as e:
+            error_msg = f"Failed to list remote branches for '{repository_url}': {e}"
+            raise ProviderError(error_msg) from e
+
+    def checkout_branch(self, target_path: str | Path, branch: str) -> None:
+        """Checkout a branch in an already cloned repository.
+
+        Args:
+            target_path: Path to the local repository.
+            branch: Branch name to checkout.
+
+        Raises:
+            ProviderError: If checkout fails.
+
+        """
+        versioner = self._get_versioner()
+        self._perform_checkout(versioner, target_path, branch, str(target_path))
+
     @override
     def clone_and_checkout(
         self,
@@ -84,31 +183,26 @@ class GitMixin(ProviderBase):
             raise ValueError(msg)
         try:
             versioner = self._get_versioner()
-            versioner.clone(repository_url, target_path)
-
-            # If a specific branch is requested, checkout that branch
             if branch:
-                try:
-                    versioner.checkout(target_path, branch)
-                    # Store the branch that was successfully used
-                    self.branch_used = branch
-                except VersionerError as e:
-                    # Check if this is a branch not found error
-                    if "not found" in str(e).lower() or "branch" in str(e).lower():
-                        error_msg = f"Version '{branch}' not found for repository '{repository_url}'. {e}"
-                    else:
-                        error_msg = f"Failed to checkout branch '{branch}' for repository '{repository_url}': {e}"
-                    raise ProviderError(error_msg) from e
+                versioner.clone(
+                    repository_url,
+                    target_path,
+                    branch=branch,
+                    depth=1,
+                )
+                self.branch_used = branch
             else:
-                # If no branch specified, use default branch (typically "main" or "master")
-                # We'll need to detect it, but for now store None
+                versioner.clone(repository_url, target_path)
                 self.branch_used = None
+        except ProviderError:
+            raise
         except VersionerError as e:
-            # This is a clone error, not a checkout error
             error_msg = f"Failed to clone repository '{repository_url}': {e}"
             raise ProviderError(error_msg) from e
         except Exception as e:
-            error_msg = f"Unexpected error: {e}"
+            error_msg = (
+                f"Unexpected error while cloning repository '{repository_url}': {e}"
+            )
             raise ProviderError(error_msg) from e
 
     @override

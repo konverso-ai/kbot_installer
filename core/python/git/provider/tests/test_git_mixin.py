@@ -58,8 +58,13 @@ class TestGitMixin:
             )
 
             mock_get_versioner.assert_called_once()
-            mock_clone.assert_called_once_with("https://test.com/repo", "/test/path")
-            mock_checkout.assert_called_once_with("/test/path", "main")
+            mock_clone.assert_called_once_with(
+                "https://test.com/repo",
+                "/test/path",
+                branch="main",
+                depth=1,
+            )
+            mock_checkout.assert_not_called()
 
     def test_clone_and_checkout_handles_versioner_error(self) -> None:
         """Test that clone_and_checkout handles VersionerError."""

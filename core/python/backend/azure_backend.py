@@ -42,7 +42,7 @@ class AzureBackend(BackendBase):
         msg = f"Unsupported credential_type: {self.credential_type}"
         raise ValueError(msg)
 
-    def model_post_init(self, __context: Any, __config: Any) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Initialize the Azure backend."""
         self._client = BlobServiceClient(
             account_url=self.account_url,

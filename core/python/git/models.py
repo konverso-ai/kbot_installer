@@ -1,6 +1,7 @@
 from enum import Enum
 import json
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,7 +22,7 @@ class GitProvider(Enum):
 
     GITHUB = "github"
     BITBUCKET = "bitbucket"
-    GIT = "git"
+    STORAGE = "storage"
 
 
 class RepoType(Enum):
@@ -39,7 +40,7 @@ class GitRepo(BaseModel):
     provider: GitProvider
     type: RepoType
     product: Product
-    settings: Settings
+    settings: Any
 
     def export(self) -> dict[Path, str]:
         """Export the repository to a file."""
@@ -53,7 +54,7 @@ class GitRepo(BaseModel):
         }
 
 
-def _settings_json(settings: Settings) -> str:
+def _settings_json(settings: Settings | Any) -> str:
     """Serialize settings to a JSON string for file export."""
     content = settings.to_json()
     if isinstance(content, str):

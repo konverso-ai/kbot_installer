@@ -92,11 +92,7 @@ class CredentialManager:
             if not auth_kwargs:
                 return None
 
-            if provider_config.auth_type in {"http_auth", "pygit_auth"}:
-                return create_auth("basic", **auth_kwargs)
-
-            logger.warning("Unknown auth type: %s", provider_config.auth_type)
-            return None
+            return create_auth(provider_config.auth_type, **auth_kwargs)
 
         except ImportError as e:
             logger.error(  # noqa: TRY400

@@ -1,7 +1,17 @@
 """Bucket storage abstractions for cloud object stores."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from enum import Enum
 from typing import Any
+
+
+class StorageBackend(Enum):
+    """Object storage backend."""
+
+    NEXUS = "nexus"
+    S3 = "s3"
+    AZURE = "azure"
 
 
 class StorageBase(ABC):
