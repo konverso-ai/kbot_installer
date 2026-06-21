@@ -7,6 +7,7 @@ that can be shared across different repository providers.
 from pathlib import Path
 
 from auth.base import HttpAuthBase
+from auth.ssh_auth import SshAuth
 from typing_extensions import override
 from git.versioner import (
     VersionerBase,
@@ -46,6 +47,43 @@ class GitMixin(ProviderBase):
 
         """
         return None  # Default implementation returns None
+
+    def _uses_ssh_auth(self) -> bool:
+        """Return whether the provider is configured for SSH authentication."""
+        return isinstance(self._get_auth(), SshAuth)
+
+    def build_repository_url(self, repository_name: str) -> str:
+        """Build the remote repository URL for the configured auth mode.
+
+        Args:
+            repository_name: Short repository name.
+
+        Returns:
+            HTTPS or SSH URL depending on the active authentication.
+
+        Raises:
+            ValueError: If the provider is missing URL template attributes.
+
+        """
+        account_name = getattr(self, "account_name", "")
+        name = getattr(self, "name", "")
+        base_url = getattr(self, "base_url", "")
+        if not name or not account_name:
+            msg = "Provider cannot build a repository URL"
+            raise ValueError(msg)
+
+        if self._uses_ssh_auth():
+            ssh_host = getattr(self, "ssh_host", f"{name}.com")
+            return f"git@{ssh_host}:{account_name}/{repository_name}.git"
+
+        if not base_url:
+            msg = "Provider cannot build a repository URL"
+            raise ValueError(msg)
+        return base_url.format(
+            name=name,
+            account_name=account_name,
+            repository_name=repository_name,
+        )
 
     def _get_versioner(self) -> VersionerBase:
         """Get or create the versioner instance.
@@ -94,31 +132,6 @@ class GitMixin(ProviderBase):
                 )
             raise ProviderError(error_msg) from e
 
-    def build_repository_url(self, repository_name: str) -> str:
-        """Build the remote repository URL for a repository name.
-
-        Args:
-            repository_name: Short repository name.
-
-        Returns:
-            Fully qualified repository URL.
-
-        Raises:
-            ValueError: If the provider is missing URL template attributes.
-
-        """
-        base_url = getattr(self, "base_url", None)
-        account_name = getattr(self, "account_name", None)
-        name = getattr(self, "name", None)
-        if not base_url or not account_name or not name:
-            msg = "Provider cannot build a repository URL"
-            raise ValueError(msg)
-        return base_url.format(
-            name=name,
-            account_name=account_name,
-            repository_name=repository_name,
-        )
-
     def list_remote_branches(self, repository_url: str) -> list[str]:
         """List branches available on the remote repository.
 
@@ -133,12 +146,8 @@ class GitMixin(ProviderBase):
 
         """
         versioner = self._get_versioner()
-        list_remote = getattr(versioner, "list_remote_branches", None)
-        if list_remote is None:
-            msg = "Versioner does not support listing remote branches"
-            raise ProviderError(msg)
         try:
-            return list_remote(repository_url)
+            return versioner.list_remote_branches(repository_url)
         except VersionerError as e:
             error_msg = f"Failed to list remote branches for '{repository_url}': {e}"
             raise ProviderError(error_msg) from e

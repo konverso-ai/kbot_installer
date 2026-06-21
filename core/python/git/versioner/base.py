@@ -81,15 +81,39 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    def clone(self, repository_url: str, target_path: str | Path) -> None:
+    def clone(
+        self,
+        repository_url: str,
+        target_path: str | Path,
+        *,
+        branch: str | None = None,
+        depth: int | None = None,
+    ) -> None:
         """Clone a repository to the specified path.
 
         Args:
             repository_url: URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
+            branch: Optional branch to clone and check out.
+            depth: Optional shallow clone depth.
 
         Raises:
             VersionerError: If the clone operation fails.
+
+        """
+
+    @abstractmethod
+    def list_remote_branches(self, repository_url: str) -> list[str]:
+        """List branch names available on the remote repository.
+
+        Args:
+            repository_url: URL of the remote repository.
+
+        Returns:
+            Sorted unique branch names reported by the remote.
+
+        Raises:
+            VersionerError: If the remote cannot be queried.
 
         """
 

@@ -10,16 +10,16 @@
       "kwargs": {
         "account_name": "konverso-ai"
       },
-      "env_vars": ["GITHUB_TOKEN"],
-      "auth_type": "basic",
+      "env_vars": [],
+      "auth_type": "ssh",
       "branches": ["main", "dev"]
     },
     "bitbucket": {
       "kwargs": {
         "account_name": "konversoai"
       },
-      "env_vars": ["BITBUCKET_USERNAME", "BITBUCKET_APP_PASSWORD"],
-      "auth_type": "basic",
+      "env_vars": [],
+      "auth_type": "ssh",
       "branches": ["master", "dev"]
     }
   },

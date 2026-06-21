@@ -1,6 +1,7 @@
 """Tests for CredentialManager class."""
 
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from auth.base import HttpAuthBase
@@ -27,11 +28,8 @@ class TestCredentialManager:
             "NEXUS_USERNAME",
             "NEXUS_PASSWORD",
         ]
-        assert manager.config.provider["github"].env_vars == ["GITHUB_TOKEN"]
-        assert manager.config.provider["bitbucket"].env_vars == [
-            "BITBUCKET_USERNAME",
-            "BITBUCKET_APP_PASSWORD",
-        ]
+        assert manager.config.provider["github"].env_vars == []
+        assert manager.config.provider["bitbucket"].env_vars == []
 
     @patch.dict(
         os.environ, {"NEXUS_USERNAME": "test_user", "NEXUS_PASSWORD": "test_pass"}
@@ -65,30 +63,31 @@ class TestCredentialManager:
         manager = CredentialManager()
         assert manager.has_credentials("storage") is False
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     def test_has_credentials_github_success(self) -> None:
-        """Test has_credentials returns True when GitHub token is available."""
+        """Test has_credentials returns True when SSH agent is available."""
         manager = CredentialManager()
         assert manager.has_credentials("github") is True
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_has_credentials_github_missing(self) -> None:
-        """Test has_credentials returns False when GitHub token is missing."""
+    def test_has_credentials_github_missing(self, mock_home) -> None:
+        """Test has_credentials returns False when SSH credentials are missing."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         assert manager.has_credentials("github") is False
 
-    @patch.dict(
-        os.environ,
-        {"BITBUCKET_USERNAME": "test_user", "BITBUCKET_APP_PASSWORD": "test_pass"},
-    )
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     def test_has_credentials_bitbucket_success(self) -> None:
-        """Test has_credentials returns True when all Bitbucket credentials are available."""
+        """Test has_credentials returns True when SSH agent is available."""
         manager = CredentialManager()
         assert manager.has_credentials("bitbucket") is True
 
-    @patch.dict(os.environ, {"BITBUCKET_USERNAME": "test_user"}, clear=True)
-    def test_has_credentials_bitbucket_missing_password(self) -> None:
-        """Test has_credentials returns False when Bitbucket password is missing."""
+    @patch("credentials.ssh_credentials.Path.home")
+    @patch.dict(os.environ, {}, clear=True)
+    def test_has_credentials_bitbucket_missing(self, mock_home) -> None:
+        """Test has_credentials returns False when SSH credentials are missing."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         assert manager.has_credentials("bitbucket") is False
 
@@ -153,12 +152,12 @@ class TestCredentialManager:
 
         assert result is None
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_github_success(self, mock_create_auth) -> None:
-        """Test get_auth_for_provider returns authentication object for GitHub when token is available."""
+        """Test get_auth_for_provider returns SSH auth for GitHub."""
         manager = CredentialManager()
         mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
@@ -167,20 +166,20 @@ class TestCredentialManager:
 
         assert result is not None
         assert isinstance(result, HttpAuthBase)
-        mock_create_auth.assert_called_once_with(
-            "basic", username="git", password="test_token"
-        )
+        mock_create_auth.assert_called_once_with("ssh", username="git")
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_auth_for_provider_github_no_credentials(self) -> None:
-        """Test get_auth_for_provider returns None for GitHub when token is not available."""
+    def test_get_auth_for_provider_github_no_credentials(self, mock_home) -> None:
+        """Test get_auth_for_provider returns None for GitHub without SSH credentials."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
 
         result = manager.get_auth_for_provider("github")
 
         assert result is None
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
@@ -193,15 +192,12 @@ class TestCredentialManager:
 
         assert result is None
 
-    @patch.dict(
-        os.environ,
-        {"BITBUCKET_USERNAME": "test_user", "BITBUCKET_APP_PASSWORD": "test_pass"},
-    )
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
     def test_get_auth_for_provider_bitbucket_success(self, mock_create_auth) -> None:
-        """Test get_auth_for_provider returns authentication object for Bitbucket when credentials are available."""
+        """Test get_auth_for_provider returns SSH auth for Bitbucket."""
         manager = CredentialManager()
         mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
@@ -210,23 +206,20 @@ class TestCredentialManager:
 
         assert result is not None
         assert isinstance(result, HttpAuthBase)
-        mock_create_auth.assert_called_once_with(
-            "basic", username="test_user", password="test_pass"
-        )
+        mock_create_auth.assert_called_once_with("ssh", username="git")
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_auth_for_provider_bitbucket_no_credentials(self) -> None:
-        """Test get_auth_for_provider returns None for Bitbucket when credentials are not available."""
+    def test_get_auth_for_provider_bitbucket_no_credentials(self, mock_home) -> None:
+        """Test get_auth_for_provider returns None for Bitbucket without SSH credentials."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
 
         result = manager.get_auth_for_provider("bitbucket")
 
         assert result is None
 
-    @patch.dict(
-        os.environ,
-        {"BITBUCKET_USERNAME": "test_user", "BITBUCKET_APP_PASSWORD": "test_pass"},
-    )
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
@@ -250,18 +243,18 @@ class TestCredentialManager:
 
         assert result is None
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(
         os.environ,
         {
             "NEXUS_USERNAME": "test_user",
             "NEXUS_PASSWORD": "test_pass",
-            "GITHUB_TOKEN": "",
-            "BITBUCKET_USERNAME": "",
-            "BITBUCKET_APP_PASSWORD": "",
         },
+        clear=True,
     )
-    def test_get_available_providers_some_available(self) -> None:
+    def test_get_available_providers_some_available(self, mock_home) -> None:
         """Test get_available_providers returns only providers with available credentials."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         available = manager.get_available_providers()
         assert "storage" in available
@@ -273,9 +266,7 @@ class TestCredentialManager:
         {
             "NEXUS_USERNAME": "test_user",
             "NEXUS_PASSWORD": "test_pass",
-            "GITHUB_TOKEN": "test_token",
-            "BITBUCKET_USERNAME": "test_user",
-            "BITBUCKET_APP_PASSWORD": "test_pass",
+            "SSH_AUTH_SOCK": "/tmp/ssh-agent",
         },
     )
     def test_get_available_providers_all_available(self) -> None:
@@ -286,9 +277,11 @@ class TestCredentialManager:
         assert "github" in available
         assert "bitbucket" in available
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_available_providers_none_available(self) -> None:
+    def test_get_available_providers_none_available(self, mock_home) -> None:
         """Test get_available_providers returns empty list when no credentials are available."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         available = manager.get_available_providers()
         assert available == []
@@ -320,29 +313,32 @@ class TestCredentialManager:
         result = manager.get_missing_credentials_info("storage")
         assert result == []
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_missing_credentials_info_github_missing(self) -> None:
-        """Test get_missing_credentials_info returns missing GitHub token."""
+    def test_get_missing_credentials_info_github_missing(self, mock_home) -> None:
+        """Test get_missing_credentials_info returns missing SSH credentials."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         result = manager.get_missing_credentials_info("github")
-        assert "GITHUB_TOKEN" in result
+        assert "SSH private key" in result[0]
         assert len(result) == 1
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "test_token"})
+    @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     def test_get_missing_credentials_info_github_none_missing(self) -> None:
-        """Test get_missing_credentials_info returns empty list when GitHub token is available."""
+        """Test get_missing_credentials_info returns empty list when SSH agent is available."""
         manager = CredentialManager()
         result = manager.get_missing_credentials_info("github")
         assert result == []
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_missing_credentials_info_bitbucket_missing_all(self) -> None:
-        """Test get_missing_credentials_info returns all missing Bitbucket credentials."""
+    def test_get_missing_credentials_info_bitbucket_missing_all(self, mock_home) -> None:
+        """Test get_missing_credentials_info returns missing SSH credentials."""
+        mock_home.return_value = Path("/empty/home")
         manager = CredentialManager()
         result = manager.get_missing_credentials_info("bitbucket")
-        assert "BITBUCKET_USERNAME" in result
-        assert "BITBUCKET_APP_PASSWORD" in result
-        assert len(result) == 2
+        assert "SSH private key" in result[0]
+        assert len(result) == 1
 
     @patch.dict(os.environ, {}, clear=True)
     def test_get_missing_credentials_info_unknown_provider(self) -> None:

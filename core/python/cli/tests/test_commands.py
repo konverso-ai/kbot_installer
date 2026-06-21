@@ -72,9 +72,38 @@ class TestInstallerCommand:
             installer_dir,
             providers=None,
             storage_backend=StorageBackend.NEXUS,
+            verbose=False,
         )
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=True
+        )
+
+    @patch("cli.commands.InstallerService")
+    def test_installer_verbose_flag(self, mock_service_class) -> None:
+        """Test installer passes verbose flag to the service."""
+        mock_service = MagicMock()
+        mock_service_class.return_value = mock_service
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "installer",
+                "--installer-dir",
+                "/test/installer",
+                "--version",
+                "2025.03",
+                "--product",
+                "jira",
+                "--verbose",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_service_class.assert_called_once_with(
+            "/test/installer",
+            providers=None,
+            storage_backend=StorageBackend.NEXUS,
+            verbose=True,
         )
 
     @patch("cli.commands.InstallerService")
@@ -111,6 +140,7 @@ class TestInstallerCommand:
             installer_dir,
             providers=["github", "bitbucket"],
             storage_backend=StorageBackend.S3,
+            verbose=False,
         )
         assert "Using providers: github, bitbucket" in result.output
         assert "Using storage backend: s3" in result.output
@@ -190,6 +220,7 @@ class TestInstallerCommand:
             installer_dir,
             providers=None,
             storage_backend=StorageBackend.NEXUS,
+            verbose=False,
         )
         mock_service.install.assert_called_once_with(
             product, version, include_dependencies=False

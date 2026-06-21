@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -7,7 +8,7 @@ import aiofiles
 import httpx
 from auth.base import HttpAuthBase
 
-from utils.streaming_reader import download_and_extract_tar_gz
+from storage.download_utils import extract_tar_gz_archive
 
 
 class AsyncAPIClient:
@@ -184,4 +185,18 @@ class AsyncAPIClient:
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
 
-        await download_and_extract_tar_gz(self.__client, endpoint, Path(target_dir))
+        destination = Path(target_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            await self.download_file(temp_path, endpoint)
+            await asyncio.to_thread(
+                extract_tar_gz_archive,
+                Path(temp_path),
+                destination,
+            )
+        finally:
+            Path(temp_path).unlink(missing_ok=True)

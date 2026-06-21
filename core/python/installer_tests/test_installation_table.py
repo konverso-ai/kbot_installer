@@ -143,6 +143,7 @@ class TestInstallationTable:
         mock_table_class.return_value = mock_table
 
         # Add test results
+        installation_table.verbose = True
         installation_table.add_result("prod1", "github", "success")
         installation_table.add_result("prod2", "nexus", "error", "Connection failed")
         installation_table.add_result("prod3", "bitbucket", "skipped")
@@ -209,6 +210,15 @@ class TestInstallationTable:
         installation_table.add_result("prod2", "provider2", "skipped")
 
         summary = installation_table.get_summary()
+        assert summary == "Installation complete: nothing to install"
+
+    def test_get_summary_skipped_only_verbose(self) -> None:
+        """Test getting summary with skipped installations in verbose mode."""
+        installation_table = InstallationTable(verbose=True)
+        installation_table.add_result("prod1", "provider1", "skipped")
+        installation_table.add_result("prod2", "provider2", "skipped")
+
+        summary = installation_table.get_summary()
         assert summary == "Installation complete: 2 skipped"
 
     def test_get_summary_mixed_results(self, installation_table) -> None:
@@ -221,7 +231,7 @@ class TestInstallationTable:
         summary = installation_table.get_summary()
         assert "2 successful" in summary
         assert "1 failed" in summary
-        assert "1 skipped" in summary
+        assert "skipped" not in summary
 
     def test_get_summary_single_of_each(self, installation_table) -> None:
         """Test getting summary with one of each status."""
@@ -230,7 +240,7 @@ class TestInstallationTable:
         installation_table.add_result("prod3", "provider3", "skipped")
 
         summary = installation_table.get_summary()
-        assert summary == "Installation complete: 1 successful, 1 failed, 1 skipped"
+        assert summary == "Installation complete: 1 successful, 1 failed"
 
     def test_get_summary_order(self, installation_table) -> None:
         """Test that summary shows results in expected order (success, error, skipped)."""
@@ -239,8 +249,7 @@ class TestInstallationTable:
         installation_table.add_result("prod3", "provider3", "success")
 
         summary = installation_table.get_summary()
-        # Should be in order: successful, failed, skipped
-        assert summary == "Installation complete: 1 successful, 1 failed, 1 skipped"
+        assert summary == "Installation complete: 1 successful, 1 failed"
 
     def test_display_row_creation_with_error_message(self, installation_table) -> None:
         """Test that display creates rows correctly with error messages."""
@@ -287,6 +296,8 @@ class TestInstallationTable:
 
             mock_table = MagicMock()
             mock_table_class.return_value = mock_table
+
+            installation_table = InstallationTable(verbose=True)
 
             # Add skipped result
             installation_table.add_result("prod1", "github", "skipped")
@@ -346,6 +357,8 @@ class TestInstallationTable:
             mock_table = MagicMock()
             mock_table_class.return_value = mock_table
 
+            installation_table = InstallationTable(verbose=True)
+
             # Add results with different statuses
             installation_table.add_result("prod1", "github", "success")
             installation_table.add_result("prod2", "nexus", "error", "Error")
@@ -361,3 +374,37 @@ class TestInstallationTable:
             for call in calls:
                 # Each call should have a style parameter
                 assert "style" in call[1] or len(call[0]) >= 5
+
+    @patch("installer_support.installation_table.Console")
+    def test_complete_installation_skipped_not_displayed_without_verbose(
+        self, mock_console_class
+    ) -> None:
+        """Test that skipped products are hidden when verbose is disabled."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=False)
+
+        installation_table.complete_installation(
+            "prod1", "storage (cached)", "skipped"
+        )
+
+        mock_console.print.assert_not_called()
+        assert len(installation_table.results) == 1
+
+    @patch("installer_support.installation_table.Console")
+    def test_begin_and_complete_installation(self, mock_console_class) -> None:
+        """Test in-progress line is replaced by the final result."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=False)
+
+        installation_table.begin_installation("prod1")
+        installation_table.complete_installation("prod1", "bitbucket", "success")
+
+        assert mock_console.print.call_count == 2
+        progress_call = mock_console.print.call_args_list[0]
+        assert "In progress" in progress_call[0][0]
+        assert progress_call[1]["end"] == "\r"
+        final_call = mock_console.print.call_args_list[1]
+        assert "Success" in final_call[0][0]
+        assert "bitbucket" in final_call[0][0]

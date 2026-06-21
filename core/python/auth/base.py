@@ -1,7 +1,7 @@
 """Base model for authentication fields."""
 
 from abc import abstractmethod
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import Annotated, TypeAlias
 
 import httpx
@@ -30,3 +30,9 @@ class HttpAuthBase(BaseModel, httpx.Auth):
     @abstractmethod
     def remote_kwargs(self) -> RemoteKwargs:
         """Return keyword arguments for Dulwich remote operations."""
+
+    def git_cli_environment(
+        self, base_env: Mapping[str, str] | None = None
+    ) -> dict[str, str] | None:
+        """Return environment for git subprocess operations, if supported."""
+        return None

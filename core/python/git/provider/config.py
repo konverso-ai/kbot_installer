@@ -155,6 +155,10 @@ class ProvidersConfig(BaseModel):
         if provider_name not in self.provider:
             return None
 
+        provider_config = self.provider[provider_name]
+        if provider_config.auth_type == "ssh":
+            return create_credentials("ssh")
+
         return create_credentials(provider_name)
 
     def get_provider_config(self, provider_name: str) -> ProviderConfig | None:

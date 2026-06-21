@@ -94,6 +94,50 @@ def test_authflow_valid_yields_request_unchanged() -> None:
     assert compare("eq", authenticated, request)
 
 
+def test_gitsshcommand_valid_includes_key_file(tmp_path: Path) -> None:
+    ssh_dir = tmp_path / "ssh"
+    ssh_dir.mkdir()
+    key_file = ssh_dir / "id_ed25519"
+    key_file.write_text("fake-private-key")
+    auth = SshAuth(ssh_directory=ssh_dir)
+    assert compare(
+        "eq",
+        auth.git_ssh_command(),
+        f"ssh -o StrictHostKeyChecking=accept-new -i {key_file}",
+    )
+
+
+def test_gitsshcommand_valid_uses_agent_without_key_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
+    auth = SshAuth(use_agent=True)
+    assert compare(
+        "eq",
+        auth.git_ssh_command(),
+        "ssh -o StrictHostKeyChecking=accept-new",
+    )
+
+
+def test_gitclienvironment_valid_sets_git_ssh_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ssh_dir = tmp_path / "ssh"
+    ssh_dir.mkdir()
+    key_file = ssh_dir / "id_ed25519"
+    key_file.write_text("fake-private-key")
+    auth = SshAuth(ssh_directory=ssh_dir)
+    monkeypatch.setenv("CUSTOM_MARKER", "keep-me")
+    env = auth.git_cli_environment(base_env={"CUSTOM_MARKER": "keep-me"})
+    assert compare("eq", env["CUSTOM_MARKER"], "keep-me")
+    assert compare(
+        "eq",
+        env["GIT_SSH_COMMAND"],
+        f"ssh -o StrictHostKeyChecking=accept-new -i {key_file}",
+    )
+
+
 def test_contextmanager_valid_cleans_up_temp_key() -> None:
     auth = SshAuth(private_key=SecretStr("temp-key-content"))
     with auth:

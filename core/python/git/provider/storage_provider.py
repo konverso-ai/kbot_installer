@@ -37,16 +37,20 @@ class StorageProvider(ProviderBase):
         self,
         config: ProvidersConfig | None = None,
         auth: HttpAuthBase | None = None,
+        *,
+        quiet: bool = False,
     ) -> None:
         """Initialize the storage provider.
 
         Args:
             config: Full providers configuration. Defaults to DEFAULT_PROVIDERS_CONFIG.
             auth: HTTP authentication for the Nexus backend, when applicable.
+            quiet: When True, suppress informational download output.
 
         """
         self._config = config or DEFAULT_PROVIDERS_CONFIG
         self._auth = auth
+        self._quiet = quiet
         self._backend = self._config.storage.backend
         self.branch_used: str | None = None
         self._storage = self._create_storage()
@@ -77,7 +81,7 @@ class StorageProvider(ProviderBase):
         key = self._build_object_key(repository_name, branch_to_use)
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(
+        self._log(
             "Downloading repository '%s' from %s storage (key: %s)",
             repository_name,
             self._backend,
@@ -96,7 +100,7 @@ class StorageProvider(ProviderBase):
             raise ProviderError(error_msg) from e
 
         self.branch_used = branch_to_use
-        logger.info(
+        self._log(
             "Successfully cloned repository '%s' to %s",
             repository_name,
             target_path,
@@ -133,7 +137,7 @@ class StorageProvider(ProviderBase):
     def check_remote_repository_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists on the configured storage backend."""
         key = self._build_object_key(repository_name, self.branch)
-        logger.info(
+        self._log(
             "Checking if remote repository exists on %s storage: %s",
             self._backend,
             repository_name,
@@ -157,3 +161,10 @@ class StorageProvider(ProviderBase):
     def get_branch(self) -> str:
         """Get the branch of the provider."""
         return self.branch_used or self.branch
+
+    def _log(self, message: str, *args: object) -> None:
+        """Log an informational message, respecting quiet mode."""
+        if self._quiet:
+            logger.debug(message, *args)
+        else:
+            logger.info(message, *args)

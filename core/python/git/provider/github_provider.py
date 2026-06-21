@@ -30,6 +30,7 @@ class GithubProvider(GitMixin):
     """
 
     name = "github"
+    ssh_host = "github.com"
     base_url = "https://{name}.com/{account_name}/{repository_name}.git"
 
     def __init__(
@@ -84,12 +85,7 @@ class GithubProvider(GitMixin):
         if repository_name is None:
             msg = "repository_name is required"
             raise ValueError(msg)
-        repository_url = self.base_url.format(
-            name=self.name,
-            account_name=self.account_name,
-            repository_name=repository_name,
-        )
-        # Use the parent clone_and_checkout method which handles authentication
+        repository_url = self.build_repository_url(repository_name)
         super().clone_and_checkout(
             target_path, branch, repository_url=repository_url
         )
@@ -106,11 +102,7 @@ class GithubProvider(GitMixin):
 
         """
         try:
-            repository_url = self.base_url.format(
-                name=self.name,
-                account_name=self.account_name,
-                repository_name=repository_name,
-            )
+            repository_url = self.build_repository_url(repository_name)
             # Use the versioner to check if repository exists
             versioner = self._get_versioner()
             return versioner.remote_exists(repository_url)

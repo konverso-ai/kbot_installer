@@ -34,6 +34,7 @@ class TestDulwichVersioner:
             "username": "user",
             "password": "pass",
         }
+        mock_auth.git_cli_environment.return_value = None
         return mock_auth
 
     def test_inherits_from_versioner_base(self) -> None:
@@ -70,6 +71,7 @@ class TestDulwichVersioner:
             "username": "git",
             "key_filename": "/priv",
         }
+        mock_auth.git_cli_environment.return_value = None
         versioner = DulwichVersioner(auth=mock_auth)
         assert versioner._get_remote_kwargs() == {
             "username": "git",
@@ -143,6 +145,56 @@ class TestDulwichVersioner:
                 username="user",
                 password="pass",
             )
+
+    def test_clone_with_ssh_auth_uses_git_cli(self) -> None:
+        """Test SSH authentication clones through the git CLI."""
+        from auth.factory import create_auth
+
+        auth = create_auth("ssh", username="git")
+        versioner = DulwichVersioner(auth=auth)
+        git_env = auth.git_cli_environment()
+        with (
+            patch.object(versioner, "_clone_with_git_cli") as mock_git_clone,
+            patch("git.versioner.dulwich_versioner.porcelain.clone") as mock_dulwich_clone,
+        ):
+            versioner.clone(
+                "git@github.com:test/repo.git",
+                "/tmp/test",
+                branch="main",
+                depth=1,
+            )
+            mock_git_clone.assert_called_once_with(
+                "git@github.com:test/repo.git",
+                Path("/tmp/test"),
+                git_env,
+                branch="main",
+                depth=1,
+            )
+            mock_dulwich_clone.assert_not_called()
+
+    def test_list_remote_branches_with_ssh_auth_uses_git_cli(self) -> None:
+        """Test SSH authentication lists branches through the git CLI."""
+        from auth.factory import create_auth
+
+        auth = create_auth("ssh", username="git")
+        versioner = DulwichVersioner(auth=auth)
+        git_env = auth.git_cli_environment()
+        with (
+            patch.object(
+                versioner,
+                "_list_remote_branches_with_git_cli",
+                return_value=["main"],
+            ) as mock_git_ls,
+            patch("git.versioner.dulwich_versioner.porcelain.ls_remote") as mock_dulwich_ls,
+        ):
+            assert versioner.list_remote_branches(
+                "git@github.com:test/repo.git"
+            ) == ["main"]
+            mock_git_ls.assert_called_once_with(
+                "git@github.com:test/repo.git",
+                git_env,
+            )
+            mock_dulwich_ls.assert_not_called()
 
     def test_clone_failure(self, versioner: DulwichVersioner) -> None:
         """Test clone wraps Dulwich errors."""

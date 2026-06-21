@@ -1,9 +1,12 @@
 """Async Nexus repository service."""
 
+import asyncio
+import tempfile
 from pathlib import Path
 
 import httpx
 from auth.base import HttpAuthBase
+from storage.download_utils import extract_tar_gz_archive
 from utils.async_api_client import AsyncAPIClient
 
 from service.errors import NexusHttpError
@@ -106,11 +109,18 @@ class NexusService:
         if not repository_path.startswith("/"):
             repository_path = f"/{repository_path}"
 
+        target = Path(target_dir)
+        target.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
+            temp_path = temp_file.name
+
         try:
-            async with AsyncAPIClient(self._base_url, prefix="", auth=self._auth) as client:
-                await client.download_and_untar_file(target_dir, f"repository{repository_path}")
-        except httpx.HTTPStatusError as exc:
-            raise NexusHttpError(
-                exc.response.status_code,
-                f"Failed to download '{repository_path}'",
-            ) from exc
+            await self.get_file(repository_path, temp_path)
+            await asyncio.to_thread(
+                extract_tar_gz_archive,
+                Path(temp_path),
+                target,
+            )
+        finally:
+            Path(temp_path).unlink(missing_ok=True)

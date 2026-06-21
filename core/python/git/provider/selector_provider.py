@@ -47,6 +47,8 @@ class SelectorProvider(ProviderBase):
         providers: list[str],
         base_url: str = "",
         config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,
+        *,
+        quiet: bool = False,
     ) -> None:
         """Initialize the selector provider.
 
@@ -54,11 +56,13 @@ class SelectorProvider(ProviderBase):
             providers: List of provider names to try in order (e.g., ["storage", "github", "bitbucket"]).
             base_url: Base URL (not used for selector, defaults to empty string).
             config: Configuration for all providers. Defaults to DEFAULT_PROVIDERS_CONFIG.
+            quiet: When True, suppress informational clone output.
 
         """
         self.base_url = base_url
         self.providers = providers
         self.config = config
+        self.quiet = quiet
         self.credential_manager = CredentialManager(config)
         # Store the branch that was successfully used
         self.branch_used: str | None = None
@@ -104,6 +108,7 @@ class SelectorProvider(ProviderBase):
 
         if provider_name == "storage":
             params["config"] = self.config
+            params["quiet"] = self.quiet
 
         # Add authentication if available
         auth = self.credential_manager.get_auth_for_provider(provider_name)
@@ -266,10 +271,16 @@ class SelectorProvider(ProviderBase):
         if "Authentication failed" in error_message or "auth" in error_message.lower():
             return error_message
 
+        # Preserve Git LFS and URL-scheme errors (colon splitting breaks ssh/http URLs)
+        if "LFS URL" in error_message or "Invalid LFS" in error_message:
+            return error_message
+
         # For other errors, take the last meaningful part
         parts = error_message.split(":")
         if len(parts) > 1:
-            return parts[-1].strip()
+            tail = parts[-1].strip()
+            if len(tail) > 3:
+                return tail
         return error_message
 
     @override
@@ -673,7 +684,8 @@ class SelectorProvider(ProviderBase):
                 # Store the branch that was successfully used
                 self.branch_used = branch_used
                 results.append((provider_name, "✅ SUCCESS", success_msg))
-                logger.info(
+                log = logger.debug if self.quiet else logger.info
+                log(
                     "✅ Successfully cloned repository '%s' using provider: %s (branch: %s)",
                     repository_identifier,
                     provider_name,

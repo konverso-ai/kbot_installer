@@ -57,6 +57,22 @@ class TestGithubProvider:
         assert provider._get_auth() is None
 
     @patch("git.provider.github_provider.GitMixin.clone_and_checkout")
+    def test_clone_and_checkout_uses_ssh_url_with_ssh_auth(
+        self, mock_clone_and_checkout
+    ) -> None:
+        """Test that SSH auth uses a git@ repository URL."""
+        from auth.factory import create_auth
+
+        provider = GithubProvider("test_account", create_auth("ssh", username="git"))
+        provider.clone_and_checkout("/test/path", "main", repository_name="test_repo")
+
+        mock_clone_and_checkout.assert_called_once_with(
+            "/test/path",
+            "main",
+            repository_url="git@github.com:test_account/test_repo.git",
+        )
+
+    @patch("git.provider.github_provider.GitMixin.clone_and_checkout")
     def test_clone_and_checkout_calls_parent_clone_and_checkout(
         self, mock_clone_and_checkout
     ) -> None:

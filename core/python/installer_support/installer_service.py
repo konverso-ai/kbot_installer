@@ -58,6 +58,8 @@ class InstallerService:
         installer_dir: str | Path,
         providers: list[str] | None = None,
         storage_backend: StorageBackend | None = None,
+        *,
+        verbose: bool = False,
     ) -> None:
         """Initialize the installer service.
 
@@ -66,10 +68,12 @@ class InstallerService:
             providers: List of provider names to try. Defaults to ["storage", "github", "bitbucket"].
             storage_backend: Storage backend override for the storage provider.
                 Defaults to the value from the providers configuration file.
+            verbose: When True, show skipped products and detailed provider output.
 
         """
         self.installer_dir = Path(installer_dir)
         self.providers = providers or ["storage", "github", "bitbucket"]
+        self.verbose = verbose
         config = _providers_config_with_storage_backend(storage_backend)
 
         # Initialize services
@@ -77,8 +81,9 @@ class InstallerService:
             name="selector",
             providers=self.providers,
             config=config,
+            quiet=not verbose,
         )
-        self.installation_table = InstallationTable()
+        self.installation_table = InstallationTable(verbose=verbose)
 
     def install(
         self,
@@ -303,18 +308,17 @@ class InstallerService:
         logger.debug(
             "Cloning repository for product: %s (branch: %s)", product_name, branch
         )
+        self.installation_table.begin_installation(product_name)
         self.selector_provider.clone_and_checkout(
             product_dir, branch, repository_name=product_name
         )
 
-        # Add to installation table since this is a successful installation
         # Use the actual provider name that was used for cloning (not "selector")
         actual_provider_name = self.selector_provider.get_name()
-        self.installation_table.add_result(
+        self.installation_table.complete_installation(
             product_name=product_name,
             provider_name=actual_provider_name,
             status="success",
-            display_immediately=True,
         )
 
     def _install_dependencies_recursively(
@@ -348,11 +352,10 @@ class InstallerService:
                         )
                         # Detect the provider that was used for this cached product
                         cached_provider = self._detect_cached_provider(dep_name)
-                        self.installation_table.add_result(
+                        self.installation_table.complete_installation(
                             product_name=dep_name,
                             provider_name=f"{cached_provider} (cached)",
                             status="skipped",
-                            display_immediately=True,
                         )
                     else:
                         logger.info("Installing product: %s", dep_name)
@@ -571,11 +574,10 @@ class InstallerService:
         # Skip self-installation
         if product.name == "kbot_installer":
             logger.info("Skipping self-installation of kbot_installer")
-            self.installation_table.add_result(
+            self.installation_table.complete_installation(
                 product_name=product.name,
                 provider_name="self",
                 status="skipped",
-                display_immediately=True,
             )
             return
 
@@ -595,16 +597,16 @@ class InstallerService:
 
         # Clone repository
         logger.debug("Cloning %s (branch: %s) to %s", product.name, branch, product_dir)
+        self.installation_table.begin_installation(product.name)
         self.selector_provider.clone_and_checkout(
             product_dir, branch, repository_name=product.name
         )
 
-        # Add to installation table
-        self.installation_table.add_result(
+        actual_provider_name = self.selector_provider.get_name()
+        self.installation_table.complete_installation(
             product_name=product.name,
-            provider_name="selector",
+            provider_name=actual_provider_name,
             status="success",
-            display_immediately=True,
         )
 
         logger.info("Successfully installed product: %s", product.name)

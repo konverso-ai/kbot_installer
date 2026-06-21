@@ -6,6 +6,7 @@ operations using Dulwich for any git repository.
 
 import logging
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, cast
 
@@ -89,6 +90,82 @@ class DulwichVersioner(StrReprMixin):
     def _dulwich_remote_kwargs(self) -> dict[str, Any]:
         """Return remote kwargs typed for Dulwich porcelain calls."""
         return cast(dict[str, Any], self._get_remote_kwargs())
+
+    def _git_cli_environment(self) -> dict[str, str] | None:
+        """Return git subprocess environment from auth, when supported."""
+        auth = self._get_auth()
+        if auth is None:
+            return None
+        return auth.git_cli_environment()
+
+    def _clone_with_git_cli(
+        self,
+        repository_url: str,
+        target_path: Path,
+        env: dict[str, str],
+        *,
+        branch: str | None = None,
+        depth: int | None = None,
+    ) -> None:
+        """Clone a repository with the system git CLI."""
+        cmd = ["git", "clone", "--quiet"]
+        if branch is not None:
+            cmd.extend(["--branch", branch])
+        if depth is not None:
+            cmd.extend(["--depth", str(depth)])
+        cmd.extend([repository_url, str(target_path)])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        except FileNotFoundError as e:
+            error_msg = "git executable not found; required for SSH repository clones"
+            raise VersionerError(error_msg) from e
+
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "").strip()
+            error_msg = f"Failed to clone repository from {repository_url}: {details}"
+            raise VersionerError(error_msg)
+
+    def _list_remote_branches_with_git_cli(
+        self, repository_url: str, env: dict[str, str]
+    ) -> list[str]:
+        """List remote branches with ``git ls-remote``."""
+        cmd = ["git", "ls-remote", "--heads", repository_url]
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        except FileNotFoundError as e:
+            error_msg = (
+                "git executable not found; required for SSH repository operations"
+            )
+            raise VersionerError(error_msg) from e
+
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "").strip()
+            error_msg = (
+                f"Failed to list remote branches for {repository_url}: {details}"
+            )
+            raise VersionerError(error_msg)
+
+        branches: list[str] = []
+        for line in result.stdout.splitlines():
+            if not line.strip():
+                continue
+            ref = line.split("\t")[-1]
+            if ref.startswith("refs/heads/"):
+                branches.append(ref.removeprefix("refs/heads/"))
+        return sorted(set(branches))
 
     def _get_repository(self, repository_path: str | Path) -> Repo:
         """Get a Dulwich Repo object from the given path.
@@ -362,6 +439,17 @@ class DulwichVersioner(StrReprMixin):
                 )
                 raise VersionerError(error_msg)
 
+            git_env = self._git_cli_environment()
+            if git_env is not None:
+                self._clone_with_git_cli(
+                    repository_url,
+                    target_path,
+                    git_env,
+                    branch=branch,
+                    depth=depth,
+                )
+                return
+
             remote_kwargs = self._dulwich_remote_kwargs()
             clone_kwargs = dict(remote_kwargs)
             if branch is not None:
@@ -378,6 +466,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to clone repository from {repository_url}: {e}"
             raise VersionerError(error_msg) from e
 
+    @override
     def list_remote_branches(self, repository_url: str) -> list[str]:
         """List branch names available on the remote repository.
 
@@ -392,6 +481,10 @@ class DulwichVersioner(StrReprMixin):
 
         """
         try:
+            git_env = self._git_cli_environment()
+            if git_env is not None:
+                return self._list_remote_branches_with_git_cli(repository_url, git_env)
+
             remote_kwargs = self._dulwich_remote_kwargs()
             refs = porcelain.ls_remote(repository_url, **remote_kwargs)
         except _DULWICH_ERRORS as e:
@@ -399,6 +492,8 @@ class DulwichVersioner(StrReprMixin):
                 f"Failed to list remote branches for {repository_url}: {e}"
             )
             raise VersionerError(error_msg) from e
+        except VersionerError:
+            raise
         except Exception as e:
             error_msg = (
                 f"Failed to list remote branches for {repository_url}: {e}"
@@ -654,8 +749,12 @@ class DulwichVersioner(StrReprMixin):
 
         """
         try:
-            remote_kwargs = self._dulwich_remote_kwargs()
-            porcelain.ls_remote(repository_url, **remote_kwargs)
+            git_env = self._git_cli_environment()
+            if git_env is not None:
+                self._list_remote_branches_with_git_cli(repository_url, git_env)
+            else:
+                remote_kwargs = self._dulwich_remote_kwargs()
+                porcelain.ls_remote(repository_url, **remote_kwargs)
         except Exception:
             logger.debug("Repository does not exist or is not accessible")
             return False

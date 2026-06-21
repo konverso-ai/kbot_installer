@@ -479,8 +479,11 @@ class TestInstallerService:
                     service.selector_provider, "clone_and_checkout"
                 ) as mock_clone,
                 patch.object(
-                    service.installation_table, "add_result"
-                ) as mock_add_result,
+                    service.installation_table, "begin_installation"
+                ) as mock_begin,
+                patch.object(
+                    service.installation_table, "complete_installation"
+                ) as mock_complete,
                 patch.object(
                     service.selector_provider, "get_name", return_value="selector"
                 ),
@@ -489,12 +492,12 @@ class TestInstallerService:
                 service._load_product_from_repository("test-product", "1.0.0")
 
                 # Verify
+                mock_begin.assert_called_once_with("test-product")
                 mock_clone.assert_called_once()
-                mock_add_result.assert_called_once_with(
+                mock_complete.assert_called_once_with(
                     product_name="test-product",
                     provider_name="selector",
                     status="success",
-                    display_immediately=True,
                 )
 
     def test_install_dependencies_recursively_no_dependencies(self) -> None:
@@ -534,8 +537,11 @@ class TestInstallerService:
                 patch.object(service, "_is_product_installed", return_value=False),
                 patch.object(service, "_detect_cached_provider", return_value="storage"),
                 patch.object(
-                    service.installation_table, "add_result"
-                ) as mock_add_result,
+                    service.installation_table, "begin_installation"
+                ) as mock_begin,
+                patch.object(
+                    service.installation_table, "complete_installation"
+                ) as mock_complete,
                 patch(
                     "installer_support.installer_service.version_to_branch",
                     return_value="release-1.0.0",
@@ -549,7 +555,8 @@ class TestInstallerService:
 
                 # Verify
                 assert mock_clone.call_count == 2  # Called for each dependency
-                assert mock_add_result.call_count == 2  # Called for each dependency
+                assert mock_begin.call_count == 2
+                assert mock_complete.call_count == 2
 
     def test_install_dependencies_recursively_skip_installed(self) -> None:
         """Test installing dependencies skips already installed products."""
@@ -573,8 +580,8 @@ class TestInstallerService:
                 patch.object(service, "_is_product_installed", return_value=True),
                 patch.object(service, "_detect_cached_provider", return_value="github"),
                 patch.object(
-                    service.installation_table, "add_result"
-                ) as mock_add_result,
+                    service.installation_table, "complete_installation"
+                ) as mock_complete,
                 patch.object(service, "_load_product_from_repository") as mock_load,
             ):
                 # Test
@@ -582,11 +589,10 @@ class TestInstallerService:
 
                 # Verify
                 mock_load.assert_not_called()  # Should not load already installed product
-                mock_add_result.assert_called_once_with(
+                mock_complete.assert_called_once_with(
                     product_name="dep1",
                     provider_name="github (cached)",
                     status="skipped",
-                    display_immediately=True,
                 )
 
     def test_get_product_success(self) -> None:
@@ -775,17 +781,16 @@ class TestInstallerService:
             mock_product.name = "kbot_installer"
 
             with patch.object(
-                service.installation_table, "add_result"
-            ) as mock_add_result:
+                service.installation_table, "complete_installation"
+            ) as mock_complete:
                 # Test
                 service._install_single_product(mock_product, "1.0.0")
 
                 # Verify
-                mock_add_result.assert_called_once_with(
+                mock_complete.assert_called_once_with(
                     product_name="kbot_installer",
                     provider_name="self",
                     status="skipped",
-                    display_immediately=True,
                 )
 
     def test_check_product_needs_repair_missing(self) -> None:

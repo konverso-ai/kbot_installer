@@ -51,7 +51,12 @@ class TestSelectorProvider:
 
             result = selector._create_provider_with_credentials("storage")
 
-            mock_create.assert_called_once_with(name="storage", config=selector.config, auth=ANY)
+            mock_create.assert_called_once_with(
+                name="storage",
+                config=selector.config,
+                quiet=False,
+                auth=ANY,
+            )
             assert result is mock_provider
 
     def test_create_provider_with_defaults_github(self) -> None:

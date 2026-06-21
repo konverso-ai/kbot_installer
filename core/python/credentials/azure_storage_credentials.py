@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal, TypeAlias, cast
 
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import override
 
 from credentials.base import ClientSecretCredentialsBase
 from credentials.factory import create_credentials
@@ -24,6 +25,7 @@ class AzureStorageCredentials(BaseSettings):
     credential_type: AzureCredentialType
     _client_secret: ClientSecretCredentialsBase = PrivateAttr()
 
+    @override
     def model_post_init(self, __context: Any) -> None:
         """Initialize nested client-secret credentials."""
         self._client_secret = cast(

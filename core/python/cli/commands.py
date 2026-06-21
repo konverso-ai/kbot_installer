@@ -377,6 +377,13 @@ def add(
     show_default=True,
     help="Storage backend to use when the storage provider is selected.",
 )
+@click.option(
+    "-V",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show detailed output (skipped products, provider download details).",
+)
 def installer(
     installer_dir: str,
     version: str,
@@ -385,6 +392,7 @@ def installer(
     no_rec: bool = False,
     provider: tuple[str, ...] = (),
     storage: str = StorageBackend.NEXUS.value,
+    verbose: bool = False,
 ) -> None:
     """Install a kbot product with specified version.
 
@@ -408,6 +416,7 @@ def installer(
             installer_dir,
             providers=selected_providers,
             storage_backend=storage_backend,
+            verbose=verbose,
         )
 
         click.echo(

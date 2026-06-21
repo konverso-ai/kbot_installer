@@ -3,7 +3,7 @@
 import os
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Annotated, TypeAlias
@@ -91,6 +91,22 @@ class SshAuth(AuthMixin):
 
     def _ssh_command(self) -> str:
         return f"ssh -o StrictHostKeyChecking={self.strict_host_key_checking}"
+
+    def git_ssh_command(self) -> str:
+        """Build the SSH command used as ``GIT_SSH_COMMAND`` for git subprocesses."""
+        command = self._ssh_command()
+        if not self.use_agent:
+            command = f"{command} -i {self._resolve_key_path()}"
+        return command
+
+    @override
+    def git_cli_environment(
+        self, base_env: Mapping[str, str] | None = None
+    ) -> dict[str, str]:
+        """Return a copy of ``base_env`` with ``GIT_SSH_COMMAND`` configured."""
+        env = dict(base_env if base_env is not None else os.environ)
+        env["GIT_SSH_COMMAND"] = self.git_ssh_command()
+        return env
 
     def _resolve_key_path(self) -> Path:
         if self._key_path is not None:
