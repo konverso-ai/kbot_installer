@@ -29,13 +29,14 @@ class BucketStorage(ABC):
         """
 
     @abstractmethod
-    def set(self, key: str, value: Any, encoding: str = "utf-8") -> None:
+    def set(self, key: str, value: Any, encoding: str = "utf-8", raise_on_status=False) -> None:
         """Upload an object to the storage.
 
         Args:
             key: Destination object key.
             value: Object content. Strings are encoded before upload.
             encoding: Character encoding used when ``value`` is a string.
+            raise_on_status: If True, then raise an exception in case of failure. If False, returns None in case of failure
         """
 
     @abstractmethod

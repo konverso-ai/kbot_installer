@@ -208,7 +208,7 @@ class AmazonS3(BucketStorage):
             storage_prefix += '/'
         return storage_prefix
 
-    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8") -> None:
+    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8", raise_on_status=False) -> None:
         """Upload an object to AWS S3.
 
         Args:
@@ -228,6 +228,8 @@ class AmazonS3(BucketStorage):
             log.debug("Object '%s' uploaded successfully to AWS S3.", key)
         except Exception as e:
             log.error("Upload failed for '%s': %s", key, e, exc_info=True)
+            if raise_on_status:
+                raise
 
     def get(self, key: str, encoding: str = "utf-8") -> str | None:
         """Retrieve and decode an object from AWS S3.

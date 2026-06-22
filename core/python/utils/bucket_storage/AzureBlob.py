@@ -150,7 +150,7 @@ class AzureBlob(BucketStorage):
             return self.container_client
         return self._get_container_client(container_name=self.container_name)
 
-    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8") -> None:
+    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8", raise_on_status=False) -> None:
         """Upload an object to Azure Blob Storage.
 
         Args:
@@ -170,6 +170,8 @@ class AzureBlob(BucketStorage):
             log.debug("Object '%s' uploaded successfully to Azure Blob Storage.", key)
         except Exception as e:
             log.error("Upload failed for '%s': %s", key, e, exc_info=True)
+            if raise_on_status:
+                raise
 
     def get(self, key: str, encoding: str = "utf-8") -> str | None:
         """Retrieve and decode an object from Azure Blob Storage.
