@@ -437,7 +437,7 @@ def download(
         else:
             click.echo("Loading product definitions (skipping dependencies)...")
 
-        service.install(product, version, include_dependencies=include_dependencies)
+        service.download(product, version, include_dependencies=include_dependencies)
 
         # Display summary (results are already displayed during installation)
         installation_table = service.get_installation_table()

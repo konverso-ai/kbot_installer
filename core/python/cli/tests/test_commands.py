@@ -74,7 +74,7 @@ class TestDownloadCommand:
             storage_backend=StorageBackend.NEXUS,
             verbose=False,
         )
-        mock_service.install.assert_called_once_with(
+        mock_service.download.assert_called_once_with(
             product, version, include_dependencies=True
         )
 
@@ -222,7 +222,7 @@ class TestDownloadCommand:
             storage_backend=StorageBackend.NEXUS,
             verbose=False,
         )
-        mock_service.install.assert_called_once_with(
+        mock_service.download.assert_called_once_with(
             product, version, include_dependencies=False
         )
 
@@ -231,7 +231,7 @@ class TestDownloadCommand:
         """Test error handling in installer command."""
         # Setup mock to raise exception
         mock_service = MagicMock()
-        mock_service.install.side_effect = Exception("Test error")
+        mock_service.download.side_effect = Exception("Test error")
         mock_service_class.return_value = mock_service
 
         # Test data

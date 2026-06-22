@@ -286,7 +286,7 @@ class TestInstallerService:
                 ) as mock_ensure,
             ):
                 # Test
-                service.install("test-product", "1.0.0", include_dependencies=True)
+                service.download("test-product", "1.0.0", include_dependencies=True)
 
                 # Verify
                 mock_ensure.assert_called_once_with(service.installer_dir)
@@ -306,7 +306,7 @@ class TestInstallerService:
                 ) as mock_ensure,
             ):
                 # Test
-                service.install("test-product", "1.0.0", include_dependencies=False)
+                service.download("test-product", "1.0.0", include_dependencies=False)
 
                 # Verify
                 mock_ensure.assert_called_once_with(service.installer_dir)

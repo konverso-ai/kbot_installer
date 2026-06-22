@@ -85,7 +85,7 @@ class InstallerService:
         )
         self.installation_table = InstallationTable(verbose=verbose)
 
-    def install(
+    def download(
         self,
         product_name: str,
         version: str,
