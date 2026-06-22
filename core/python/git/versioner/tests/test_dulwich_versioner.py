@@ -146,11 +146,12 @@ class TestDulwichVersioner:
                 password="pass",
             )
 
+    @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     def test_clone_with_ssh_auth_uses_git_cli(self) -> None:
         """Test SSH authentication clones through the git CLI."""
         from auth.factory import create_auth
 
-        auth = create_auth("ssh", username="git")
+        auth = create_auth("ssh", username="git", use_agent=True)
         versioner = DulwichVersioner(auth=auth)
         git_env = auth.git_cli_environment()
         with (
@@ -172,11 +173,12 @@ class TestDulwichVersioner:
             )
             mock_dulwich_clone.assert_not_called()
 
+    @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     def test_list_remote_branches_with_ssh_auth_uses_git_cli(self) -> None:
         """Test SSH authentication lists branches through the git CLI."""
         from auth.factory import create_auth
 
-        auth = create_auth("ssh", username="git")
+        auth = create_auth("ssh", username="git", use_agent=True)
         versioner = DulwichVersioner(auth=auth)
         git_env = auth.git_cli_environment()
         with (

@@ -22,7 +22,16 @@ class SshCredentials:
             "SSH private key in ~/.ssh (id_ed25519, id_rsa, ...) or SSH_AUTH_SOCK",
         ]
 
-    def auth_kwargs(self) -> dict[str, str] | None:
+    def auth_kwargs(self) -> dict[str, str | bool] | None:
         if self.missing_env_vars():
             return None
-        return {"username": "git"}
+
+        kwargs: dict[str, str | bool] = {"username": "git"}
+        if os.environ.get("SSH_AUTH_SOCK"):
+            ssh_dir = Path.home() / ".ssh"
+            has_local_key = any(
+                (ssh_dir / name).is_file() for name in DEFAULT_KEY_FILENAMES
+            )
+            if not has_local_key:
+                kwargs["use_agent"] = True
+        return kwargs

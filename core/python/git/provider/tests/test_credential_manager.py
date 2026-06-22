@@ -152,12 +152,16 @@ class TestCredentialManager:
 
         assert result is None
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
-    def test_get_auth_for_provider_github_success(self, mock_create_auth) -> None:
+    def test_get_auth_for_provider_github_success(
+        self, mock_create_auth, mock_home
+    ) -> None:
         """Test get_auth_for_provider returns SSH auth for GitHub."""
+        mock_home.return_value = Path("/tmp")
         manager = CredentialManager()
         mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
@@ -166,7 +170,9 @@ class TestCredentialManager:
 
         assert result is not None
         assert isinstance(result, HttpAuthBase)
-        mock_create_auth.assert_called_once_with("ssh", username="git")
+        mock_create_auth.assert_called_once_with(
+            "ssh", username="git", use_agent=True
+        )
 
     @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)
@@ -192,12 +198,16 @@ class TestCredentialManager:
 
         assert result is None
 
+    @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
     @patch(
         "git.provider.credential_manager.create_auth"
     )
-    def test_get_auth_for_provider_bitbucket_success(self, mock_create_auth) -> None:
+    def test_get_auth_for_provider_bitbucket_success(
+        self, mock_create_auth, mock_home
+    ) -> None:
         """Test get_auth_for_provider returns SSH auth for Bitbucket."""
+        mock_home.return_value = Path("/tmp")
         manager = CredentialManager()
         mock_auth = MagicMock(spec=HttpAuthBase)
         mock_create_auth.return_value = mock_auth
@@ -206,7 +216,9 @@ class TestCredentialManager:
 
         assert result is not None
         assert isinstance(result, HttpAuthBase)
-        mock_create_auth.assert_called_once_with("ssh", username="git")
+        mock_create_auth.assert_called_once_with(
+            "ssh", username="git", use_agent=True
+        )
 
     @patch("credentials.ssh_credentials.Path.home")
     @patch.dict(os.environ, {}, clear=True)

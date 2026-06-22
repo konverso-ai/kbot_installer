@@ -320,10 +320,15 @@ class SelectorProvider(ProviderBase):
         if not hasattr(provider_config, "branches"):
             return [branch] if branch else []
 
-        if branch:
-            return [branch]
+        configured_branches = (
+            list(provider_config.branches) if provider_config.branches else []
+        )
+        if not branch:
+            return configured_branches
 
-        return list(provider_config.branches) if provider_config.branches else []
+        # Keep requested branch first, then provider fallbacks without duplicates.
+        ordered_branches = [branch, *configured_branches]
+        return list(dict.fromkeys(ordered_branches))
 
     def _try_clone_with_branch(
         self,

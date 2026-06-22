@@ -431,15 +431,27 @@ class TestSelectorProvider:
         # Before clone, branch_used is None, so should return empty string
         assert selector.get_branch() == ""
 
-    def test_get_branches_to_try_explicit_branch_only(self) -> None:
-        """Test explicit branch does not append provider fallback branches."""
+    def test_get_branches_to_try_explicit_branch_includes_provider_fallbacks(self) -> None:
+        """Test explicit branch keeps configured provider fallbacks."""
         selector = SelectorProvider(["github"])
-        assert selector._get_branches_to_try("github", "master") == ["master"]
+        assert selector._get_branches_to_try("github", "master") == [
+            "master",
+            "main",
+            "dev",
+        ]
 
     def test_get_branches_to_try_default_uses_config_branches(self) -> None:
         """Test missing branch uses configured provider branches."""
         selector = SelectorProvider(["github"])
         assert selector._get_branches_to_try("github", None) == ["main", "dev"]
+
+    def test_get_branches_to_try_explicit_branch_deduplicates(self) -> None:
+        """Test explicit branch is not duplicated when already in configured fallbacks."""
+        selector = SelectorProvider(["bitbucket"])
+        assert selector._get_branches_to_try("bitbucket", "master") == [
+            "master",
+            "dev",
+        ]
 
     @patch("git.provider.selector_provider.create_provider")
     def test_clone_git_fails_fast_when_branch_missing_on_remote(
@@ -455,7 +467,7 @@ class TestSelectorProvider:
             patch.object(
                 provider,
                 "list_remote_branches",
-                return_value=["master", "dev"],
+                return_value=["hotfix"],
             ),
             patch.object(provider, "clone_and_checkout") as mock_clone,
             patch(
@@ -468,7 +480,10 @@ class TestSelectorProvider:
             selector = SelectorProvider(["bitbucket"])
             with pytest.raises(
                 ProviderError,
-                match="Branch\\(es\\) 'release-2025.02-dev' not found on remote repository",
+                match=(
+                    "Branch\\(es\\) 'release-2025.02-dev', 'master', 'dev' "
+                    "not found on remote repository"
+                ),
             ):
                 selector.clone_and_checkout(
                     "/tmp/test",
