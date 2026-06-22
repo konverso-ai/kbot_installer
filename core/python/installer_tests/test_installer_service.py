@@ -385,7 +385,7 @@ class TestInstallerService:
 
                 # Verify
                 assert result == "tree output"
-                mock_renderer.render_uv_tree_style.assert_called_once_with(mock_graph)
+                mock_renderer.render_uv_tree_style.assert_called_once_with(mock_graph, verbose=False)
 
     def test_repair_success(self) -> None:
         """Test successful repair operation."""

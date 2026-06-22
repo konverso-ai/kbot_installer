@@ -130,7 +130,7 @@ class InstallerService:
 
         logger.info("Installation completed for product '%s'", product_name)
 
-    def list_products(self, *, as_tree: bool = False) -> str:
+    def list_products(self, *, as_tree: bool = False, verbose: bool = False) -> str:
         """List installed products.
 
         This method corresponds to the 'list' CLI command.
@@ -140,6 +140,7 @@ class InstallerService:
 
         Args:
             as_tree: Whether to show as dependency tree.
+            verbose: Show all subtrees even if already displayed.
 
         Returns:
             Formatted string listing products.
@@ -161,7 +162,7 @@ class InstallerService:
             # Create dependency graph and render as tree
             dependency_graph = DependencyGraph(products)
             renderer = DependencyTreeRenderer()
-            return renderer.render_uv_tree_style(dependency_graph)
+            return renderer.render_uv_tree_style(dependency_graph, verbose=verbose)
 
         # Simple list format
         lines = ["Installed products:", "=================="]

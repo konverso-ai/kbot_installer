@@ -16,11 +16,12 @@ class DependencyTreeRenderer:
         """Initialize the renderer."""
         self._visited = set()
 
-    def render_uv_tree_style(self, graph: DependencyGraph) -> str:
+    def render_uv_tree_style(self, graph: DependencyGraph, verbose: bool = False) -> str:
         """Render dependency tree in UV tree style.
 
         Args:
             graph: DependencyGraph to render.
+            verbose: Show all subtrees even if already displayed.
 
         Returns:
             Formatted tree string.
@@ -37,8 +38,9 @@ class DependencyTreeRenderer:
             root_products = sorted(all_products)
 
         for root in sorted(root_products):
-            self._visited.clear()  # Reset visited for each root
-            self._render_uv_node(graph, root, "", "", lines)
+            if verbose:
+                self._visited.clear()  # Reset visited for each root in verbose mode
+            self._render_uv_node(graph, root, "", "", lines, verbose=verbose)
 
         return "\n".join(lines)
 
@@ -82,14 +84,14 @@ class DependencyTreeRenderer:
         if root:
             if root not in [p.name for p in graph.products]:
                 return f"Product '{root}' not found in graph"
-            self._render_uv_node(graph, root, "", "", lines)
+            self._render_uv_node(graph, root, "", "", lines, verbose=False)
         else:
             root_products = graph.get_root_products()
             if not root_products:
                 root_products = graph.get_leaf_products()
 
             for root_product in sorted(root_products):
-                self._render_uv_node(graph, root_product, "", "", lines)
+                self._render_uv_node(graph, root_product, "", "", lines, verbose=False)
 
         return "\n".join(lines)
 
@@ -137,6 +139,8 @@ class DependencyTreeRenderer:
         prefix: str,
         connector: str,
         lines: list[str],
+        *,
+        verbose: bool = False,
     ) -> None:
         """Render a single node in UV tree style.
 
@@ -146,10 +150,16 @@ class DependencyTreeRenderer:
             prefix: Prefix for the current line.
             connector: Connector character for the current line.
             lines: List to append lines to.
+            verbose: Show all subtrees even if already displayed.
 
         """
         if product_name in self._visited:
-            lines.append(f"{prefix}{connector}{product_name} (circular)")
+            if verbose:
+                # In verbose mode, show circular reference but continue
+                lines.append(f"{prefix}{connector}{product_name} (circular)")
+            else:
+                # In non-verbose mode, show that subtree was already displayed
+                lines.append(f"{prefix}{connector}{product_name} (already shown)")
             return
 
         self._visited.add(product_name)
@@ -166,7 +176,7 @@ class DependencyTreeRenderer:
             new_prefix = prefix + ("    " if is_last else "│   ")
             new_connector = "└── " if is_last else "├── "
 
-            self._render_uv_node(graph, dep, new_prefix, new_connector, lines)
+            self._render_uv_node(graph, dep, new_prefix, new_connector, lines, verbose=verbose)
 
     def _render_file_node(
         self,

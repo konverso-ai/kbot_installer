@@ -41,7 +41,7 @@ class TestDownloadCommand:
         self.runner = CliRunner()
 
     @patch("cli.commands.InstallerService")
-    def test_installer_success(self, mock_service_class) -> None:
+    def test_download_success(self, mock_service_class) -> None:
         """Test successful product installation."""
         # Setup mock
         mock_service = MagicMock()
@@ -79,7 +79,7 @@ class TestDownloadCommand:
         )
 
     @patch("cli.commands.InstallerService")
-    def test_installer_verbose_flag(self, mock_service_class) -> None:
+    def test_download_verbose_flag(self, mock_service_class) -> None:
         """Test installer passes verbose flag to the service."""
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
@@ -107,7 +107,7 @@ class TestDownloadCommand:
         )
 
     @patch("cli.commands.InstallerService")
-    def test_installer_with_provider_and_storage(self, mock_service_class) -> None:
+    def test_download_with_provider_and_storage(self, mock_service_class) -> None:
         """Test product installation with provider and storage options."""
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
@@ -146,7 +146,7 @@ class TestDownloadCommand:
         assert "Using storage backend: s3" in result.output
 
     @patch("cli.commands.InstallerService")
-    def test_installer_rejects_invalid_provider(self, mock_service_class) -> None:
+    def test_download_rejects_invalid_provider(self, mock_service_class) -> None:
         """Test installer rejects invalid provider values."""
         result = self.runner.invoke(
             cli,
@@ -167,7 +167,7 @@ class TestDownloadCommand:
         mock_service_class.assert_not_called()
 
     @patch("cli.commands.InstallerService")
-    def test_installer_rejects_invalid_storage(self, mock_service_class) -> None:
+    def test_download_rejects_invalid_storage(self, mock_service_class) -> None:
         """Test installer rejects invalid storage values."""
         result = self.runner.invoke(
             cli,
@@ -188,7 +188,7 @@ class TestDownloadCommand:
         mock_service_class.assert_not_called()
 
     @patch("cli.commands.InstallerService")
-    def test_installer_with_no_rec(self, mock_service_class) -> None:
+    def test_download_with_no_rec(self, mock_service_class) -> None:
         """Test product installation without dependencies."""
         # Setup mock
         mock_service = MagicMock()
@@ -227,7 +227,7 @@ class TestDownloadCommand:
         )
 
     @patch("cli.commands.InstallerService")
-    def test_installer_error_handling(self, mock_service_class) -> None:
+    def test_download_error_handling(self, mock_service_class) -> None:
         """Test error handling in installer command."""
         # Setup mock to raise exception
         mock_service = MagicMock()

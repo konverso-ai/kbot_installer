@@ -461,7 +461,13 @@ def download(
     default=lambda: str(Path.home() / "dev" / "installer"),
     help="Installation directory (default: $HOME/dev/installer)",
 )
-def list_products(*, tree: bool = False, installer_dir: str) -> None:
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Show all subtrees even if already displayed (default: hide redundant subtrees)",
+)
+def list_products(*, tree: bool = False, installer_dir: str, verbose: bool = False) -> None:
     """List installed kbot products.
 
     This command displays a list of all products that are currently installed
@@ -477,7 +483,7 @@ def list_products(*, tree: bool = False, installer_dir: str) -> None:
             return
 
         # List the installed products
-        output = service.list_products(as_tree=tree)
+        output = service.list_products(as_tree=tree, verbose=verbose)
         click.echo(output)
 
     except Exception as e:

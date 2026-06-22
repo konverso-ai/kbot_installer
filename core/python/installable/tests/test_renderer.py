@@ -140,7 +140,7 @@ class TestDependencyTreeRenderer:
 
         assert "circular1" in result
         assert "circular2" in result
-        assert "(circular)" in result
+        assert "(already shown)" in result
 
     def test_render_file_tree_style_empty(self, renderer) -> None:
         """Test rendering empty graph in file tree style."""
@@ -344,7 +344,7 @@ class TestDependencyTreeRenderer:
         renderer._render_uv_node(circular_graph, "circular1", "", "", lines)
 
         # Should detect circular dependency
-        assert any("(circular)" in line for line in lines)
+        assert any("(already shown)" in line for line in lines)
 
     def test_render_file_node_circular_detection(
         self, renderer, circular_graph
@@ -518,4 +518,4 @@ class TestDependencyTreeRenderer:
 
         # Test that tree rendering handles circular dependencies
         tree_result = renderer.render_uv_tree_style(graph)
-        assert "(circular)" in tree_result
+        assert "(already shown)" in tree_result
