@@ -6,9 +6,8 @@ from typing import Any, Iterator
 from azure.core.exceptions import ResourceNotFoundError, ClientAuthenticationError, ResourceExistsError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobPrefix, BlobServiceClient
-
 from utils.Logger import logger
-from utils.bucket_storage import BucketStorage
+from utils.bucket_storage.base import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
 

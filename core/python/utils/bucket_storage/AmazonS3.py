@@ -8,7 +8,7 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from utils.Logger import logger
-from utils.bucket_storage import BucketStorage
+from utils.bucket_storage.base import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
 
