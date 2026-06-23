@@ -37,7 +37,7 @@ class AmazonS3(BucketStorage):
     # No name, such that this class will not be loaded in factory
     name = ""
 
-    def __init__(self, region_name, bucket_name, cluster_name=None) -> None:
+    def __init__(self, region_name=None, bucket_name=None, cluster_name=None) -> None:
         """Initialize S3 settings from the bot configuration."""
         self.region_name = region_name
         self.bucket_name = bucket_name
