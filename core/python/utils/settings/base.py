@@ -2,6 +2,29 @@
 
 from typing import Any, Protocol
 
+from pydantic import BaseModel
+
+
+Simple = str | int | float | None
+Choice = list[Simple]
+Choices = list[Choice]
+
+
+class Value(BaseModel):
+    value: Simple
+
+
+class NamedValue(Value):
+    name: str
+
+
+class SingleChoice(BaseModel):
+    pass
+
+
+class MultipleChoice(BaseModel):
+    pass
+
 
 class Settings(Protocol):
     """Repository settings exportable to conf and JSON formats."""

@@ -1,9 +1,11 @@
 """ProductInstallable class for managing installable product definitions."""
 
+# Pydantic model fields are validated at runtime; pylint infers FieldInfo on access.
+# pylint: disable=no-member
+
 import configparser
 import contextlib
 import fnmatch
-import importlib
 import json
 import logging
 import os
@@ -25,8 +27,11 @@ from git.provider.base import ProviderBase
 from git.provider import create_provider
 
 from installable.factory import create_installable
+from utils.product import Build, Categories, Category, Parent, Parents
 from installable.installable_base import InstallableBase
 from installable.product_collection import ProductCollection
+from utils.product import Product
+from utils.version import Version
 
 logger = logging.getLogger(__name__)
 
@@ -53,55 +58,155 @@ class BuildDetails(TypedDict, total=False):
     commit: str
 
 
-@dataclass
+@dataclass(init=False)
 class ProductInstallable(InstallableBase):
-    """Represents a product with its metadata and dependencies.
+    """Orchestrates a Product and installable operations.
 
-    Attributes:
-        name: Product name.
-        version: Product version.
-        build: Build information.
-        date: Build date.
-        type: Product type (solution, framework, customer).
-        parents: List of parent product names (dependencies).
-        categories: List of product categories.
-        license: License information.
-        display: Multilingual display information.
-        build_details: Detailed build information (timestamp, branch, commit).
-        branch: Specific branch to use (overrides version_to_branch calculation).
-               If specified, env is forced to "dev".
-
+    Holds a :class:`~utils.product.Product` for metadata and implements
+    :class:`InstallableBase` for installer workflows.
     """
 
-    name: str
-    version: str = ""
-    build: str | None = None
-    date: str | None = None
-    type: str = "solution"
-    docs: list[str] = field(default_factory=list)
-    env: Literal["dev", "prod"] = "dev"
-    parents: list[str] = field(default_factory=list)
-    categories: list[str] = field(default_factory=list)
-    license: str | None = None
-    # Multilingual info: {"name": {"en": "...", "fr": "..."}, ...}
-    display: dict[str, dict[str, str]] | None = None
-    build_details: BuildDetails | None = None
-    providers: list[str] = field(
-        default_factory=lambda: ["storage", "github", "bitbucket"]
-    )
-    # Directory path where product is located
-    dirname: Path | None = None
-    # Provider name that was successfully used during clone
-    provider_name_used: str | None = None
-    # Branch that was successfully used during clone
-    branch_used: str | None = None
-    # Specific branch to use (overrides version_to_branch calculation)
-    branch: str | None = None
+    product: Product
+    env: Literal["dev", "prod"]
+    providers: list[str]
+    dirname: Path | None
+    provider_name_used: str | None
+    branch_used: str | None
+    branch: str | None
     provider: ProviderBase = field(init=False, repr=False, compare=False)
 
-    def __post_init__(self) -> None:
-        """Initialize provider after instance creation."""
+    def __init__(
+        self,
+        product: Product,
+        *,
+        env: Literal["dev", "prod"] = "dev",
+        providers: list[str] | None = None,
+        dirname: Path | None = None,
+        provider_name_used: str | None = None,
+        branch_used: str | None = None,
+        branch: str | None = None,
+    ) -> None:
+        """Initialize a product installable.
+
+        Args:
+            product: Product metadata.
+            env: Environment (dev or prod).
+            providers: Provider names used for downloading.
+            dirname: Directory path where the product is located.
+            provider_name_used: Provider used during the last download.
+            branch_used: Branch used during the last download.
+            branch: Specific branch override.
+        """
+        self.product = product
+        self.env = env
+        self.providers = providers or ["storage", "github", "bitbucket"]
+        self.dirname = dirname
+        self.provider_name_used = provider_name_used
+        self.branch_used = branch_used
+        self.branch = branch
         self.provider = create_provider(name="selector", providers=self.providers)
+
+    @property
+    def name(self) -> str:
+        """Return the product name."""
+        return self.product.name
+
+    @property
+    def version(self) -> str:
+        """Return the product version."""
+        return self.product.version.to_str()
+
+    @version.setter
+    def version(self, value: str | Version) -> None:
+        self.product.version = Version.parse(value)
+
+    @property
+    def build(self) -> str | None:
+        """Return the build timestamp."""
+        return self.product.build_timestamp
+
+    @build.setter
+    def build(self, value: str | None) -> None:
+        build = Build(timestamp=value) if value else None
+        self.product = self.product.model_copy(update={"build": build})
+
+    @property
+    def date(self) -> str | None:
+        """Return the product date."""
+        return self.product.date or None
+
+    @date.setter
+    def date(self, value: str | None) -> None:
+        self.product = self.product.model_copy(update={"date": value or ""})
+
+    @property
+    def type(self) -> str:
+        """Return the product type."""
+        return self.product.type
+
+    @type.setter
+    def type(self, value: str) -> None:
+        self.product = self.product.model_copy(update={"type": value})
+
+    @property
+    def docs(self) -> list[str]:
+        """Return documentation references."""
+        return self.product.docs_list
+
+    @property
+    def parents(self) -> list[str]:
+        """Return parent product names."""
+        return self.product.parent_names
+
+    @parents.setter
+    def parents(self, value: list[str]) -> None:
+        parents = (
+            Parents(parent=[Parent(name=parent_name) for parent_name in value])
+            if value
+            else None
+        )
+        self.product = self.product.model_copy(update={"parents": parents})
+
+    @property
+    def categories(self) -> list[str]:
+        """Return product categories."""
+        return self.product.category_names
+
+    @categories.setter
+    def categories(self, value: list[str]) -> None:
+        categories = (
+            Categories(category=[Category(name=category_name) for category_name in value])
+            if value
+            else None
+        )
+        self.product = self.product.model_copy(update={"categories": categories})
+
+    @property
+    def license(self) -> str | None:
+        """Return license information."""
+        return self.product.license
+
+    @license.setter
+    def license(self, value: str | None) -> None:
+        self.product = self.product.model_copy(update={"license": value})
+
+    @property
+    def display(self) -> dict[str, dict[str, str]] | None:
+        """Return multilingual display information."""
+        if self.product.display is None:
+            return None
+        return self.product.display.model_dump(exclude_none=True)
+
+    @property
+    def build_details(self) -> "BuildDetails | None":
+        """Return detailed build information."""
+        if self.product.build is None:
+            return None
+        return {
+            "timestamp": self.product.build.timestamp,
+            "branch": self.product.build.branch,
+            "commit": self.product.build.commit,
+        }
 
     @staticmethod
     def _parse_comma_separated_string(value: str) -> list[str]:
@@ -170,198 +275,6 @@ class ProductInstallable(InstallableBase):
             ),
         )
 
-    @classmethod
-    def from_xml(cls, xml_content: str) -> Self:
-        """Create Product from XML content.
-
-        Args:
-            xml_content: XML string content.
-
-        Returns:
-            Product instance.
-
-        Raises:
-            ValueError: If XML is invalid or missing required fields.
-
-        """
-        # Import defusedxml locally to avoid heavy import at module level
-        from defusedxml import ElementTree as defused_ET  # noqa: PLC0415
-
-        try:
-            root = defused_ET.fromstring(xml_content)
-        except defused_ET.ParseError as e:
-            msg = f"Invalid XML content: {e}"
-            raise ValueError(msg) from e
-
-        if root.tag != "product":
-            msg = "Root element must be 'product'"
-            raise ValueError(msg)
-
-        # Extract attributes
-        name = root.get("name")
-        if not name:
-            msg = "Product name is required"
-            raise ValueError(msg)
-
-        # Get version - if attribute doesn't exist or is empty, use empty string
-        # This allows us to distinguish between "no version specified" vs "version explicitly set"
-        version = root.get("version") or ""
-        build = root.get("build") or None
-        date = root.get("date") or None
-        product_type = root.get("type", "solution")
-
-        # Extract parents
-        parents = []
-        parents_elem = root.find("parents")
-        if parents_elem is not None:
-            for parent_elem in parents_elem.findall("parent"):
-                parent_name = parent_elem.get("name")
-                if parent_name:
-                    parents.append(parent_name)
-
-        # Extract categories
-        categories = []
-        categories_elem = root.find("categories")
-        if categories_elem is not None:
-            for category_elem in categories_elem.findall("category"):
-                category_name = category_elem.get("name")
-                if category_name:
-                    categories.append(category_name)
-
-        # Extract doc (comma-separated string -> list)
-        doc = cls._parse_comma_separated_string(root.get("doc", ""))
-
-        return cls(
-            name=name,
-            version=version,
-            build=build,
-            date=date,
-            type=product_type,
-            parents=parents,
-            categories=categories,
-            docs=doc,
-        )
-
-    @classmethod
-    def from_json(cls, json_content: str) -> Self:
-        """Create Product from JSON content.
-
-        Args:
-            json_content: JSON string content.
-
-        Returns:
-            Product instance.
-
-        Raises:
-            ValueError: If JSON is invalid or missing required fields.
-
-        """
-        try:
-            data = json.loads(json_content)
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON content: {e}"
-            raise ValueError(msg) from e
-
-        if "name" not in data:
-            msg = "Product name is required"
-            raise ValueError(msg)
-
-        # Extract build details if present
-        build_details = data.get("build")
-        if build_details and isinstance(build_details, dict):
-            build_details = build_details.copy()
-        else:
-            build_details = None
-
-        return cls(
-            name=data["name"],
-            version=data.get("version", ""),
-            build=data.get("build", {}).get("timestamp")
-            if isinstance(data.get("build"), dict)
-            else data.get("build"),
-            date=data.get("date"),
-            type=data.get("type", "solution"),
-            parents=data.get("parents", []),
-            categories=data.get("categories", []),
-            docs=cls._parse_comma_separated_string(data.get("doc", "")),
-            env=data.get("env", "dev"),
-            license=data.get("license"),
-            display=data.get("display"),
-            build_details=build_details,
-        )
-
-    @classmethod
-    def from_xml_file(cls, xml_path: str | Path) -> Self:
-        """Create Product from XML file.
-
-        Args:
-            xml_path: Path to XML file.
-
-        Returns:
-            Product instance.
-
-        Raises:
-            FileNotFoundError: If XML file doesn't exist.
-            ValueError: If XML is invalid.
-
-        """
-        xml_path = Path(xml_path)
-        if not xml_path.exists():
-            msg = f"XML file not found: {xml_path.name}"
-            raise FileNotFoundError(msg)
-
-        return cls.from_xml(xml_path.read_text(encoding="utf-8"))
-
-    @classmethod
-    def from_json_file(cls, json_path: str | Path) -> Self:
-        """Create Product from JSON file.
-
-        Args:
-            json_path: Path to JSON file.
-
-        Returns:
-            Product instance.
-
-        Raises:
-            FileNotFoundError: If JSON file doesn't exist.
-            ValueError: If JSON is invalid.
-
-        """
-        json_path = Path(json_path)
-        if not json_path.exists():
-            msg = f"JSON file not found: {json_path.name}"
-            raise FileNotFoundError(msg)
-
-        return cls.from_json(json_path.read_text(encoding="utf-8"))
-
-    @classmethod
-    def from_installer_folder(cls, folder_path: Path) -> Self:
-        """Create ProductInstallable from installer folder (XML + optional JSON).
-
-        Args:
-            folder_path: Path to product folder.
-
-        Returns:
-            ProductInstallable instance with merged data.
-
-        Raises:
-            FileNotFoundError: If description.xml doesn't exist.
-            ValueError: If XML is invalid.
-
-        """
-        xml_path = folder_path / "description.xml"
-        json_path = folder_path / "description.json"
-
-        # Load XML (required)
-        xml_product = cls.from_xml_file(xml_path)
-
-        # Load JSON if exists (optional)
-        if json_path.exists():
-            json_product = cls.from_json_file(json_path)
-            return cls.merge_xml_json(xml_product, json_product)
-
-        return xml_product
-
     @override
     def load_from_installer_folder(self, folder_path: Path) -> None:
         """Load product data from installer folder (XML + optional JSON) into current instance.
@@ -378,97 +291,43 @@ class ProductInstallable(InstallableBase):
         xml_path = folder_path / "description.xml"
         json_path = folder_path / "description.json"
 
-        # Load XML (required)
-        xml_product = self.from_xml_file(xml_path)
-
-        # Load JSON if exists (optional)
+        xml_product = Product.from_xml_file(xml_path)
         if json_path.exists():
-            json_product = self.from_json_file(json_path)
-            merged_product = self.merge_xml_json(xml_product, json_product)
-            self._update_from_product(merged_product)
+            json_data = json.loads(json_path.read_text(encoding="utf-8"))
+            loaded_product = Product.merge(xml_product, Product.from_json(json_data))
+            self.env = json_data.get("env", self.env)
         else:
-            self._update_from_product(xml_product)
+            loaded_product = xml_product
 
-    def _update_from_product(self, source_product: Self) -> None:
-        """Update current instance with data from another product.
+        if not loaded_product.version and self.product.version:
+            loaded_product = loaded_product.model_copy(
+                update={"version": self.product.version}
+            )
 
-        This method copies all relevant data from the source product to the current
-        instance, preserving the original name and provider which should remain
-        consistent with the instance's identity.
-
-        Args:
-            source_product: Product to copy data from.
-
-        """
-        # Only update version if source has a non-empty version
-        # This preserves the version that was set before loading (e.g., inherited from parent)
-        if source_product.version:
-            self.version = source_product.version
-        # If source version is empty but we have a version, keep ours (inherited from parent)
-        # This happens when description.xml has version="" - we want to keep parent's version
-        # Preserve branch: only update if source has an explicit branch, otherwise keep ours
-        # This ensures branch inherited from parent is not lost when loading from XML
-        if hasattr(source_product, "branch") and source_product.branch is not None:
-            self.branch = source_product.branch
-        # If source doesn't have branch or has None, self.branch remains unchanged
-        self.build = source_product.build
-        self.date = source_product.date
-        self.type = source_product.type
-        self.docs = source_product.docs
-        self.env = source_product.env
-        self.parents = source_product.parents.copy()
-        self.categories = source_product.categories.copy()
-        self.license = source_product.license
-        self.display = source_product.display
-        self.build_details = source_product.build_details
-        # Note: name, provider, and branch are preserved as they should remain consistent
+        self.product = loaded_product
 
     @classmethod
-    def merge_xml_json(
-        cls, xml_product: Self, json_product: Self
-    ) -> Self:
-        """Merge XML and JSON products, with JSON taking precedence.
+    def from_installer_folder(cls, folder_path: str | Path) -> Self | None:
+        """Create a product installable from an installer folder.
 
         Args:
-            xml_product: Product from XML.
-            json_product: Product from JSON.
+            folder_path: Path to the product folder containing ``description.xml``.
 
         Returns:
-            Merged Product instance.
-
-        Raises:
-            ValueError: If product names don't match.
-
+            Loaded product installable, or ``None`` when the folder is missing
+            or invalid.
         """
-        if xml_product.name != json_product.name:
-            msg = (
-                f"Product names don't match: {xml_product.name} != {json_product.name}"
-            )
-            raise ValueError(msg)
+        path = Path(folder_path)
+        if not path.exists() or not (path / "description.xml").exists():
+            return None
 
-        # JSON takes precedence for common fields
-        # Preserve branch from either product if it exists (not stored in XML/JSON typically)
-        branch = None
-        if hasattr(json_product, "branch") and json_product.branch:
-            branch = json_product.branch
-        elif hasattr(xml_product, "branch") and xml_product.branch:
-            branch = xml_product.branch
-
-        return cls(
-            name=xml_product.name,
-            version=json_product.version or xml_product.version,
-            build=json_product.build or xml_product.build,
-            date=json_product.date or xml_product.date,
-            type=json_product.type or xml_product.type,
-            parents=json_product.parents or xml_product.parents,
-            categories=json_product.categories or xml_product.categories,
-            docs=json_product.docs or xml_product.docs,
-            env=json_product.env or xml_product.env,
-            license=json_product.license,
-            display=json_product.display,
-            build_details=json_product.build_details,
-            branch=branch,
-        )
+        try:
+            product = create_installable(name=path.name)
+            product.load_from_installer_folder(path)
+        except (ValueError, FileNotFoundError):
+            return None
+        else:
+            return cast(Self, product)
 
     @override
     def to_xml(self) -> str:
@@ -478,76 +337,45 @@ class ProductInstallable(InstallableBase):
             XML string representation.
 
         """
-        # Access underlying ElementTree for creation (safe - we control the content)
-        # defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
-        # __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
-        from defusedxml import ElementTree as defused_ET  # noqa: PLC0415
-
-        _etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
-        ET = importlib.import_module(_etree_module_name)  # noqa: N806
-
-        root = ET.Element("product")
-        root.set("name", self.name)
-        root.set("version", self.version)
-        if self.build:
-            root.set("build", self.build)
-        if self.date:
-            root.set("date", self.date)
-        root.set("type", self.type)
-
-        # Add parents
-        if self.parents:
-            parents_elem = ET.SubElement(root, "parents")
-            for parent in self.parents:
-                parent_elem = ET.SubElement(parents_elem, "parent")
-                parent_elem.set("name", parent)
-
-        # Add categories
-        if self.categories:
-            categories_elem = ET.SubElement(root, "categories")
-            for category in self.categories:
-                category_elem = ET.SubElement(categories_elem, "category")
-                category_elem.set("name", category)
-
-        # Add doc attribute (list -> comma-separated string)
-        if self.docs:
-            root.set("doc", ",".join(self.docs))
-
-        return ET.tostring(root, encoding="unicode")
+        return self.product.to_xml()
 
     @override
     def to_json(self) -> dict[str, Any]:
-        """Convert Product to a JSON-serializable dictionary.
+        """Convert product installable to a JSON-serializable dictionary.
 
         Returns:
-            Dictionary representation of the product.
+            Dictionary representation of the product and installable state.
 
         """
-        return {
-            "name": self.name,
-            "version": self.version,
-            "build": self.build,
-            "date": self.date,
-            "type": self.type,
-            "parents": self.parents,
-            "categories": self.categories,
-            "doc": ",".join(self.docs) if self.docs else None,
-            "env": self.env,
-            "license": self.license,
-            "display": self.display,
-            "build_details": self.build_details,
-            "provider_name_used": self.provider_name_used,
-            "branch_used": self.branch_used,
-            "branch": self.branch,
-        }
+        data = self.product.to_json()
+        data["env"] = self.env
+
+        if self.product.build is not None:
+            data["build"] = self.product.build_timestamp
+            data["build_details"] = {
+                "timestamp": self.product.build.timestamp,
+                "branch": self.product.build.branch,
+                "commit": self.product.build.commit,
+            }
+        else:
+            data["build"] = None
+            data["build_details"] = None
+
+        if self.product.display is not None:
+            data["display"] = self.product.display.model_dump(exclude_none=True)
+
+        data["provider_name_used"] = self.provider_name_used
+        data["branch_used"] = self.branch_used
+        data["branch"] = self.branch
+        return data
 
     @override
-    def clone(self, path: Path, *, dependencies: bool = True) -> None:
-        """Clone the product to the given path using breadth-first traversal.
+    def download(self, path: Path, *, dependencies: bool = True) -> None:
+        """Download the product to the given path using breadth-first traversal.
 
         Args:
-            path: Path to the directory that will contain the cloned products.
-            dependencies: Whether to clone dependencies.
+            path: Path to the directory that will contain the downloaded products.
+            dependencies: Whether to download dependencies.
 
         """
         # Ensure the base path exists
@@ -560,7 +388,7 @@ class ProductInstallable(InstallableBase):
         branch = self.branch
 
         if not dependencies:
-            logger.warning("Cloning %s (branch: %s) to %s", self.name, branch, path)
+            logger.warning("Downloading %s (branch: %s) to %s", self.name, branch, path)
             product_path = path / self.name
             self.provider.clone_and_checkout(
                 product_path, branch, repository_name=self.name
@@ -608,7 +436,7 @@ class ProductInstallable(InstallableBase):
                 continue
 
             # Clone current product if not already cloned (main product is already cloned)
-            if current_product.name != self.name and not self._clone_dependency_product(
+            if current_product.name != self.name and not self._download_dependency_product(
                 current_product, path, processed
             ):
                 continue
@@ -628,18 +456,18 @@ class ProductInstallable(InstallableBase):
         collection.export_to_json(str(lock_file))
         logger.debug("Exported product collection to %s", lock_file)
 
-    def _clone_dependency_product(
+    def _download_dependency_product(
         self, product: Self, base_path: Path, processed: set[str]
     ) -> bool:
-        """Clone a dependency product.
+        """Download a dependency product.
 
         Args:
-            product: Product to clone.
-            base_path: Base path for cloning.
+            product: Product to download.
+            base_path: Base path for downloading.
             processed: Set of processed product names.
 
         Returns:
-            True if clone was successful, False otherwise.
+            True if download was successful, False otherwise.
 
         """
         # Use specified branch if provided, otherwise convert version to branch name
@@ -661,7 +489,7 @@ class ProductInstallable(InstallableBase):
             product.branch_used = product.provider.get_branch()
         except Exception:
             # Clone failed - selector_provider already tried all fallback branches from config
-            logger.exception("Failed to clone %s", product.name)
+            logger.exception("Failed to download %s", product.name)
             # Mark as processed even if clone failed to avoid infinite loop
             processed.add(product.name)
             # Continue with other dependencies even if one fails
@@ -682,7 +510,7 @@ class ProductInstallable(InstallableBase):
         processed: set[str],
         base_path: Path,
     ) -> None:
-        """Discover and queue parent products for cloning.
+        """Discover and queue parent products for downloading.
 
         Args:
             current_product: Current product being processed.
@@ -1355,8 +1183,8 @@ class ProductInstallable(InstallableBase):
             List of products from lock file after cloning.
 
         """
-        logger.debug("Installer not complete, cloning products to %s", installer_path)
-        self.clone(installer_path, dependencies=dependencies)
+        logger.debug("Installer not complete, downloading products to %s", installer_path)
+        self.download(installer_path, dependencies=dependencies)
 
         lock_file = installer_path / "products.lock.json"
         if lock_file.exists():

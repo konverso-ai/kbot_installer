@@ -1,11 +1,10 @@
 """Writer package for serializing models to files."""
 
 from writer.base import Writer
-from writer.toml_writer import TomlWriter
-from writer.xml_writer import XmlWriter
+from writer.factory import add_writer
+from writer.text_writer import TextWriter
 
 __all__ = [
-    "TomlWriter",
+    "TextWriter",
     "Writer",
-    "XmlWriter",
 ]

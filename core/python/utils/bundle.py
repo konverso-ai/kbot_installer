@@ -1,7 +1,8 @@
 """Bundle model for grouping product versions."""
 
 import json
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -12,14 +13,7 @@ from pydantic import (
 
 from utils.version import Version
 from utils.product import Product
-
-
-def _parse_version(value: Any) -> Version:
-    if isinstance(value, Version):
-        return value
-    if isinstance(value, str):
-        return Version(value)
-    raise TypeError(f"Expected version string or Version, got {type(value).__name__}")
+from writer.factory import add_writer
 
 
 class Bundle(BaseModel):
@@ -38,7 +32,11 @@ class Bundle(BaseModel):
     @field_validator("version", mode="before")
     @classmethod
     def _validate_version(cls, value: Any) -> Version:
-        return _parse_version(value)
+        version = Version.parse(value)
+        if not version:
+            msg = "Bundle version is required"
+            raise ValueError(msg)
+        return version
 
     @field_serializer("version")
     def _serialize_version(self, version: Version) -> str:
@@ -60,3 +58,34 @@ class Bundle(BaseModel):
             else json_content
         )
         return cls.model_validate(data)
+
+    def to_json(self) -> dict[str, Any]:
+        """Convert Bundle to a JSON-serializable dictionary.
+
+        Returns:
+            Dictionary representation suitable for :meth:`from_json` round-trip.
+        """
+        return {
+            "name": self.name,
+            "version": self.version.to_json_str(),
+            "created_by": self.created_by,
+            "created_on": self.created_on,
+            "created_from": self.created_from,
+            "timestamp": self.timestamp,
+            "versions": [product.to_json() for product in self.versions],
+        }
+
+    def export(self, mode: Literal["json"], path: str | Path) -> None:
+        """Export the bundle to a file in the given format.
+
+        Args:
+            mode: Serialization format (``json``).
+            path: Destination file path.
+
+        Raises:
+            AttributeError: If no ``to_{mode}`` method exists on the bundle.
+        """
+        content = getattr(self, f"to_{mode}")()
+        if not isinstance(content, str):
+            content = json.dumps(content, indent=4)
+        add_writer("text").write(content, path)

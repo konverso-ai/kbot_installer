@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
-
-from pydantic import BaseModel
+from typing import Any, Protocol
 
 
 class Writer(Protocol):
     """Writer protocol."""
 
-    def write(self, obj: BaseModel, file_path: str | Path) -> None:
-        """Write a model instance to a file.
+    def write(self, content: str, file_path: str | Path, **kwargs: Any) -> None:
+        """Write serialized content to a file.
 
         Args:
-            obj: Model instance to serialize.
+            content: Serialized text to write.
             file_path: Destination file path.
+            **kwargs: Optional arguments forwarded to ``Path.write_text``.
         """

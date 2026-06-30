@@ -14,7 +14,7 @@ ignore=
 jobs=1
 load-plugins=
 unsafe-load-any-extension=no
-extension-pkg-whitelist=
+extension-pkg-whitelist=pydantic
 
 [MESSAGES CONTROL]
 # Désactive les règles couvertes par Ruff

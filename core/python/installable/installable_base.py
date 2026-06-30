@@ -46,12 +46,12 @@ class InstallableBase(ABC):
         """
 
     @abstractmethod
-    def clone(self, path: Path, *, dependencies: bool = True) -> None:
-        """Clone the product to the given path using breadth-first traversal.
+    def download(self, path: Path, *, dependencies: bool = True) -> None:
+        """Download the product to the given path using breadth-first traversal.
 
         Args:
-            path: Path to clone the product to.
-            dependencies: Whether to clone dependencies.
+            path: Path to download the product to.
+            dependencies: Whether to download dependencies.
 
         """
 
@@ -67,31 +67,12 @@ class InstallableBase(ABC):
         """
 
     @abstractmethod
-    def install(self, path: Path, *, dependencies: bool = True) -> None:
-        """Install the product into the workarea.
-
-        Args:
-            path: Path to install the product to.
-            dependencies: Whether to install dependencies.
-
-        """
-
-    @abstractmethod
     def update(self, path: Path, *, dependencies: bool = True) -> None:
         """Update the product in the workarea.
 
         Args:
             path: Path to update the product at.
             dependencies: Whether to update dependencies.
-
-        """
-
-    @abstractmethod
-    def uninstall(self, path: Path) -> None:
-        """Uninstall the product from the workarea.
-
-        Args:
-            path: Path to uninstall the product from.
 
         """
 
@@ -105,7 +86,33 @@ class InstallableBase(ABC):
 
         """
 
-    @abstractmethod
+    def install(self, path: Path, *, dependencies: bool = True) -> None:
+        """Install the product into the workarea.
+
+        Args:
+            path: Path to install the product to.
+            dependencies: Whether to install dependencies.
+
+        Raises:
+            NotImplementedError: If the installable does not support installation.
+
+        """
+        msg = "Install is not implemented"
+        raise NotImplementedError(msg)
+
+    def uninstall(self, path: Path) -> None:
+        """Uninstall the product from the workarea.
+
+        Args:
+            path: Path to uninstall the product from.
+
+        Raises:
+            NotImplementedError: If the installable does not support uninstallation.
+
+        """
+        msg = "Uninstall is not implemented"
+        raise NotImplementedError(msg)
+
     def upgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Upgrade the product in the workarea.
 
@@ -113,9 +120,13 @@ class InstallableBase(ABC):
             path: Path to upgrade the product at.
             dependencies: Whether to upgrade dependencies.
 
-        """
+        Raises:
+            NotImplementedError: If the installable does not support upgrade.
 
-    @abstractmethod
+        """
+        msg = "Upgrade is not implemented"
+        raise NotImplementedError(msg)
+
     def downgrade(self, path: Path, *, dependencies: bool = True) -> None:
         """Downgrade the product in the workarea.
 
@@ -123,31 +134,48 @@ class InstallableBase(ABC):
             path: Path to downgrade the product at.
             dependencies: Whether to downgrade dependencies.
 
-        """
+        Raises:
+            NotImplementedError: If the installable does not support downgrade.
 
-    @abstractmethod
+        """
+        msg = "Downgrade is not implemented"
+        raise NotImplementedError(msg)
+
     def backup(self, path: Path) -> None:
         """Backup the product in the workarea.
 
         Args:
             path: Path to backup the product from.
 
-        """
+        Raises:
+            NotImplementedError: If the installable does not support backup.
 
-    @abstractmethod
+        """
+        msg = "Backup is not implemented"
+        raise NotImplementedError(msg)
+
     def restore(self, path: Path) -> None:
         """Restore the product in the workarea.
 
         Args:
             path: Path to restore the product from.
 
-        """
+        Raises:
+            NotImplementedError: If the installable does not support restore.
 
-    @abstractmethod
+        """
+        msg = "Restore is not implemented"
+        raise NotImplementedError(msg)
+
     def delete(self, path: Path) -> None:
         """Delete the product in the workarea.
 
         Args:
             path: Path to delete the product from.
 
+        Raises:
+            NotImplementedError: If the installable does not support deletion.
+
         """
+        msg = "Delete is not implemented"
+        raise NotImplementedError(msg)

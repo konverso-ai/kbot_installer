@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from installable.product_collection import ProductCollection
+from installable import create_installable
 from installable.product_installable import ProductInstallable
 
 
@@ -20,7 +21,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create pyproject.toml
@@ -32,7 +33,7 @@ class TestProductInstall:
 
     def test_pyproject_path_no_dirname(self) -> None:
         """Test pyproject_path property when dirname is not set."""
-        product = ProductInstallable(name="test-product")
+        product = create_installable(name="test-product")
         product.dirname = None
 
         with pytest.raises(FileNotFoundError, match="has no dirname set"):
@@ -44,7 +45,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             with pytest.raises(FileNotFoundError, match=r"pyproject\.toml not found"):
@@ -64,7 +65,7 @@ class TestProductInstall:
                 "[database]\nhost = localhost\nport = 5432\n\n[app]\nname = test\n"
             )
 
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Mock get_dependencies to return just this product
@@ -104,10 +105,10 @@ class TestProductInstall:
                 "[database]\nhost = db2\n\n[logging]\nlevel = debug\n"
             )
 
-            product1 = ProductInstallable(name="product1")
+            product1 = create_installable(name="product1")
             product1.dirname = product1_dir
 
-            product2 = ProductInstallable(name="product2", parents=["product1"])
+            product2 = create_installable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             # Mock get_dependencies to return both products in BFS order
@@ -140,7 +141,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -167,10 +168,10 @@ class TestProductInstall:
             product2_dir = Path(temp_dir) / "product2"
             product2_dir.mkdir()
 
-            product1 = ProductInstallable(name="product1")
+            product1 = create_installable(name="product1")
             product1.dirname = product1_dir
 
-            product2 = ProductInstallable(name="product2", parents=["product1"])
+            product2 = create_installable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             def mock_get_dependencies() -> ProductCollection:
@@ -185,7 +186,7 @@ class TestProductInstall:
 
     def test_get_kconf_invalid_product(self) -> None:
         """Test get_kconf with invalid product name."""
-        product = ProductInstallable(name="test-product")
+        product = create_installable(name="test-product")
 
         def mock_get_dependencies() -> ProductCollection:
             return ProductCollection([product])
@@ -210,7 +211,7 @@ logs = ["httpd"]
             pyproject_file.write_text(pyproject_content)
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -278,7 +279,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -353,7 +354,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -433,7 +434,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -514,13 +515,13 @@ core = ["RunBot.py", "Learn.py"]
 """
             )
 
-            product1 = ProductInstallable(name="product1")
+            product1 = create_installable(name="product1")
             product1.dirname = product1_dir
             # Mock provider to avoid real clone calls
             mock_provider1 = MagicMock()
             product1.provider = mock_provider1
 
-            product2 = ProductInstallable(name="product2", parents=["product1"])
+            product2 = create_installable(name="product2", parents=["product1"])
             product2.dirname = product2_dir
             # Mock provider to avoid real clone calls
             mock_provider2 = MagicMock()
@@ -620,7 +621,7 @@ ui = ["static"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -694,7 +695,7 @@ bin = []
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -752,7 +753,7 @@ bin = []
             product_dir.mkdir()
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -804,7 +805,7 @@ bin = []
             pyproject_file.write_text('[project]\nname = "test-product"\n')
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method
@@ -885,7 +886,7 @@ bin = ["*.sh"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = ProductInstallable(name="test-product")
+            product = create_installable(name="test-product")
             product.dirname = product_dir
 
             # Create products.lock.json for install method

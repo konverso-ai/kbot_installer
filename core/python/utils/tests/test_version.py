@@ -71,10 +71,20 @@ def test_version_compare_valid_orders_versions(
     "version",
     [
         "foo",
-        "",
         "not-a-version",
     ],
 )
 def test_version_invalid_raises_value_error(version: str) -> None:
     with pytest.raises(ValueError):
         Version(version)
+
+
+def test_version_empty_valid_serializes_to_empty_string() -> None:
+    assert compare("eq", Version.empty().to_str(), "")
+    assert compare("eq", Version.parse(""), Version.empty())
+    assert compare("not", Version.empty())
+
+
+def test_version_to_json_str_preserves_source_format() -> None:
+    assert compare("eq", Version("2025.03").to_json_str(), "2025.03")
+    assert compare("eq", Version("1.0.0").to_json_str(), "1.0.0")

@@ -8,7 +8,13 @@ from unittest.mock import patch
 import pytest
 
 from installable.product_collection import ProductCollection
+from installable import create_installable
 from installable.product_installable import ProductInstallable
+from utils.version import Version
+
+
+def _version_str(value: str) -> str:
+    return Version(value).to_str()
 
 
 class TestProductCollection:
@@ -18,7 +24,7 @@ class TestProductCollection:
     def sample_products(self) -> list[ProductInstallable]:
         """Create sample products for testing."""
         return [
-            ProductInstallable(
+            create_installable(
                 name="product1",
                 version="1.0.0",
                 type="solution",
@@ -28,7 +34,7 @@ class TestProductCollection:
                 date="2023-01-01",
                 license="MIT",
             ),
-            ProductInstallable(
+            create_installable(
                 name="product2",
                 version="2.0.0",
                 type="framework",
@@ -38,7 +44,7 @@ class TestProductCollection:
                 date="2023-02-01",
                 license="Apache",
             ),
-            ProductInstallable(
+            create_installable(
                 name="product3",
                 version="3.0.0",
                 type="customer",
@@ -113,7 +119,7 @@ class TestProductCollection:
 
         assert product is not None
         assert product.name == "product1"
-        assert product.version == "1.0.0"
+        assert product.version == _version_str("1.0.0")
 
     def test_get_product_nonexistent(self, populated_collection) -> None:
         """Test getting a non-existent product."""
@@ -315,7 +321,7 @@ class TestProductCollection:
 
             assert product is not None
             assert product.name == "test_product"
-            assert product.version == "1.0.0"
+            assert product.version == _version_str("1.0.0")
             mock_from_installer_folder.assert_called_once()
 
     def test_load_product_nonexistent(self) -> None:
@@ -424,7 +430,7 @@ class TestProductCollection:
             product1 = root[0]
             assert product1.tag == "product"
             assert product1.get("name") == "product1"
-            assert product1.get("version") == "1.0.0"
+            assert product1.get("version") == _version_str("1.0.0")
             assert product1.get("type") == "solution"
 
         finally:

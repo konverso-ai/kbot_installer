@@ -1,5 +1,6 @@
-"""Tests for Product class."""
+"""Tests for ProductInstallable and Product integration."""
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -7,6 +8,21 @@ import pytest
 
 from installable import create_installable
 from installable.product_installable import ProductInstallable
+from utils.product import Product
+from utils.version import Version
+
+
+def _version_str(value: str) -> str:
+    return Version(value).to_str()
+
+
+def _installable_from_json(json_content: str) -> ProductInstallable:
+    data = json.loads(json_content)
+    return ProductInstallable(product=Product.from_json(data), env=data.get("env", "dev"))
+
+
+def _installable_from_xml(xml_content: str) -> ProductInstallable:
+    return ProductInstallable(product=Product.from_xml(xml_content))
 
 
 class TestProduct:
@@ -23,14 +39,14 @@ class TestProduct:
         )
 
         assert product.name == "test"
-        assert product.version == "1.0.0"
+        assert product.version == _version_str("1.0.0")
         assert product.type == "solution"
         assert product.parents == ["parent1"]
         assert product.categories == ["cat1"]
 
     def test_initialization_minimal(self) -> None:
         """Test Product initialization with minimal parameters."""
-        product = ProductInstallable(name="test")
+        product = create_installable(name="test")
 
         assert product.name == "test"
         assert product.version == ""  # Default empty string
@@ -46,10 +62,10 @@ class TestProduct:
         <product name="jira" version="2025.02" type="solution">
         </product>
         """
-        product = ProductInstallable.from_xml(xml_content)
+        product = _installable_from_xml(xml_content)
 
         assert product.name == "jira"
-        assert product.version == "2025.02"
+        assert product.version == _version_str("2025.02")
         assert product.type == "solution"
         assert product.parents == []
         assert product.categories == []
@@ -68,7 +84,7 @@ class TestProduct:
             </categories>
         </product>
         """
-        product = ProductInstallable.from_xml(xml_content)
+        product = _installable_from_xml(xml_content)
 
         assert product.name == "jira"
         assert product.parents == ["ithd", "kbot"]
@@ -80,7 +96,7 @@ class TestProduct:
         <product name="jira" version="2025.02" type="solution" doc="doc1,doc2,doc3">
         </product>
         """
-        product = ProductInstallable.from_xml(xml_content)
+        product = _installable_from_xml(xml_content)
 
         assert product.name == "jira"
         assert product.docs == ["doc1", "doc2", "doc3"]
@@ -91,7 +107,7 @@ class TestProduct:
         <product name="jira" version="2025.02" type="solution" doc="">
         </product>
         """
-        product = ProductInstallable.from_xml(xml_content)
+        product = _installable_from_xml(xml_content)
 
         assert product.name == "jira"
         assert product.docs == []
@@ -100,13 +116,13 @@ class TestProduct:
         """Test creating Product from invalid XML."""
         xml_content = "<invalid>test</invalid>"
         with pytest.raises(ValueError, match="Root element must be 'product'"):
-            ProductInstallable.from_xml(xml_content)
+            Product.from_xml(xml_content)
 
     def test_from_xml_missing_name(self) -> None:
         """Test creating Product from XML without name."""
         xml_content = '<product version="1.0.0"></product>'
         with pytest.raises(ValueError, match="Product name is required"):
-            ProductInstallable.from_xml(xml_content)
+            Product.from_xml(xml_content)
 
     def test_from_json_simple(self) -> None:
         """Test creating Product from simple JSON."""
@@ -117,10 +133,10 @@ class TestProduct:
             "type": "solution"
         }
         """
-        product = ProductInstallable.from_json(json_content)
+        product = _installable_from_json(json_content)
 
         assert product.name == "jira"
-        assert product.version == "2025.03"
+        assert product.version == _version_str("2025.03")
         assert product.type == "solution"
 
     def test_from_json_complex(self) -> None:
@@ -148,10 +164,10 @@ class TestProduct:
             }
         }
         """
-        product = ProductInstallable.from_json(json_content)
+        product = _installable_from_json(json_content)
 
         assert product.name == "jira"
-        assert product.version == "2025.03"
+        assert product.version == _version_str("2025.03")
         assert product.parents == ["ithd"]
         assert product.categories == ["itsm", "knowledge"]
         assert product.docs == ["doc1", "doc2", "doc3"]
@@ -169,7 +185,7 @@ class TestProduct:
             "doc": ""
         }
         """
-        product = ProductInstallable.from_json(json_content)
+        product = _installable_from_json(json_content)
 
         assert product.name == "jira"
         assert product.docs == []
@@ -178,13 +194,13 @@ class TestProduct:
         """Test creating Product from invalid JSON."""
         json_content = '{"name": "test"'  # Missing closing brace
         with pytest.raises(ValueError, match="Invalid JSON content"):
-            ProductInstallable.from_json(json_content)
+            Product.from_json(json_content)
 
     def test_from_json_missing_name(self) -> None:
         """Test creating Product from JSON without name."""
         json_content = '{"version": "1.0.0"}'
         with pytest.raises(ValueError, match="Product name is required"):
-            ProductInstallable.from_json(json_content)
+            Product.from_json(json_content)
 
     def test_from_xml_file(self) -> None:
         """Test creating Product from XML file."""
@@ -197,16 +213,16 @@ class TestProduct:
             xml_path = f.name
 
         try:
-            product = ProductInstallable.from_xml_file(xml_path)
+            product = ProductInstallable(product=Product.from_xml_file(xml_path))
             assert product.name == "test"
-            assert product.version == "1.0.0"
+            assert product.version == _version_str("1.0.0")
         finally:
             Path(xml_path).unlink()
 
     def test_from_xml_file_not_found(self) -> None:
         """Test creating Product from non-existent XML file."""
         with pytest.raises(FileNotFoundError):
-            ProductInstallable.from_xml_file("/non/existent/file.xml")
+            Product.from_xml_file("/non/existent/file.xml")
 
     def test_from_json_file(self) -> None:
         """Test creating Product from JSON file."""
@@ -216,15 +232,15 @@ class TestProduct:
             json_path = f.name
 
         try:
-            product = ProductInstallable.from_json_file(json_path)
+            product = ProductInstallable(product=Product.from_json_file(json_path))
             assert product.name == "test"
-            assert product.version == "1.0.0"
+            assert product.version == _version_str("1.0.0")
         finally:
             Path(json_path).unlink()
 
     def test_merge_xml_json(self) -> None:
         """Test merging XML and JSON products."""
-        xml_product = ProductInstallable(
+        xml_product = create_installable(
             name="jira",
             version="2025.02",
             type="solution",
@@ -232,7 +248,7 @@ class TestProduct:
             categories=["itsm"],
         )
 
-        json_product = ProductInstallable(
+        json_product = create_installable(
             name="jira",
             version="2025.03",  # Different version
             type="solution",
@@ -242,10 +258,15 @@ class TestProduct:
             display={"name": {"en": "Kbot for Atlassian"}},
         )
 
-        merged = ProductInstallable.merge_xml_json(xml_product, json_product)
+        merged_product = Product.merge(xml_product.product, json_product.product)
+        merged = ProductInstallable(
+            product=merged_product,
+            env=json_product.env,
+            branch=json_product.branch or xml_product.branch,
+        )
 
         assert merged.name == "jira"
-        assert merged.version == "2025.03"  # JSON takes precedence
+        assert merged.version == _version_str("2025.03")  # JSON takes precedence
         assert merged.parents == ["ithd"]  # JSON empty, so XML is used
         assert merged.categories == ["itsm", "knowledge"]  # JSON takes precedence
         assert merged.license == "kbot-included"  # From JSON
@@ -253,13 +274,13 @@ class TestProduct:
 
     def test_merge_xml_json_different_names(self) -> None:
         """Test merging products with different names."""
-        xml_product = ProductInstallable(name="jira", version="1.0.0", type="solution")
-        json_product = ProductInstallable(
+        xml_product = create_installable(name="jira", version="1.0.0", type="solution")
+        json_product = create_installable(
             name="confluence", version="1.0.0", type="solution"
         )
 
         with pytest.raises(ValueError, match="Product names don't match"):
-            ProductInstallable.merge_xml_json(xml_product, json_product)
+            Product.merge(xml_product.product, json_product.product)
 
     def test_from_installer_folder_xml_only(self) -> None:
         """Test creating Product from installer folder with XML only."""
@@ -274,10 +295,10 @@ class TestProduct:
             xml_file = product_dir / "description.xml"
             xml_file.write_text(xml_content)
 
-            product = ProductInstallable(name="jira")
+            product = create_installable(name="jira")
             product.load_from_installer_folder(product_dir)
             assert product.name == "jira"
-            assert product.version == "2025.02"
+            assert product.version == _version_str("2025.02")
 
     def test_from_installer_folder_xml_and_json(self) -> None:
         """Test creating Product from installer folder with XML and JSON."""
@@ -306,16 +327,16 @@ class TestProduct:
             json_file = product_dir / "description.json"
             json_file.write_text(json_content)
 
-            product = ProductInstallable(name="jira")
+            product = create_installable(name="jira")
             product.load_from_installer_folder(product_dir)
             assert product.name == "jira"
-            assert product.version == "2025.03"  # From JSON
+            assert product.version == _version_str("2025.03")  # From JSON
             assert product.parents == ["ithd"]  # From XML
             assert product.license == "kbot-included"  # From JSON
 
     def test_to_xml(self) -> None:
         """Test converting Product to XML."""
-        product = ProductInstallable(
+        product = create_installable(
             name="jira",
             version="2025.02",
             type="solution",
@@ -325,16 +346,16 @@ class TestProduct:
         )
 
         xml = product.to_xml()
-        assert '<product name="jira"' in xml
-        assert 'version="2025.02"' in xml
+        assert 'name="jira"' in xml
+        assert 'version="{}"'.format(_version_str("2025.02")) in xml
         assert 'type="solution"' in xml
-        assert '<parent name="ithd" />' in xml
-        assert '<category name="itsm" />' in xml
+        assert 'name="ithd"' in xml
+        assert 'name="itsm"' in xml
         assert 'doc="doc1,doc2"' in xml
 
     def test_to_json(self) -> None:
         """Test converting Product to JSON."""
-        product = ProductInstallable(
+        product = create_installable(
             name="jira",
             version="2025.02",
             type="solution",
@@ -356,24 +377,58 @@ class TestProduct:
         assert data["env"] == "prod"
         assert data["license"] == "kbot-included"
 
+    def test_to_json_description_structure(self) -> None:
+        """Test Product.to_json matches description.json structure."""
+        json_content = """
+        {
+            "name": "3rdparty",
+            "version": "2025.03",
+            "date": "2026/06/17",
+            "type": "framework",
+            "parents": [],
+            "categories": [],
+            "build": {
+                "timestamp": "2026/06/17 07:08:54",
+                "branch": "release-2025.03-dev",
+                "commit": "70ca3093f81fe9ffc5f22a572ff86dd038e6cb7f"
+            },
+            "license": "kbot-included",
+            "display": {
+                "name": {
+                    "en": "",
+                    "fr": ""
+                },
+                "description": {
+                    "en": "",
+                    "fr": ""
+                }
+            }
+        }
+        """
+        product = Product.from_json(json_content)
+        assert product.to_json() == json.loads(json_content)
+
     def test_str_representation(self) -> None:
         """Test string representation of ProductInstallable."""
-        product = ProductInstallable(name="jira", version="2025.02", type="solution")
+        product = create_installable(name="jira", version="2025.02", type="solution")
         assert (
             str(product)
-            == "ProductInstallable(name='jira', version='2025.02', type='solution')"
+            == f"ProductInstallable(name='jira', version='{_version_str('2025.02')}', type='solution')"
         )
 
     def test_repr_representation(self) -> None:
         """Test detailed string representation of ProductInstallable."""
-        product = ProductInstallable(
+        product = create_installable(
             name="jira",
             version="2025.02",
             type="solution",
             parents=["ithd"],
             categories=["itsm"],
         )
-        expected = "ProductInstallable(name='jira', version='2025.02', type='solution', parents=['ithd'], categories=['itsm'])"
+        expected = (
+            f"ProductInstallable(name='jira', version='{_version_str('2025.02')}', "
+            "type='solution', parents=['ithd'], categories=['itsm'])"
+        )
         assert repr(product) == expected
 
     def test_parse_comma_separated_string(self) -> None:
@@ -400,46 +455,12 @@ class TestProduct:
 
     def test_load_product_by_name(self) -> None:
         """Test _load_product_by_name method."""
-        product = ProductInstallable(name="test", version="1.0.0")
+        product = create_installable(name="test", version="1.0.0")
         loaded_product = product._load_product_by_name("new-product")
 
         assert loaded_product.name == "new-product"
         # Version inherits from parent product
-        assert loaded_product.version == "1.0.0"
-
-    def test_update_from_product(self) -> None:
-        """Test _update_from_product method."""
-        source_product = ProductInstallable(
-            name="source",
-            version="2.0.0",
-            build="build123",
-            date="2025-01-01",
-            type="framework",
-            docs=["doc1", "doc2"],
-            env="prod",
-            parents=["parent1", "parent2"],
-            categories=["cat1"],
-            license="MIT",
-            display={"name": {"en": "Source Product"}},
-            build_details={"timestamp": "2025-01-01"},
-        )
-
-        target_product = ProductInstallable(name="target", version="1.0.0")
-        target_product._update_from_product(source_product)
-
-        # Check that all fields are updated except name and provider
-        assert target_product.name == "target"  # Should remain unchanged
-        assert target_product.version == "2.0.0"
-        assert target_product.build == "build123"
-        assert target_product.date == "2025-01-01"
-        assert target_product.type == "framework"
-        assert target_product.docs == ["doc1", "doc2"]
-        assert target_product.env == "prod"
-        assert target_product.parents == ["parent1", "parent2"]
-        assert target_product.categories == ["cat1"]
-        assert target_product.license == "MIT"
-        assert target_product.display == {"name": {"en": "Source Product"}}
-        assert target_product.build_details == {"timestamp": "2025-01-01"}
+        assert loaded_product.version == _version_str("1.0.0")
 
     def test_load_from_installer_folder(self) -> None:
         """Test load_from_installer_folder method."""
@@ -467,11 +488,11 @@ class TestProduct:
             json_file.write_text(json_content)
 
             # Create a product instance and load data into it
-            product = ProductInstallable(name="jira")
+            product = create_installable(name="jira")
             product.load_from_installer_folder(product_dir)
 
             assert product.name == "jira"  # Should remain unchanged
-            assert product.version == "2025.03"  # From JSON
+            assert product.version == _version_str("2025.03")  # From JSON
             assert product.parents == ["ithd"]  # From XML
             assert product.docs == ["doc1", "doc2"]  # From XML
             assert product.env == "prod"  # From JSON
@@ -480,14 +501,14 @@ class TestProduct:
     def test_get_dependencies(self) -> None:
         """Test get_dependencies method."""
         # Create a product with dependencies
-        product_a = ProductInstallable(
+        product_a = create_installable(
             name="product-a", version="1.0.0", parents=["product-b", "product-c"]
         )
-        product_b = ProductInstallable(
+        product_b = create_installable(
             name="product-b", version="1.0.0", parents=["product-d"]
         )
-        product_c = ProductInstallable(name="product-c", version="1.0.0")
-        product_d = ProductInstallable(name="product-d", version="1.0.0")
+        product_c = create_installable(name="product-c", version="1.0.0")
+        product_d = create_installable(name="product-d", version="1.0.0")
 
         # Mock the _load_product_by_name method to return our test products
         def mock_load_product(
@@ -500,7 +521,7 @@ class TestProduct:
                 "product-c": product_c,
                 "product-d": product_d,
             }
-            return products.get(name, ProductInstallable(name=name))
+            return products.get(name, create_installable(name=name))
 
         product_a._load_product_by_name = mock_load_product
 
@@ -518,11 +539,11 @@ class TestProduct:
         assert "product-c" in product_names
         assert "product-d" in product_names
 
-    def test_clone_without_dependencies(self) -> None:
-        """Test clone method without dependencies."""
+    def test_download_without_dependencies(self) -> None:
+        """Test download method without dependencies."""
         from unittest.mock import Mock, patch
 
-        product = ProductInstallable(name="test-product", version="1.0.0")
+        product = create_installable(name="test-product", version="1.0.0")
         mock_provider = Mock()
         mock_provider.get_name.return_value = "nexus"
         mock_provider.get_branch.return_value = "master"
@@ -538,28 +559,28 @@ class TestProduct:
             with patch.object(
                 product, "load_from_installer_folder"
             ) as mock_load_folder:
-                product.clone(base_path, dependencies=False)
+                product.download(base_path, dependencies=False)
 
                 # Verify provider.clone_and_checkout was called with product subdirectory
                 from installer_support.installer_utils import version_to_branch
 
-                branch = version_to_branch("1.0.0", env="dev")
+                branch = version_to_branch(product.version, env="dev")
                 mock_provider.clone_and_checkout.assert_called_once_with(
                     product_path, branch, repository_name="test-product"
                 )
                 # Verify load_from_installer_folder was called
                 mock_load_folder.assert_called_once_with(product_path)
 
-    def test_clone_with_dependencies(self) -> None:
-        """Test clone method with dependencies."""
+    def test_download_with_dependencies(self) -> None:
+        """Test download method with dependencies."""
         from unittest.mock import Mock, patch
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create products with dependencies
-            product_a = ProductInstallable(
+            product_a = create_installable(
                 name="product-a", version="1.0.0", parents=["product-b"]
             )
-            product_b = ProductInstallable(name="product-b", version="1.0.0")
+            product_b = create_installable(name="product-b", version="1.0.0")
 
             # Mock providers
             mock_provider_a = Mock()
@@ -579,7 +600,7 @@ class TestProduct:
             ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
-                return ProductInstallable(name=name)
+                return create_installable(name=name)
 
             product_a._load_product_by_name = mock_load_product
 
@@ -597,13 +618,13 @@ class TestProduct:
                 (product_a_path / "description.xml").write_text("<product></product>")
                 (product_b_path / "description.xml").write_text("<product></product>")
 
-                product_a.clone(base_path, dependencies=True)
+                product_a.download(base_path, dependencies=True)
 
                 # Verify both providers were called (version converted to branch)
                 from installer_support.installer_utils import version_to_branch
 
-                branch_a = version_to_branch("1.0.0", env="dev")
-                branch_b = version_to_branch("1.0.0", env="dev")
+                branch_a = version_to_branch(product_a.version, env="dev")
+                branch_b = version_to_branch(product_b.version, env="dev")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
                     product_a_path, branch_a, repository_name="product-a"
                 )
@@ -615,16 +636,16 @@ class TestProduct:
                 assert mock_load_a.call_count == 1
                 assert mock_load_b.call_count == 1
 
-    def test_clone_with_dependencies_same_product_name(self) -> None:
-        """Test clone when dependency has same name uses base path."""
+    def test_download_with_dependencies_same_product_name(self) -> None:
+        """Test download when dependency has same name uses base path."""
         from unittest.mock import Mock, patch
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create product with self as dependency (shouldn't happen but tests path logic)
-            product_a = ProductInstallable(
+            product_a = create_installable(
                 name="product-a", version="1.0.0", parents=["product-b"]
             )
-            product_b = ProductInstallable(name="product-b", version="1.0.0")
+            product_b = create_installable(name="product-b", version="1.0.0")
 
             # Mock providers
             mock_provider_a = Mock()
@@ -644,7 +665,7 @@ class TestProduct:
             ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
-                return ProductInstallable(name=name)
+                return create_installable(name=name)
 
             product_a._load_product_by_name = mock_load_product
 
@@ -662,18 +683,18 @@ class TestProduct:
                 (product_a_path / "description.xml").write_text("<product></product>")
                 (product_b_path / "description.xml").write_text("<product></product>")
 
-                product_a.clone(base_path, dependencies=True)
+                product_a.download(base_path, dependencies=True)
 
                 # When cloning product_a in collection, if name matches, use original path
                 # Otherwise use parent / product.name
                 from installer_support.installer_utils import version_to_branch
 
-                branch_a = version_to_branch("1.0.0", env="dev")
+                branch_a = version_to_branch(product_a.version, env="dev")
                 mock_provider_a.clone_and_checkout.assert_called_once_with(
                     product_a_path, branch_a, repository_name="product-a"
                 )
                 # product-b should be cloned to base_path / "product-b"
-                branch_b = version_to_branch("1.0.0", env="dev")
+                branch_b = version_to_branch(product_b.version, env="dev")
                 mock_provider_b.clone_and_checkout.assert_called_once_with(
                     product_b_path, branch_b, repository_name="product-b"
                 )

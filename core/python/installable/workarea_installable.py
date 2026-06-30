@@ -123,18 +123,18 @@ class WorkareaInstallable(InstallableBase):
         }
 
     @override
-    def clone(self, path: Path, *, dependencies: bool = True) -> None:
-        """Clone is not applicable for workarea.
+    def download(self, path: Path, *, dependencies: bool = True) -> None:
+        """Download is not applicable for workarea.
 
         Args:
-            path: Path to clone to (not used).
-            dependencies: Whether to clone dependencies (not used).
+            path: Path to download to (not used).
+            dependencies: Whether to download dependencies (not used).
 
         Raises:
-            NotImplementedError: Always raised as clone is not applicable for workarea.
+            NotImplementedError: Always raised as download is not applicable for workarea.
 
         """
-        msg = "Clone is not applicable for workarea. Use install() instead."
+        msg = "Download is not applicable for workarea. Use install() instead."
         raise NotImplementedError(msg)
 
     @override

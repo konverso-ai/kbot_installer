@@ -272,8 +272,8 @@ def add(
         installer_path.mkdir(parents=True, exist_ok=True)
 
         # Clone product to installer directory
-        click.echo(f"Cloning product '{name}' to {installer_path}")
-        installable.clone(installer_path, dependencies=not no_rec)
+        click.echo(f"Downloading product '{name}' to {installer_path}")
+        installable.download(installer_path, dependencies=not no_rec)
 
         # Ensure installable has dirname set after clone
         if not installable.dirname:
@@ -300,7 +300,7 @@ def add(
                 f"Warning: products.lock.json not found in {installer_path}",
                 err=True,
             )
-            click.echo("The product was cloned but lock file is missing.", err=True)
+            click.echo("The product was downloaded but lock file is missing.", err=True)
             return
 
         installable.install(

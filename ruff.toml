@@ -3,7 +3,7 @@
 # Cache directory will be set to a temporary location to avoid cluttering the repository
 
 # Target Python version
-target-version = "py313"
+target-version = "py310"
 
 # Line length (used by both linter and formatter)
 line-length = 88

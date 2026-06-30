@@ -1,8 +1,10 @@
 """Factory for creating installable products."""
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from utils.factory.factory import factory_class
+from utils.product import Build, Categories, Category, LocDisplayMapper, Parent, Parents, Product
+from utils.version import Version
 
 if TYPE_CHECKING:
     from installable.product_installable import BuildDetails, ProductInstallable
@@ -14,11 +16,13 @@ def create_installable(
     build: str | None = None,
     date: str | None = None,
     product_type: str = "solution",
+    type: str | None = None,
     docs: list[str] | None = None,
     env: str = "dev",
     parents: list[str] | None = None,
     categories: list[str] | None = None,
     license_info: str | None = None,
+    license: str | None = None,
     display: dict[str, dict[str, str]] | None = None,
     build_details: "BuildDetails | None" = None,
     providers: list[str] | None = None,
@@ -51,32 +55,53 @@ def create_installable(
         ProductInstallable instance.
 
     """
-    # If branch is specified, force env to "dev"
-    effective_env = "dev" if branch else env
+    effective_env: Literal["dev", "prod"] = "dev" if branch else cast("Literal['dev', 'prod']", env)
+    effective_type = type if type is not None else product_type
+    effective_license = license if license is not None else license_info
 
-    # Prepare kwargs for ProductInstallable constructor
-    product_kwargs = {
-        "name": name,
-        "version": version,
-        "build": build,
-        "date": date,
-        "type": product_type,
-        "docs": docs or [],
+    build_obj: Build | None = None
+    if build_details:
+        build_obj = Build(
+            timestamp=build_details.get("timestamp", ""),
+            branch=build_details.get("branch", ""),
+            commit=build_details.get("commit", ""),
+        )
+    elif build:
+        build_obj = Build(timestamp=build)
+
+    product = Product(
+        name=name,
+        version=Version.parse(version),
+        doc=",".join(docs) if docs else None,
+        build=build_obj,
+        date=date or "",
+        type=effective_type,
+        parents=(
+            Parents(parent=[Parent(name=parent_name) for parent_name in parents])
+            if parents
+            else None
+        ),
+        categories=(
+            Categories(
+                category=[Category(name=category_name) for category_name in categories]
+            )
+            if categories
+            else None
+        ),
+        license=effective_license,
+        display=LocDisplayMapper.model_validate(display) if display is not None else None,
+    )
+
+    installable_kwargs = {
+        "product": product,
         "env": effective_env,
-        "parents": parents or [],
-        "categories": categories or [],
-        "license": license_info,
-        "display": display,
-        "build_details": build_details,
         "providers": providers or ["storage", "github", "bitbucket"],
         "branch": branch,
     }
 
-    # Get the class using factory_class
     cls = factory_class(
         name="product",
         package="installable",
     )
 
-    # Instantiate with the product kwargs
-    return cast("ProductInstallable", cls(**product_kwargs))
+    return cast("ProductInstallable", cls(**installable_kwargs))
