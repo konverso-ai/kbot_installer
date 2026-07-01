@@ -1,11 +1,9 @@
 from enum import Enum
 import json
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
-from utils.path_utils import ensure_file_path
 from utils.product import Product
 from utils.settings import Settings
 
@@ -42,15 +40,13 @@ class GitRepo(BaseModel):
     product: Product
     settings: Any
 
-    def export(self) -> dict[Path, str]:
-        """Export the repository to a file."""
+    def export(self) -> dict[str, str]:
+        """Export repository files as relative paths mapped to file contents."""
         return {
-            ensure_file_path("pyproject.toml"): self.product.to_toml(),
-            ensure_file_path("description.xml"): self.product.to_xml(),
-            ensure_file_path(Path("conf") / "kbot.conf"): self.settings.to_conf(),
-            ensure_file_path(Path("conf") / "kbot.json"): _settings_json(
-                self.settings
-            ),
+            "pyproject.toml": self.product.to_toml(),
+            "description.xml": self.product.to_xml(),
+            "conf/kbot.conf": self.settings.to_conf(),
+            "conf/kbot.json": _settings_json(self.settings),
         }
 
 

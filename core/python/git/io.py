@@ -5,6 +5,8 @@ from utils.path_utils import ensure_file_path
 
 
 def write_repository(repo: GitRepo, root: str | Path) -> None:
-    """Write repository files to disk."""
-    for path, content in repo.export().items():
-        ensure_file_path(path).write_text(content, encoding="utf-8")
+    """Write repository files to disk under the given root directory."""
+    root_path = Path(root).resolve()
+    for relative_path, content in repo.export().items():
+        file_path = ensure_file_path(root_path / relative_path)
+        file_path.write_text(content, encoding="utf-8")

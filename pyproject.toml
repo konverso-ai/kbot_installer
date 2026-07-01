@@ -95,6 +95,7 @@ known_first_party = [
     "cli",
     "config",
     "credentials",
+    "errors",
     "git",
     "installable",
     "installer_support",
