@@ -15,16 +15,24 @@ if TYPE_CHECKING:
     from auth.base import HttpAuthBase
 
 DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH = Path("conf") / "default_providers_config.json"
+INSTALLED_PROVIDERS_CONFIG_GLOB = "installer/*/conf/default_providers_config.json"
 
 
 def _resolve_default_providers_config_path() -> Path:
     """Locate the default providers config file in dev or installed layouts."""
     for parent in Path(__file__).resolve().parents:
-        candidate = parent / DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH
-        if candidate.is_file():
-            return candidate
+        dev_candidate = parent / DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH
+        if dev_candidate.is_file():
+            return dev_candidate
 
-    msg = f"Could not find {DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH}"
+        for installed_candidate in sorted(parent.glob(INSTALLED_PROVIDERS_CONFIG_GLOB)):
+            if installed_candidate.is_file():
+                return installed_candidate
+
+    msg = (
+        f"Could not find {DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH} "
+        f"or {INSTALLED_PROVIDERS_CONFIG_GLOB}"
+    )
     raise FileNotFoundError(msg)
 
 
