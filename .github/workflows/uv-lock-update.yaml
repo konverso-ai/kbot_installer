@@ -1,0 +1,52 @@
+name: UV lock update
+on:
+  schedule:
+    - cron: "0 22 * * 5"
+  workflow_dispatch:
+
+env:
+  GH_TOKEN: ${{ secrets.GH_PAT }}
+
+jobs:
+  uv-lock-update:
+    name: UV lock on master
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ env.GH_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "konversoai"
+          git config --global user.email "devops@konverso.ai"
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Run uv lock
+        run: |
+          rm uv.lock
+          uv lock
+        env:
+          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
+          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+
+      - name: Commit uv.lock if changed
+        run: |
+          if git status --porcelain | grep -q 'uv.lock'; then
+            echo "uv.lock was modified, committing..."
+            git add uv.lock
+            git commit -m "chore(KB-21000): update uv.lock on master"
+            git push origin master
+          else
+            echo "uv.lock is unchanged, nothing to commit."
+          fi

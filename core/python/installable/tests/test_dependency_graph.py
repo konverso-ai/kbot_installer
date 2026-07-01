@@ -285,7 +285,7 @@ class TestDependencyGraph:
 
         levels = graph.get_dependency_levels()
         # All products should be present in the levels
-        all_products = {product.name for product in [product1, product2, product3]}
+        all_products = {product.product.name for product in [product1, product2, product3]}
         found_products = set()
         for level in levels:
             found_products.update(level)

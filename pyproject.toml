@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings",
     "pygit2",
     "python-dotenv",
+    "python-json-logger",
     "requests",
     "rich",
     "typing_extensions",
@@ -109,8 +110,11 @@ known_first_party = [
 [tool.deptry.optional_dependencies_dev_groups]
 dev = ["lint", "typecheck", "test", "deps"]
 
+[tool.deptry.package_module_name_map]
+python-json-logger = "pythonjsonlogger"
+
 [tool.deptry.per_rule_ignores]
-DEP001 = ["tomllib"]
+DEP001 = ["tomllib", "Bot"]
 DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]

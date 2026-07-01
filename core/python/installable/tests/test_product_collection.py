@@ -1,6 +1,5 @@
 """Tests for collection module."""
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -117,8 +116,8 @@ class TestProductCollection:
         product = populated_collection.get_product("product1")
 
         assert product is not None
-        assert product.name == "product1"
-        assert product.version == _version_str("1.0.0")
+        assert product.product.name == "product1"
+        assert product.product.version.to_str() == _version_str("1.0.0")
 
     def test_get_product_nonexistent(self, populated_collection) -> None:
         """Test getting a non-existent product."""
@@ -141,13 +140,13 @@ class TestProductCollection:
         customer_products = populated_collection.get_products_by_type("customer")
 
         assert len(solution_products) == 1
-        assert solution_products[0].name == "product1"
+        assert solution_products[0].product.name == "product1"
 
         assert len(framework_products) == 1
-        assert framework_products[0].name == "product2"
+        assert framework_products[0].product.name == "product2"
 
         assert len(customer_products) == 1
-        assert customer_products[0].name == "product3"
+        assert customer_products[0].product.name == "product3"
 
     def test_get_products_by_type_nonexistent(self, populated_collection) -> None:
         """Test filtering products by non-existent type."""
@@ -182,21 +181,21 @@ class TestProductCollection:
         solution_products = populated_collection.filter_products(type="solution")
 
         assert len(solution_products) == 1
-        assert solution_products[0].name == "product1"
+        assert solution_products[0].product.name == "product1"
 
     def test_filter_products_by_category(self, populated_collection) -> None:
         """Test filtering products by category using filter_products."""
         category1_products = populated_collection.filter_products(category="category1")
 
         assert len(category1_products) == 2
-        assert all("category1" in p.categories for p in category1_products)
+        assert all("category1" in p.product.category_names for p in category1_products)
 
     def test_filter_products_has_parents_true(self, populated_collection) -> None:
         """Test filtering products that have parents."""
         products_with_parents = populated_collection.filter_products(has_parents=True)
 
         assert len(products_with_parents) == 2
-        assert all(p.parents for p in products_with_parents)
+        assert all(p.product.parent_names for p in products_with_parents)
 
     def test_filter_products_has_parents_false(self, populated_collection) -> None:
         """Test filtering products that don't have parents."""
@@ -205,7 +204,7 @@ class TestProductCollection:
         )
 
         assert len(products_without_parents) == 1
-        assert not products_without_parents[0].parents
+        assert not products_without_parents[0].product.parent_names
 
     def test_filter_products_multiple_filters(self, populated_collection) -> None:
         """Test filtering products with multiple criteria."""
@@ -214,7 +213,7 @@ class TestProductCollection:
         )
 
         assert len(products) == 1
-        assert products[0].name == "product1"
+        assert products[0].product.name == "product1"
 
     def test_filter_products_no_filters(self, populated_collection) -> None:
         """Test filtering products with no filters."""
@@ -307,9 +306,9 @@ class TestProductCollection:
             product = collection.load_product(str(installer_path), "test_product")
 
             assert product is not None
-            assert product.name == "test_product"
-            assert product.version == _version_str("1.0.0")  # From XML
-            assert product.type == "solution"  # From XML
+            assert product.product.name == "test_product"
+            assert product.product.version.to_str() == _version_str("1.0.0")  # From XML
+            assert product.product.type == "solution"  # From XML
 
     def test_load_product_nonexistent(self) -> None:
         """Test loading a non-existent product."""
@@ -372,58 +371,7 @@ class TestProductCollection:
             assert is_valid is False
             assert "No product folders found" in errors
 
-    def test_export_to_json(self, populated_collection) -> None:
-        """Test exporting collection to JSON."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_json(file_path)
-
-            # Verify file was created and contains expected data
-            with Path(file_path).open(encoding="utf-8") as f:
-                data = json.load(f)
-
-            assert "products" in data
-            assert len(data["products"]) == 3
-
-            # Check first product
-            product1 = data["products"][0]
-            assert product1["name"] == "product1"
-            assert product1["version"] == "1.0.0"
-            assert product1["type"] == "solution"
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
-    def test_export_to_xml(self, populated_collection) -> None:
-        """Test exporting collection to XML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_xml(file_path)
-
-            # Verify file was created and contains expected data
-            from defusedxml import ElementTree
-
-            tree = ElementTree.parse(file_path)
-            root = tree.getroot()
-
-            assert root.tag == "products"
-            assert len(root) == 3
-
-            # Check first product
-            product1 = root[0]
-            assert product1.tag == "product"
-            assert product1.get("name") == "product1"
-            assert product1.get("version") == _version_str("1.0.0")
-            assert product1.get("type") == "solution"
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
-    def test_from_installer_success(self) -> None:
+    def test_validate_installer_no_products(self) -> None:
         """Test creating collection from installer directory successfully."""
         with tempfile.TemporaryDirectory() as temp_dir:
             installer_path = Path(temp_dir)
@@ -443,7 +391,7 @@ class TestProductCollection:
 
             assert len(collection.products) == 2
             # Verify products have correct names
-            product_names = {p.name for p in collection.products}
+            product_names = {p.product.name for p in collection.products}
             assert "product1" in product_names
             assert "product2" in product_names
 
@@ -490,7 +438,10 @@ class TestProductCollection:
             # Both should have the same number of products
             assert len(collection1.products) == len(collection2.products)
             assert len(collection1.products) == 1
-            assert collection1.products[0].name == collection2.products[0].name
+            assert (
+                collection1.products[0].product.name
+                == collection2.products[0].product.name
+            )
 
     def test_empty_collection_operations(self, empty_collection) -> None:
         """Test operations on empty collection."""
@@ -536,74 +487,12 @@ class TestProductCollection:
             if not is_valid:
                 assert any("invalid_product" in error.lower() for error in errors)
 
-    def test_to_bfs_ordered_dict(self, populated_collection) -> None:
-        """Test converting collection to BFS-ordered dictionary."""
-        # Set up dependencies for BFS ordering
-        product1 = populated_collection.get_product("product1")
-        product2 = populated_collection.get_product("product2")
-        product3 = populated_collection.get_product("product3")
-
-        # Make product1 depend on product2, product3 depend on product1
-        if product1 and product3:
-            product1.parents = ["product2"]
-            product3.parents = ["product1"]
-
-        bfs_dict = populated_collection.to_bfs_ordered_dict("product3")
-
-        # Should return dictionary with product names as keys and JSON as values
-        assert isinstance(bfs_dict, dict)
-        assert (
-            "product3" in bfs_dict or "product1" in bfs_dict or "product2" in bfs_dict
-        )
-
-    def test_save_bfs_ordered_json(self, populated_collection) -> None:
-        """Test saving collection as BFS-ordered JSON."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = Path(f.name)
-
-        try:
-            # Set up dependencies
-            product1 = populated_collection.get_product("product1")
-            if product1:
-                product1.parents = ["product2"]
-
-            populated_collection.save_bfs_ordered_json(file_path, "product1")
-
-            # Verify file was created
-            assert file_path.exists()
-            with file_path.open(encoding="utf-8") as f:
-                data = json.load(f)
-                assert isinstance(data, dict)
-
-        finally:
-            file_path.unlink(missing_ok=True)
-
-    def test_export_to_json_structure(self, populated_collection) -> None:
-        """Test that export_to_json creates correct structure."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_json(file_path)
-
-            with Path(file_path).open(encoding="utf-8") as f:
-                data = json.load(f)
-                assert "products" in data
-                assert len(data["products"]) == 3
-                # Verify structure includes all expected fields
-                product1 = data["products"][0]
-                assert "name" in product1
-                assert "version" in product1
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
     def test_get_files(self, populated_collection) -> None:
         """Test getting files matching pattern across products."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set up product directories
             for product in populated_collection.products:
-                product_dir = Path(temp_dir) / product.name
+                product_dir = Path(temp_dir) / product.product.name
                 product_dir.mkdir()
                 product.dirname = product_dir
 
@@ -620,7 +509,7 @@ class TestProductCollection:
         """Test getting files with specific extensions."""
         with tempfile.TemporaryDirectory() as temp_dir:
             product = populated_collection.products[0]
-            product_dir = Path(temp_dir) / product.name
+            product_dir = Path(temp_dir) / product.product.name
             product_dir.mkdir()
             product.dirname = product_dir
 
@@ -636,7 +525,7 @@ class TestProductCollection:
         """Test getting files from non-existent path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             product = populated_collection.products[0]
-            product.dirname = Path(temp_dir) / product.name
+            product.dirname = Path(temp_dir) / product.product.name
 
             files = populated_collection.get_files("nonexistent/path", "*")
             assert files == []

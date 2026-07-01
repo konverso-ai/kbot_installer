@@ -27,7 +27,7 @@ class WorkareaInstallable(InstallableBase):
     Attributes:
         name: Workarea name (typically derived from path).
         target: Path to the workarea directory.
-        installer_path: Path to installer directory (contains products.lock.json).
+        installer_path: Path to installer directory (contains cloned products).
         db_internal: Whether to use internal PostgreSQL database.
         db_host: Database hostname (for external database).
         db_port: Database port number.
@@ -58,20 +58,15 @@ class WorkareaInstallable(InstallableBase):
         """Load workarea data from installer folder.
 
         Args:
-            folder_path: Path to installer directory (should contain products.lock.json).
+            folder_path: Path to installer directory with cloned product folders.
 
         Raises:
-            FileNotFoundError: If products.lock.json doesn't exist.
-            ValueError: If JSON is invalid.
+            NotADirectoryError: If the installer path is not a directory.
+            ValueError: If product loading fails.
 
         """
-        lock_file = folder_path / "products.lock.json"
-        if not lock_file.exists():
-            msg = f"products.lock.json not found in {folder_path}"
-            raise FileNotFoundError(msg)
-
         self.installer_path = folder_path.resolve()
-        self.products = ProductCollection.from_json(str(lock_file))
+        self.products = ProductCollection.from_installer(str(folder_path))
 
     @override
     def to_xml(self) -> str:
@@ -165,13 +160,14 @@ class WorkareaInstallable(InstallableBase):
 
         # Ensure we have products loaded
         if not self.products.products and self.installer_path:
-            lock_file = self.installer_path / "products.lock.json"
-            if lock_file.exists():
-                self.products = ProductCollection.from_json(str(lock_file))
-            else:
+            try:
+                self.products = ProductCollection.from_installer(str(self.installer_path))
+            except (NotADirectoryError, ValueError) as exc:
                 logger.warning(
-                    "No products.lock.json found in %s. Database setup will proceed without products.",
+                    "Failed to load products from %s: %s. "
+                    "Database setup will proceed without products.",
                     self.installer_path,
+                    exc,
                 )
 
         # Set up database using appropriate manager

@@ -293,16 +293,6 @@ def add(
         # Install product to workarea
         click.echo(f"Installing product '{name}' to {workarea_path}")
 
-        # Verify lock file was created
-        lock_file = installer_path / "products.lock.json"
-        if not lock_file.exists():
-            click.echo(
-                f"Warning: products.lock.json not found in {installer_path}",
-                err=True,
-            )
-            click.echo("The product was downloaded but lock file is missing.", err=True)
-            return
-
         installable.install(
             workarea_path,
             dependencies=not no_rec,

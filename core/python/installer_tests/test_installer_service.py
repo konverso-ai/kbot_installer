@@ -9,6 +9,20 @@ from installer_support.installation_table import InstallationTable
 from installer_support.installer_service import InstallerService
 
 
+def _mock_installable(
+    name: str,
+    *,
+    product_type: str = "solution",
+    parent_names: list[str] | None = None,
+) -> MagicMock:
+    """Build a ProductInstallable mock with nested product metadata."""
+    mock = MagicMock()
+    mock.product.name = name
+    mock.product.type = product_type
+    mock.product.parent_names = parent_names or []
+    return mock
+
+
 class TestInstallerService:
     """Test cases for InstallerService."""
 
@@ -189,8 +203,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product
-            mock_product = MagicMock()
-            mock_product.name = "test-product"
+            mock_product = _mock_installable("test-product")
             mock_product.versions = ["1.0.0", "2.0.0"]
 
             with (
@@ -215,8 +228,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product
-            mock_product = MagicMock()
-            mock_product.name = "test-product"
+            mock_product = _mock_installable("test-product")
             mock_product.versions = ["1.0.0", "2.0.0"]
 
             # Mock clone_and_checkout to raise exception immediately
@@ -319,15 +331,11 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product collection with products
-            mock_product1 = MagicMock()
-            mock_product1.name = "product1"
-            mock_product1.type = "nexus"
-            mock_product1.parents = ["dep1", "dep2"]
+            mock_product1 = _mock_installable(
+                "product1", product_type="nexus", parent_names=["dep1", "dep2"]
+            )
 
-            mock_product2 = MagicMock()
-            mock_product2.name = "product2"
-            mock_product2.type = "github"
-            mock_product2.parents = []
+            mock_product2 = _mock_installable("product2", product_type="github")
 
             mock_collection = MagicMock()
             mock_collection.get_all_products.return_value = [
@@ -355,8 +363,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product collection
-            mock_product = MagicMock()
-            mock_product.name = "product1"
+            mock_product = _mock_installable("product1")
             mock_collection = MagicMock()
             mock_collection.get_all_products.return_value = [mock_product]
 
@@ -393,8 +400,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock products
-            mock_product = MagicMock()
-            mock_product.name = "test-product"
+            mock_product = _mock_installable("test-product")
             mock_collection = MagicMock()
             mock_collection.get_all_products.return_value = [mock_product]
 
@@ -506,8 +512,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product with no dependencies
-            mock_product = MagicMock()
-            mock_product.parents = []
+            mock_product = _mock_installable("test-product", parent_names=[])
 
             with patch.object(service, "_get_product", return_value=mock_product):
                 # Test
@@ -521,11 +526,11 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock products - main product with dependencies, and dependency products with no dependencies
-            mock_main_product = MagicMock()
-            mock_main_product.parents = ["dep1", "dep2"]
+            mock_main_product = _mock_installable(
+                "test-product", parent_names=["dep1", "dep2"]
+            )
 
-            mock_dep_product = MagicMock()
-            mock_dep_product.parents = []  # Dependencies have no further dependencies
+            mock_dep_product = _mock_installable("dep", parent_names=[])
 
             def mock_get_product(product_name: str):
                 if product_name == "test-product":
@@ -564,11 +569,11 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock products - main product with dependencies, and dependency products with no dependencies
-            mock_main_product = MagicMock()
-            mock_main_product.parents = ["dep1"]
+            mock_main_product = _mock_installable(
+                "test-product", parent_names=["dep1"]
+            )
 
-            mock_dep_product = MagicMock()
-            mock_dep_product.parents = []  # Dependencies have no further dependencies
+            mock_dep_product = _mock_installable("dep", parent_names=[])
 
             def mock_get_product(product_name: str):
                 if product_name == "test-product":
@@ -777,8 +782,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock product with name "kbot_installer"
-            mock_product = MagicMock()
-            mock_product.name = "kbot_installer"
+            mock_product = _mock_installable("kbot_installer")
 
             with patch.object(
                 service.installation_table, "complete_installation"
@@ -875,8 +879,7 @@ class TestInstallerService:
             product_dir.mkdir()
             (product_dir / "old_file.txt").write_text("old")
 
-            mock_product = MagicMock()
-            mock_product.name = "test-product"
+            mock_product = _mock_installable("test-product")
 
             with (
                 patch(
@@ -901,10 +904,8 @@ class TestInstallerService:
             extra_dir.mkdir()
 
             # Mock existing products - include both target and extra products
-            mock_target_product = MagicMock()
-            mock_target_product.name = "target-product"
-            mock_extra_product = MagicMock()
-            mock_extra_product.name = "extra-product"
+            mock_target_product = _mock_installable("target-product")
+            mock_extra_product = _mock_installable("extra-product")
             mock_collection = MagicMock()
             mock_collection.get_all_products.return_value = [
                 mock_target_product,

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import fnmatch
-import importlib
-import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from defusedxml import ElementTree as defused_ET
+from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
 
 from installable.dependency_graph import DependencyGraph
@@ -19,29 +17,23 @@ from installer_support.installer_utils import version_to_branch
 if TYPE_CHECKING:
     from installable.product_installable import ProductInstallable
 
-# Access underlying ElementTree for creation (safe - we control the content)
-# defusedxml wraps xml.etree.ElementTree for secure parsing, but creation is safe
-# __origin__ contains the string 'xml.etree.ElementTree', so we import it dynamically
-_etree_module_name = defused_ET.__origin__  # type: ignore[attr-defined]
-ET = importlib.import_module(_etree_module_name)
 
+class ProductCollection(BaseModel):
+    """Manages a collection of products."""
 
-class ProductCollection:
-    """Manages a collection of products.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    Attributes:
-        products: List of Product instances.
+    products: Annotated[list[ProductInstallable], Field(default_factory=list)]
 
-    """
-
-    def __init__(self, products: list[ProductInstallable] | None = None) -> None:
-        """Initialize collection with products.
-
-        Args:
-            products: List of Product instances.
-
-        """
-        self.products = products or []
+    def __init__(
+        self,
+        products: list[ProductInstallable] | None = None,
+        **data: Any,
+    ) -> None:
+        """Initialize collection, accepting a legacy positional products list."""
+        if products is not None:
+            data["products"] = products
+        super().__init__(**data)
 
     def add_product(self, product: ProductInstallable) -> None:
         """Add a product to the collection.
@@ -63,7 +55,7 @@ class ProductCollection:
 
         """
         for i, product in enumerate(self.products):
-            if product.name == product_name:
+            if product.product.name == product_name:
                 del self.products[i]
                 return True
         return False
@@ -79,7 +71,7 @@ class ProductCollection:
 
         """
         for product in self.products:
-            if product.name == name:
+            if product.product.name == name:
                 return product
         return None
 
@@ -102,7 +94,7 @@ class ProductCollection:
             List of products of the specified type.
 
         """
-        return [p for p in self.products if p.type == product_type]
+        return [p for p in self.products if p.product.type == product_type]
 
     def get_products_by_category(self, category: str) -> list[ProductInstallable]:
         """Get products filtered by category.
@@ -114,7 +106,7 @@ class ProductCollection:
             List of products containing the specified category.
 
         """
-        return [p for p in self.products if category in p.categories]
+        return [p for p in self.products if category in p.product.category_names]
 
     def get_product_names(self) -> list[str]:
         """Get list of all product names.
@@ -123,7 +115,7 @@ class ProductCollection:
             List of product names.
 
         """
-        return [p.name for p in self.products]
+        return [p.product.name for p in self.products]
 
     def filter_products(self, **filters: str) -> list[ProductInstallable]:
         """Filter products by various criteria.
@@ -138,16 +130,18 @@ class ProductCollection:
         filtered = self.products
 
         if "type" in filters:
-            filtered = [p for p in filtered if p.type == filters["type"]]
+            filtered = [p for p in filtered if p.product.type == filters["type"]]
 
         if "category" in filters:
-            filtered = [p for p in filtered if filters["category"] in p.categories]
+            filtered = [
+                p for p in filtered if filters["category"] in p.product.category_names
+            ]
 
         if "has_parents" in filters:
             if filters["has_parents"]:
-                filtered = [p for p in filtered if p.parents]
+                filtered = [p for p in filtered if p.product.parent_names]
             else:
-                filtered = [p for p in filtered if not p.parents]
+                filtered = [p for p in filtered if not p.product.parent_names]
 
         return filtered
 
@@ -285,108 +279,6 @@ class ProductCollection:
 
         return len(errors) == 0, errors
 
-    def export_to_json(self, file_path: str) -> None:
-        """Export collection to JSON file.
-
-        Args:
-            file_path: Path to output JSON file.
-
-        """
-        data = {"products": [p.to_json() for p in self.products]}
-
-        with Path(file_path).open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-
-    @classmethod
-    def from_json(cls, file_path: str | Path) -> "ProductCollection":
-        """Load collection from JSON file (e.g., products.lock.json).
-
-        Args:
-            file_path: Path to JSON file.
-
-        Returns:
-            ProductCollection instance with loaded products.
-
-        Raises:
-            FileNotFoundError: If JSON file doesn't exist.
-            ValueError: If JSON is invalid.
-
-        """
-        file_path = Path(file_path)
-        if not file_path.exists():
-            msg = f"JSON file not found: {file_path}"
-            raise FileNotFoundError(msg)
-
-        try:
-            data = json.loads(file_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            msg = f"Invalid JSON in {file_path}: {e}"
-            raise ValueError(msg) from e
-
-        if "products" not in data:
-            msg = f"Invalid format: missing 'products' key in {file_path}"
-            raise ValueError(msg)
-
-        products = []
-        for product_data in data["products"]:
-            product = create_installable(
-                name=product_data["name"],
-                version=product_data.get("version", ""),
-                product_type=product_data.get("type", "solution"),
-                parents=product_data.get("parents", []),
-                categories=product_data.get("categories", []),
-                license_info=product_data.get("license"),
-                display=product_data.get("display"),
-                build_details=product_data.get("build_details"),
-                providers=product_data.get("providers"),
-                branch=product_data.get("branch"),
-            )
-            # Set dirname if provided in JSON
-            if product_data.get("dirname"):
-                product.dirname = Path(product_data["dirname"])
-            # Set provider_name_used if provided in JSON
-            if product_data.get("provider_name_used"):
-                product.provider_name_used = product_data["provider_name_used"]
-            # Set branch_used if provided in JSON
-            if product_data.get("branch_used"):
-                product.branch_used = product_data["branch_used"]
-            products.append(product)
-
-        return cls(products)
-
-    def export_to_xml(self, file_path: str) -> None:
-        """Export collection to XML file.
-
-        Args:
-            file_path: Path to output XML file.
-
-        """
-        root = ET.Element("products")
-        for product in self.products:
-            product_elem = ET.SubElement(root, "product")
-            product_elem.set("name", product.name)
-            product_elem.set("version", product.version)
-            product_elem.set("type", product.type)
-            if product.build:
-                product_elem.set("build", product.build)
-            if product.date:
-                product_elem.set("date", product.date)
-
-            if product.parents:
-                parents_elem = ET.SubElement(product_elem, "parents")
-                for parent in product.parents:
-                    parent_elem = ET.SubElement(parents_elem, "parent")
-                    parent_elem.set("name", parent)
-
-            if product.categories:
-                categories_elem = ET.SubElement(product_elem, "categories")
-                for category in product.categories:
-                    category_elem = ET.SubElement(categories_elem, "category")
-                    category_elem.set("name", category)
-
-        tree = ET.ElementTree(root)
-        tree.write(file_path, encoding="utf-8", xml_declaration=True)
-
     def clone_with_dependencies(self, root_product_name: str, base_path: Path) -> None:
         """Clone a product and all its dependencies using BFS order.
 
@@ -399,43 +291,18 @@ class ProductCollection:
         bfs_products = graph.get_bfs_ordered_products(root_product_name)
 
         for product in bfs_products:
-            product_path = base_path / product.name
+            product_path = base_path / product.product.name
             branch = product.branch
-            if not branch and product.version:
-                branch = version_to_branch(product.version, env=product.env)
+            if not branch and product.product.version:
+                branch = version_to_branch(
+                    product.product.version.to_str(), env=product.env
+                )
             product.provider.clone_and_checkout(
-                product_path, branch, repository_name=product.name
+                product_path, branch, repository_name=product.product.name
             )
             product.load_from_installer_folder(product_path)
 
-    def to_bfs_ordered_dict(self, root_product_name: str) -> dict[str, Any]:
-        """Convert collection to BFS-ordered dictionary.
-
-        Args:
-            root_product_name: Starting product name.
-
-        Returns:
-            Dictionary with product.name: product.to_json() in BFS order.
-
-        """
-        graph = DependencyGraph(self.products)
-        bfs_products = graph.get_bfs_ordered_products(root_product_name)
-
-        return {product.name: product.to_json() for product in bfs_products}
-
-    def save_bfs_ordered_json(self, file_path: Path, root_product_name: str) -> None:
-        """Save collection as BFS-ordered JSON.
-
-        Args:
-            file_path: Path to save the JSON file.
-            root_product_name: Starting product name.
-
-        """
-        bfs_dict = self.to_bfs_ordered_dict(root_product_name)
-
-        with Path(file_path).open("w", encoding="utf-8") as f:
-            json.dump(bfs_dict, f, indent=2, ensure_ascii=False)
-
+    @override
     def __iter__(self) -> Iterator[ProductInstallable]:
         """Iterate over products in the collection.
 
@@ -530,4 +397,4 @@ class ProductCollection:
     @override
     def __repr__(self) -> str:
         """Detailed string representation of ProductCollection."""
-        return f"ProductCollection(products={[p.name for p in self.products]})"
+        return f"ProductCollection(products={[p.product.name for p in self.products]})"

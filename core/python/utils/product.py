@@ -35,10 +35,6 @@ class LocMapper(BaseModel):
 
     en: str
     fr: str | None = None
-    de: str | None = None
-    it: str | None = None
-    es: str | None = None
-    pt: str | None = None
 
 
 class LocDisplayMapper(BaseModel):

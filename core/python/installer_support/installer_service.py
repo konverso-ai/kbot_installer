@@ -167,9 +167,11 @@ class InstallerService:
         # Simple list format
         lines = ["Installed products:", "=================="]
         for product in products:
-            lines.append(f"- {product.name} ({product.type})")
-            if hasattr(product, "parents") and product.parents:
-                lines.append(f"  Dependencies: {', '.join(product.parents)}")
+            lines.append(f"- {product.product.name} ({product.product.type})")
+            if product.product.parent_names:
+                lines.append(
+                    f"  Dependencies: {', '.join(product.product.parent_names)}"
+                )
         return "\n".join(lines)
 
     def repair(
@@ -209,7 +211,7 @@ class InstallerService:
 
         # Get target products (what should be installed)
         target_products = self._get_products_with_dependencies(product_name)
-        target_product_names = {p.name for p in target_products}
+        target_product_names = {p.product.name for p in target_products}
 
         # Repair products that need fixing
         repaired_products = self._repair_products(target_products, version)
@@ -227,15 +229,17 @@ class InstallerService:
         repaired_products = []
 
         for product in target_products:
-            product_dir = self.installer_dir / product.name
+            product_dir = self.installer_dir / product.product.name
             needs_repair, repair_reason = self._check_product_needs_repair(
-                product_dir, product.name, version
+                product_dir, product.product.name, version
             )
 
             if needs_repair:
-                logger.info("Repairing product '%s' (%s)", product.name, repair_reason)
+                logger.info(
+                    "Repairing product '%s' (%s)", product.product.name, repair_reason
+                )
                 self._repair_single_product(product_dir, product, version or "master")
-                repaired_products.append(product.name)
+                repaired_products.append(product.product.name)
 
         return repaired_products
 
@@ -271,7 +275,9 @@ class InstallerService:
         if not existing_products:
             return
 
-        existing_product_names = {p.name for p in existing_products.get_all_products()}
+        existing_product_names = {
+            p.product.name for p in existing_products.get_all_products()
+        }
         extra_products = existing_product_names - target_product_names
 
         for extra_product in extra_products:
@@ -334,16 +340,12 @@ class InstallerService:
 
         # Load the main product to get its dependencies
         main_product = self._get_product(product_name)
-        if (
-            not main_product
-            or not hasattr(main_product, "parents")
-            or not main_product.parents
-        ):
+        if not main_product or not main_product.product.parent_names:
             logger.debug("No dependencies to install for product '%s'", product_name)
             return
 
         # Install each dependency
-        for dep_name in main_product.parents:
+        for dep_name in main_product.product.parent_names:
             if dep_name != "kbot_installer":  # Skip self-installation
                 logger.debug("Installing dependency: %s", dep_name)
                 try:
@@ -569,14 +571,16 @@ class InstallerService:
     def _install_single_product(self, product: ProductInstallable, version: str) -> None:
         """Install a single product."""
         logger.debug(
-            "Installing single product: %s (version: %s)", product.name, version
+            "Installing single product: %s (version: %s)",
+            product.product.name,
+            version,
         )
 
         # Skip self-installation
-        if product.name == "kbot_installer":
+        if product.product.name == "kbot_installer":
             logger.info("Skipping self-installation of kbot_installer")
             self.installation_table.complete_installation(
-                product_name=product.name,
+                product_name=product.product.name,
                 provider_name="self",
                 status="skipped",
             )
@@ -586,28 +590,35 @@ class InstallerService:
         branch = version_to_branch(version)
 
         # Create product directory
-        product_dir = self.installer_dir / product.name
+        product_dir = self.installer_dir / product.product.name
 
         # Remove existing directory to ensure fresh installation
         if product_dir.exists():
             shutil.rmtree(product_dir)
-            logger.debug("Removed existing directory for product: %s", product.name)
+            logger.debug(
+                "Removed existing directory for product: %s", product.product.name
+            )
 
         # Ensure directory exists
         ensure_directory(product_dir)
 
         # Clone repository
-        logger.debug("Cloning %s (branch: %s) to %s", product.name, branch, product_dir)
-        self.installation_table.begin_installation(product.name)
+        logger.debug(
+            "Cloning %s (branch: %s) to %s",
+            product.product.name,
+            branch,
+            product_dir,
+        )
+        self.installation_table.begin_installation(product.product.name)
         self.selector_provider.clone_and_checkout(
-            product_dir, branch, repository_name=product.name
+            product_dir, branch, repository_name=product.product.name
         )
 
         actual_provider_name = self.selector_provider.get_name()
         self.installation_table.complete_installation(
-            product_name=product.name,
+            product_name=product.product.name,
             provider_name=actual_provider_name,
             status="success",
         )
 
-        logger.info("Successfully installed product: %s", product.name)
+        logger.info("Successfully installed product: %s", product.product.name)

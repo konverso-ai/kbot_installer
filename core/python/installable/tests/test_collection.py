@@ -118,8 +118,8 @@ class TestProductCollection:
         product = populated_collection.get_product("product1")
 
         assert product is not None
-        assert product.name == "product1"
-        assert product.version == _version_str("1.0.0")
+        assert product.product.name == "product1"
+        assert product.product.version.to_str() == _version_str("1.0.0")
 
     def test_get_product_nonexistent(self, populated_collection) -> None:
         """Test getting a non-existent product."""
@@ -142,13 +142,13 @@ class TestProductCollection:
         customer_products = populated_collection.get_products_by_type("customer")
 
         assert len(solution_products) == 1
-        assert solution_products[0].name == "product1"
+        assert solution_products[0].product.name == "product1"
 
         assert len(framework_products) == 1
-        assert framework_products[0].name == "product2"
+        assert framework_products[0].product.name == "product2"
 
         assert len(customer_products) == 1
-        assert customer_products[0].name == "product3"
+        assert customer_products[0].product.name == "product3"
 
     def test_get_products_by_type_nonexistent(self, populated_collection) -> None:
         """Test filtering products by non-existent type."""
@@ -183,21 +183,21 @@ class TestProductCollection:
         solution_products = populated_collection.filter_products(type="solution")
 
         assert len(solution_products) == 1
-        assert solution_products[0].name == "product1"
+        assert solution_products[0].product.name == "product1"
 
     def test_filter_products_by_category(self, populated_collection) -> None:
         """Test filtering products by category using filter_products."""
         category1_products = populated_collection.filter_products(category="category1")
 
         assert len(category1_products) == 2
-        assert all("category1" in p.categories for p in category1_products)
+        assert all("category1" in p.product.category_names for p in category1_products)
 
     def test_filter_products_has_parents_true(self, populated_collection) -> None:
         """Test filtering products that have parents."""
         products_with_parents = populated_collection.filter_products(has_parents=True)
 
         assert len(products_with_parents) == 2
-        assert all(p.parents for p in products_with_parents)
+        assert all(p.product.parent_names for p in products_with_parents)
 
     def test_filter_products_has_parents_false(self, populated_collection) -> None:
         """Test filtering products that don't have parents."""
@@ -206,7 +206,7 @@ class TestProductCollection:
         )
 
         assert len(products_without_parents) == 1
-        assert not products_without_parents[0].parents
+        assert not products_without_parents[0].product.parent_names
 
     def test_filter_products_multiple_filters(self, populated_collection) -> None:
         """Test filtering products with multiple criteria."""
@@ -215,7 +215,7 @@ class TestProductCollection:
         )
 
         assert len(products) == 1
-        assert products[0].name == "product1"
+        assert products[0].product.name == "product1"
 
     def test_filter_products_no_filters(self, populated_collection) -> None:
         """Test filtering products with no filters."""
@@ -311,8 +311,12 @@ class TestProductCollection:
 
             # Mock load_from_installer_folder to update the product instance
             def mock_load(self, _folder_path):
-                self.version = "1.0.0"
-                self.type = "solution"
+                self.product = self.product.model_copy(
+                    update={
+                        "version": Version.parse("1.0.0"),
+                        "type": "solution",
+                    }
+                )
 
             mock_from_installer_folder.side_effect = mock_load
 
@@ -320,8 +324,8 @@ class TestProductCollection:
             product = collection.load_product(str(installer_path), "test_product")
 
             assert product is not None
-            assert product.name == "test_product"
-            assert product.version == _version_str("1.0.0")
+            assert product.product.name == "test_product"
+            assert product.product.version.to_str() == _version_str("1.0.0")
             mock_from_installer_folder.assert_called_once()
 
     def test_load_product_nonexistent(self) -> None:
@@ -385,57 +389,6 @@ class TestProductCollection:
             assert is_valid is False
             assert "No product folders found" in errors
 
-    def test_export_to_json(self, populated_collection) -> None:
-        """Test exporting collection to JSON."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_json(file_path)
-
-            # Verify file was created and contains expected data
-            with Path(file_path).open(encoding="utf-8") as f:
-                data = json.load(f)
-
-            assert "products" in data
-            assert len(data["products"]) == 3
-
-            # Check first product
-            product1 = data["products"][0]
-            assert product1["name"] == "product1"
-            assert product1["version"] == "1.0.0"
-            assert product1["type"] == "solution"
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
-    def test_export_to_xml(self, populated_collection) -> None:
-        """Test exporting collection to XML."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
-            file_path = f.name
-
-        try:
-            populated_collection.export_to_xml(file_path)
-
-            # Verify file was created and contains expected data
-            from defusedxml import ElementTree
-
-            tree = ElementTree.parse(file_path)
-            root = tree.getroot()
-
-            assert root.tag == "products"
-            assert len(root) == 3
-
-            # Check first product
-            product1 = root[0]
-            assert product1.tag == "product"
-            assert product1.get("name") == "product1"
-            assert product1.get("version") == _version_str("1.0.0")
-            assert product1.get("type") == "solution"
-
-        finally:
-            Path(file_path).unlink(missing_ok=True)
-
     @patch(
         "installable.product_installable.ProductInstallable.load_from_installer_folder",
         autospec=True,
@@ -466,13 +419,17 @@ class TestProductCollection:
                     self = args[0]
                     if call_count < len(sample_products[:2]):
                         product = sample_products[call_count]
-                        self.version = product.version
-                        self.type = product.type
-                        self.parents = product.parents
-                        self.categories = product.categories
-                        self.build = product.build
-                        self.date = product.date
-                        self.license = product.license
+                        self.product = product.product.model_copy(
+                            update={
+                                "version": product.product.version,
+                                "type": product.product.type,
+                                "parents": product.product.parents,
+                                "categories": product.product.categories,
+                                "build": product.product.build,
+                                "date": product.product.date,
+                                "license": product.product.license,
+                            }
+                        )
                         call_count += 1
 
             mock_from_installer.side_effect = mock_load
@@ -480,7 +437,10 @@ class TestProductCollection:
             collection = ProductCollection.from_installer(str(installer_path))
 
             assert len(collection.products) == 2
-            assert collection.products == sample_products[:2]
+            for loaded, expected in zip(
+                collection.products, sample_products[:2], strict=True
+            ):
+                assert loaded.product == expected.product
 
     def test_from_installer_invalid_directory(self) -> None:
         """Test creating collection from invalid directory."""
@@ -516,7 +476,9 @@ class TestProductCollection:
                     self = args[0]
                     if call_count == 0:
                         # First product loads successfully
-                        self.version = "1.0.0"
+                        self.product = self.product.model_copy(
+                            update={"version": Version.parse("1.0.0")}
+                        )
                         call_count += 1
                     else:
                         # Second product raises error
@@ -546,7 +508,10 @@ class TestProductCollection:
 
                 def mock_load(*args: object, **_kwargs: object) -> None:
                     if args:
-                        args[0].version = "1.0.0"
+                        installable = args[0]
+                        installable.product = installable.product.model_copy(
+                            update={"version": Version.parse("1.0.0")}
+                        )
 
                 mock_from_installer.side_effect = mock_load
 

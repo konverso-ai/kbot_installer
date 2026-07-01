@@ -7,7 +7,7 @@ from utils.product import Build, Categories, Category, LocDisplayMapper, Parent,
 from utils.version import Version
 
 if TYPE_CHECKING:
-    from installable.product_installable import BuildDetails, ProductInstallable
+    from installable.product_installable import ProductInstallable
 
 
 def create_installable(
@@ -24,7 +24,7 @@ def create_installable(
     license_info: str | None = None,
     license: str | None = None,
     display: dict[str, dict[str, str]] | None = None,
-    build_details: "BuildDetails | None" = None,
+    build_details: dict[str, str] | None = None,
     providers: list[str] | None = None,
     branch: str | None = None,
 ) -> "ProductInstallable":

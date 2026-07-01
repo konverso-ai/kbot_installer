@@ -13,13 +13,13 @@ import shutil
 import site
 import sys
 from collections import deque
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Annotated, Any, Literal, cast
 
 from typing_extensions import Self, override
 
 import tomlkit
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from tomlkit.exceptions import TOMLKitError
 
 from installer_support.installer_utils import ensure_directory, version_to_branch
@@ -27,7 +27,6 @@ from git.provider.base import ProviderBase
 from git.provider import create_provider
 
 from installable.factory import create_installable
-from utils.product import Build, Categories, Category, Parent, Parents
 from installable.installable_base import InstallableBase
 from installable.product_collection import ProductCollection
 from utils.product import Product
@@ -43,191 +42,47 @@ ProductConfig = dict[str, dict[str, str]]
 KbotConfigResult = dict[str, ProductConfig]
 
 
-class BuildDetails(TypedDict, total=False):
-    """Build details structure.
-
-    Attributes:
-        timestamp: Build timestamp (e.g., "2025/09/29 14:08:06").
-        branch: Git branch name (e.g., "release-2025.03-dev").
-        commit: Git commit hash (e.g., "7062432bd6ebeb174bf38bc5dde8d75d6e603e09").
-
-    """
-
-    timestamp: str
-    branch: str
-    commit: str
+DEFAULT_PROVIDERS: list[str] = ["storage", "github", "bitbucket"]
 
 
-@dataclass(init=False)
-class ProductInstallable(InstallableBase):
+class ProductInstallable(BaseModel, InstallableBase):
     """Orchestrates a Product and installable operations.
 
     Holds a :class:`~utils.product.Product` for metadata and implements
     :class:`InstallableBase` for installer workflows.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     product: Product
-    env: Literal["dev", "prod"]
-    providers: list[str]
-    dirname: Path | None
-    provider_name_used: str | None
-    branch_used: str | None
-    branch: str | None
-    provider: ProviderBase = field(init=False, repr=False, compare=False)
+    env: Literal["dev", "prod"] = "dev"
+    providers: Annotated[list[str], Field(default_factory=lambda: list(DEFAULT_PROVIDERS))]
+    dirname: Path | None = None
+    provider_name_used: str | None = None
+    branch_used: str | None = None
+    branch: str | None = None
+    _provider: ProviderBase = PrivateAttr()
 
-    def __init__(
-        self,
-        product: Product,
-        *,
-        env: Literal["dev", "prod"] = "dev",
-        providers: list[str] | None = None,
-        dirname: Path | None = None,
-        provider_name_used: str | None = None,
-        branch_used: str | None = None,
-        branch: str | None = None,
-    ) -> None:
-        """Initialize a product installable.
-
-        Args:
-            product: Product metadata.
-            env: Environment (dev or prod).
-            providers: Provider names used for downloading.
-            dirname: Directory path where the product is located.
-            provider_name_used: Provider used during the last download.
-            branch_used: Branch used during the last download.
-            branch: Specific branch override.
-        """
-        self.product = product
-        self.env = env
-        self.providers = providers or ["storage", "github", "bitbucket"]
-        self.dirname = dirname
-        self.provider_name_used = provider_name_used
-        self.branch_used = branch_used
-        self.branch = branch
-        self.provider = create_provider(name="selector", providers=self.providers)
+    @override
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize the runtime git provider after model validation."""
+        self._provider = create_provider(name="selector", providers=self.providers)
 
     @property
-    def name(self) -> str:
-        """Return the product name."""
-        return self.product.name
+    def provider(self) -> ProviderBase:
+        """Return the git provider used for clone operations."""
+        return self._provider
 
-    @property
-    def version(self) -> str:
-        """Return the product version."""
-        return self.product.version.to_str()
-
-    @version.setter
-    def version(self, value: str | Version) -> None:
-        self.product.version = Version.parse(value)
-
-    @property
-    def build(self) -> str | None:
-        """Return the build timestamp."""
-        return self.product.build_timestamp
-
-    @build.setter
-    def build(self, value: str | None) -> None:
-        build = Build(timestamp=value) if value else None
-        self.product = self.product.model_copy(update={"build": build})
-
-    @property
-    def date(self) -> str | None:
-        """Return the product date."""
-        return self.product.date or None
-
-    @date.setter
-    def date(self, value: str | None) -> None:
-        self.product = self.product.model_copy(update={"date": value or ""})
-
-    @property
-    def type(self) -> str:
-        """Return the product type."""
-        return self.product.type
-
-    @type.setter
-    def type(self, value: str) -> None:
-        self.product = self.product.model_copy(update={"type": value})
-
-    @property
-    def docs(self) -> list[str]:
-        """Return documentation references."""
-        return self.product.docs_list
-
-    @property
-    def parents(self) -> list[str]:
-        """Return parent product names."""
-        return self.product.parent_names
-
-    @parents.setter
-    def parents(self, value: list[str]) -> None:
-        parents = (
-            Parents(parent=[Parent(name=parent_name) for parent_name in value])
-            if value
-            else None
-        )
-        self.product = self.product.model_copy(update={"parents": parents})
-
-    @property
-    def categories(self) -> list[str]:
-        """Return product categories."""
-        return self.product.category_names
-
-    @categories.setter
-    def categories(self, value: list[str]) -> None:
-        categories = (
-            Categories(category=[Category(name=category_name) for category_name in value])
-            if value
-            else None
-        )
-        self.product = self.product.model_copy(update={"categories": categories})
-
-    @property
-    def license(self) -> str | None:
-        """Return license information."""
-        return self.product.license
-
-    @license.setter
-    def license(self, value: str | None) -> None:
-        self.product = self.product.model_copy(update={"license": value})
-
-    @property
-    def display(self) -> dict[str, dict[str, str]] | None:
-        """Return multilingual display information."""
-        if self.product.display is None:
-            return None
-        return self.product.display.model_dump(exclude_none=True)
-
-    @property
-    def build_details(self) -> "BuildDetails | None":
-        """Return detailed build information."""
-        if self.product.build is None:
-            return None
-        return {
-            "timestamp": self.product.build.timestamp,
-            "branch": self.product.build.branch,
-            "commit": self.product.build.commit,
-        }
-
-    @staticmethod
-    def _parse_comma_separated_string(value: str) -> list[str]:
-        """Parse a comma-separated string into a list of trimmed strings.
-
-        Args:
-            value: Comma-separated string to parse.
-
-        Returns:
-            List of trimmed strings, empty list if value is empty or None.
-
-        """
-        if not value:
-            return []
-        return [item.strip() for item in value.split(",") if item.strip()]
+    @provider.setter
+    def provider(self, value: ProviderBase) -> None:
+        """Replace the git provider (used in tests and provider overrides)."""
+        self._provider = value
 
     def _load_product_by_name(
         self,
         product_name: str,
         base_path: Path | None = None,
-        default_version: str | None = None,
+        default_version: str | Version | None = None,
     ) -> Self:
         """Load a product by its name.
 
@@ -245,7 +100,11 @@ class ProductInstallable(InstallableBase):
         # Use the same providers as the parent product to ensure consistency
         providers = self.providers
         # Use default_version if provided, otherwise use parent's version as fallback
-        version = default_version or self.version
+        version = (
+            default_version.to_str()
+            if isinstance(default_version, Version)
+            else (default_version or self.product.version.to_str())
+        )
         # Use the same branch as the parent product if specified
         branch = self.branch
 
@@ -261,8 +120,8 @@ class ProductInstallable(InstallableBase):
                 )
                 product.load_from_installer_folder(cloned_product_path)
                 # If description.xml doesn't specify a version, keep the default version
-                if not product.version and version:
-                    product.version = version
+                if not product.product.version and version:
+                    product.product.version = Version.parse(version)
                 return cast(Self, product)
 
         # Otherwise, create a minimal product instance with just the name using factory
@@ -383,15 +242,22 @@ class ProductInstallable(InstallableBase):
 
         # Use specified branch if provided, otherwise convert version to branch name
         # Store the calculated branch in self.branch so it's preserved and can be used by dependencies
-        if not self.branch and self.version:
-            self.branch = version_to_branch(self.version, env=self.env)
+        if not self.branch and self.product.version:
+            self.branch = version_to_branch(
+                self.product.version.to_str(), env=self.env
+            )
         branch = self.branch
 
         if not dependencies:
-            logger.warning("Downloading %s (branch: %s) to %s", self.name, branch, path)
-            product_path = path / self.name
+            logger.warning(
+                "Downloading %s (branch: %s) to %s",
+                self.product.name,
+                branch,
+                path,
+            )
+            product_path = path / self.product.name
             self.provider.clone_and_checkout(
-                product_path, branch, repository_name=self.name
+                product_path, branch, repository_name=self.product.name
             )
             # Store the provider and branch used (providers update these during clone)
             self.provider_name_used = self.provider.get_name()
@@ -399,17 +265,12 @@ class ProductInstallable(InstallableBase):
             # Only load if description.xml exists (clone may have failed)
             if (product_path / "description.xml").exists():
                 self.load_from_installer_folder(product_path)
-            # Export single product collection to lock file
-            collection = ProductCollection([self])
-            lock_file = path / "products.lock.json"
-            collection.export_to_json(str(lock_file))
-            logger.debug("Exported product collection to %s", lock_file)
             return
 
         # First, clone the main product to get its dependencies
-        main_product_path = path / self.name
+        main_product_path = path / self.product.name
         self.provider.clone_and_checkout(
-            main_product_path, branch, repository_name=self.name
+            main_product_path, branch, repository_name=self.product.name
         )
         # Store the provider and branch used (providers update these during clone)
         self.provider_name_used = self.provider.get_name()
@@ -432,29 +293,23 @@ class ProductInstallable(InstallableBase):
             current_product = queue.popleft()
 
             # Skip if already processed (can happen if product appears in multiple dependency chains)
-            if current_product.name in processed:
+            if current_product.product.name in processed:
                 continue
 
             # Clone current product if not already cloned (main product is already cloned)
-            if current_product.name != self.name and not self._download_dependency_product(
-                current_product, path, processed
+            if (
+                current_product.product.name != self.product.name
+                and not self._download_dependency_product(
+                    current_product, path, processed
+                )
             ):
                 continue
 
             # Mark as processed
-            processed.add(current_product.name)
+            processed.add(current_product.product.name)
 
             # Discover new dependencies from the (now loaded) current product
             self._discover_and_queue_parents(current_product, queue, processed, path)
-
-        # Now get the final collection with all discovered products
-        # All products are now cloned, so get_dependencies will load them all properly
-        collection = self.get_dependencies(base_path=path)
-
-        # Export collection to products.lock.json for install() to use later
-        lock_file = path / "products.lock.json"
-        collection.export_to_json(str(lock_file))
-        logger.debug("Exported product collection to %s", lock_file)
 
     def _download_dependency_product(
         self, product: Self, base_path: Path, processed: set[str]
@@ -472,26 +327,28 @@ class ProductInstallable(InstallableBase):
         """
         # Use specified branch if provided, otherwise convert version to branch name
         # Store the calculated branch in product.branch so it's preserved
-        if not product.branch and product.version:
-            product.branch = version_to_branch(product.version, env=product.env)
+        if not product.branch and product.product.version:
+            product.branch = version_to_branch(
+                product.product.version.to_str(), env=product.env
+            )
         dependency_branch = product.branch
-        product_path = base_path / product.name
+        product_path = base_path / product.product.name
 
         try:
             # Clone with branch fallback handled by selector_provider using config.branches
             product.provider.clone_and_checkout(
                 product_path,
                 dependency_branch,
-                repository_name=product.name,
+                repository_name=product.product.name,
             )
             # Store the provider and branch used (providers update these during clone)
             product.provider_name_used = product.provider.get_name()
             product.branch_used = product.provider.get_branch()
         except Exception:
             # Clone failed - selector_provider already tried all fallback branches from config
-            logger.exception("Failed to download %s", product.name)
+            logger.exception("Failed to download %s", product.product.name)
             # Mark as processed even if clone failed to avoid infinite loop
-            processed.add(product.name)
+            processed.add(product.product.name)
             # Continue with other dependencies even if one fails
             return False
 
@@ -523,7 +380,7 @@ class ProductInstallable(InstallableBase):
         # 1. Product is the main product (already cloned and loaded), or
         # 2. Product was successfully cloned and loaded (has dirname and description.xml)
         should_process_parents = False
-        if current_product.name == self.name:
+        if current_product.product.name == self.product.name:
             # Main product: should have been loaded already
             should_process_parents = True
         elif (
@@ -534,13 +391,13 @@ class ProductInstallable(InstallableBase):
             should_process_parents = True
 
         if should_process_parents:
-            for parent_name in current_product.parents:
+            for parent_name in current_product.product.parent_names:
                 if parent_name not in processed:
                     # Load parent product - try from cloned repo first, otherwise create minimal instance
                     parent_product = self._load_product_by_name(
                         parent_name,
                         base_path=base_path,
-                        default_version=current_product.version,
+                        default_version=current_product.product.version,
                     )
                     queue.append(parent_product)
 
@@ -566,20 +423,20 @@ class ProductInstallable(InstallableBase):
         while queue:
             current_product = queue.popleft()
 
-            if current_product.name in processed:
+            if current_product.product.name in processed:
                 continue
 
             collected_products.append(current_product)
-            processed.add(current_product.name)
+            processed.add(current_product.product.name)
 
             # Add dependencies to queue
             # Pass current product's version as default so dependencies inherit it
-            for parent_name in current_product.parents:
+            for parent_name in current_product.product.parent_names:
                 if parent_name not in processed:
                     parent_product = self._load_product_by_name(
                         parent_name,
                         base_path=base_path,
-                        default_version=current_product.version,
+                        default_version=current_product.product.version,
                     )
                     queue.append(parent_product)
 
@@ -598,7 +455,7 @@ class ProductInstallable(InstallableBase):
 
         """
         if not self.dirname:
-            msg = f"Product {self.name} has no dirname set"
+            msg = f"Product {self.product.name} has no dirname set"
             raise FileNotFoundError(msg)
 
         pyproject_file = self.dirname / "pyproject.toml"
@@ -646,7 +503,7 @@ class ProductInstallable(InstallableBase):
 
             conf_path = prod.dirname / "conf" / "kbot.conf"
             if not conf_path.exists():
-                result[prod.name] = {}
+                result[prod.product.name] = {}
                 continue
 
             # Parse INI-style config file
@@ -654,7 +511,7 @@ class ProductInstallable(InstallableBase):
             try:
                 parser.read(conf_path, encoding="utf-8")
             except configparser.Error:
-                result[prod.name] = {}
+                result[prod.product.name] = {}
                 continue
 
             # Convert to dict
@@ -662,7 +519,7 @@ class ProductInstallable(InstallableBase):
             for section in parser.sections():
                 prod_config[section] = dict(parser[section])
 
-            result[prod.name] = prod_config
+            result[prod.product.name] = prod_config
 
             # Aggregate into merged config
             for section, values in prod_config.items():
@@ -1081,117 +938,55 @@ class ProductInstallable(InstallableBase):
             dest_path.symlink_to(source_path.resolve())
             processed.add(dest_path.resolve())
 
-    def _find_lock_file(
-        self, path: Path, installer_path: Path | None
-    ) -> tuple[Path | None, Path | None]:
-        """Find products.lock.json file in common locations.
+    def _resolve_installer_path(
+        self, workarea_path: Path, installer_path: Path | None
+    ) -> Path:
+        """Resolve the installer directory for workarea installation.
 
         Args:
-            path: Workarea path.
-            installer_path: Optional installer path.
+            workarea_path: Workarea destination path.
+            installer_path: Explicit installer directory when provided.
 
         Returns:
-            Tuple of (lock_file_path, effective_installer_path).
+            Resolved installer directory path.
 
+        Raises:
+            ValueError: If the installer path cannot be determined.
         """
-        if installer_path:
-            return installer_path / "products.lock.json", installer_path
+        if installer_path is not None:
+            return installer_path.resolve()
 
-        potential_lock = path / "products.lock.json"
-        if potential_lock.exists():
-            return potential_lock, path
+        msg = (
+            f"installer_path is required to install products into {workarea_path}. "
+            "Pass the directory where products were cloned."
+        )
+        raise ValueError(msg)
 
-        parent_lock = path.parent / "products.lock.json"
-        if parent_lock.exists():
-            return parent_lock, path.parent
-
-        return None, None
-
-    def _verify_products_from_lock(
-        self, collection: ProductCollection, installer_path: Path
-    ) -> bool:
-        """Verify all products in collection exist in installer.
-
-        Args:
-            collection: Product collection from lock file.
-            installer_path: Path to installer directory.
-
-        Returns:
-            True if all products exist, False otherwise.
-
-        """
-        for product in collection.products:
-            if not product.dirname or not product.dirname.exists():
-                potential_dir = installer_path / product.name
-                if (potential_dir / "description.xml").exists():
-                    product.dirname = potential_dir.resolve()
-                else:
-                    logger.warning(
-                        "Product %s from lock file not found in installer at %s",
-                        product.name,
-                        potential_dir,
-                    )
-                    return False
-        return True
-
-    def _load_products_from_lock(
-        self, lock_file: Path, installer_path: Path, *, dependencies: bool
+    def _load_products_for_install(
+        self, installer_path: Path, *, dependencies: bool
     ) -> list[Self]:
-        """Load products from lock file.
+        """Load products from the installer directory for workarea installation.
 
         Args:
-            lock_file: Path to products.lock.json.
-            installer_path: Path to installer directory.
-            dependencies: Whether to include dependencies.
+            installer_path: Path to the installer directory.
+            dependencies: Whether to include dependency products.
 
         Returns:
-            List of products, empty if lock file invalid.
-
+            Products to process, loaded from cloned repositories when available.
         """
-        try:
-            collection = ProductCollection.from_json(lock_file)
-            if not self._verify_products_from_lock(collection, installer_path):
-                logger.warning(
-                    "Installer incomplete, missing products. Will clone if needed."
-                )
-                return []
+        if not dependencies:
+            product_dir = installer_path / self.product.name
+            loaded = ProductInstallable.from_installer_folder(product_dir)
+            return [cast(Self, loaded)] if loaded else []
 
-            products = collection.products
-            if not dependencies:
-                products = [p for p in products if p.name == self.name]
-            logger.debug("Installer already complete, using products.lock.json")
-        except (FileNotFoundError, ValueError) as e:
-            logger.warning("Failed to load products.lock.json: %s", e)
-            products = []
-        else:
-            return cast(list[Self], products)
-        return []
+        root_dir = installer_path / self.product.name
+        if root_dir.exists() and (root_dir / "description.xml").exists():
+            self.load_from_installer_folder(root_dir)
 
-    def _ensure_installer_complete(
-        self,
-        installer_path: Path,
-        *,
-        dependencies: bool,
-    ) -> list[Self]:
-        """Ensure installer is complete, cloning if needed.
-
-        Args:
-            installer_path: Path to installer directory.
-            dependencies: Whether to clone dependencies.
-
-        Returns:
-            List of products from lock file after cloning.
-
-        """
-        logger.debug("Installer not complete, downloading products to %s", installer_path)
-        self.download(installer_path, dependencies=dependencies)
-
-        lock_file = installer_path / "products.lock.json"
-        if lock_file.exists():
-            return self._load_products_from_lock(
-                lock_file, installer_path, dependencies=dependencies
-            )
-        return []
+        return cast(
+            list[Self],
+            self.get_dependencies(base_path=installer_path).products,
+        )
 
     def _process_product_work_config(
         self,
@@ -1210,14 +1005,16 @@ class ProductInstallable(InstallableBase):
         try:
             pyproject_file = product.pyproject_path
         except FileNotFoundError:
-            logger.warning("Product %s has no pyproject.toml", product.name)
+            logger.warning("Product %s has no pyproject.toml", product.product.name)
             return
 
         try:
             with pyproject_file.open(encoding="utf-8") as f:
                 pyproject_data = tomlkit.load(f)
         except (OSError, TOMLKitError):
-            logger.warning("Failed to load pyproject.toml for product %s", product.name)
+            logger.warning(
+                "Failed to load pyproject.toml for product %s", product.product.name
+            )
             return
 
         work_raw = pyproject_data.get("work")
@@ -1233,24 +1030,25 @@ class ProductInstallable(InstallableBase):
         link_external_config = link_section.get("external", {})
 
         if init_config:
-            logger.warning("Processing init section for product %s", product.name)
+            logger.warning("Processing init section for product %s", product.product.name)
             self._handle_work_init(workarea_root, init_config, processed)
 
         if copy_config and product.dirname is not None:
-            logger.warning("Processing copy section for product %s", product.name)
+            logger.warning("Processing copy section for product %s", product.product.name)
             self._handle_work_copy(
                 workarea_root, product.dirname, copy_config, ignore_config, processed
             )
 
         if link_config and product.dirname is not None:
-            logger.warning("Processing link section for product %s", product.name)
+            logger.warning("Processing link section for product %s", product.product.name)
             self._handle_work_link(
                 workarea_root, product.dirname, link_config, ignore_config, processed
             )
 
         if link_external_config:
             logger.warning(
-                "Processing link.external section for product %s", product.name
+                "Processing link.external section for product %s",
+                product.product.name,
             )
             self._handle_work_link_external(
                 workarea_root, link_external_config, processed
@@ -1274,47 +1072,32 @@ class ProductInstallable(InstallableBase):
         Args:
             path: Path to install the product to (workarea root).
             dependencies: Whether to install dependencies.
-            installer_path: Path where products are cloned (should contain products.lock.json).
-                         If None, attempts to detect from path.
+            installer_path: Path where products are cloned. Required.
 
         """
-        logger.debug("Installing product %s to %s", self.name, path)
+        logger.debug("Installing product %s to %s", self.product.name, path)
         ensure_directory(path)
 
-        logger.debug("Finding lock file in %s", path)
-        lock_file, effective_installer_path = self._find_lock_file(path, installer_path)
-
-        # Raise error if lock file is not found
-        if not lock_file or not lock_file.exists():
-            logger.error("Lock file not found at %s", lock_file)
-            msg = f"products.lock.json not found. Expected at: {lock_file or 'unknown location'}"
-            raise FileNotFoundError(msg)
-
-        if not effective_installer_path:
-            logger.error(
-                "Installer path could not be determined from lock file location"
-            )
-            msg = "Installer path could not be determined from lock file location"
-            raise ValueError(msg)
-
-        products = self._load_products_from_lock(
-            lock_file, effective_installer_path, dependencies=dependencies
+        effective_installer_path = self._resolve_installer_path(path, installer_path)
+        products = self._load_products_for_install(
+            effective_installer_path, dependencies=dependencies
         )
 
-        logger.debug("Loaded %d products from lock file", len(products))
+        logger.debug("Loaded %d products from installer directory", len(products))
 
-        # If loading from lock failed, try to ensure installer is complete
-        if not products and effective_installer_path:
-            products = self._ensure_installer_complete(
+        if not products:
+            logger.debug(
+                "Installer incomplete at %s, downloading products",
+                effective_installer_path,
+            )
+            self.download(effective_installer_path, dependencies=dependencies)
+            products = self._load_products_for_install(
                 effective_installer_path, dependencies=dependencies
             )
 
         if not products:
-            if dependencies:
-                collection = self.get_dependencies(base_path=effective_installer_path)
-                products = collection.products
-            else:
-                products = [self]
+            msg = f"No products found in installer directory: {effective_installer_path}"
+            raise FileNotFoundError(msg)
 
         logger.warning(
             "Products to process: %s", [product.dirname for product in products]
@@ -1322,9 +1105,9 @@ class ProductInstallable(InstallableBase):
         processed: set[Path] = set()
 
         for product in products:
-            logger.warning("Processing product %s", product.name)
+            logger.warning("Processing product %s", product.product.name)
             if not product.dirname:
-                logger.warning("Product %s has no dirname", product.name)
+                logger.warning("Product %s has no dirname", product.product.name)
                 continue
 
             self._process_product_work_config(product, path, processed)
@@ -1424,12 +1207,20 @@ class ProductInstallable(InstallableBase):
     @override
     def __str__(self) -> str:
         """Return string representation of ProductInstallable."""
-        return f"ProductInstallable(name='{self.name}', version='{self.version}', type='{self.type}')"
+        return (
+            f"ProductInstallable(name='{self.product.name}', "
+            f"version='{self.product.version.to_str()}', type='{self.product.type}')"
+        )
 
     @override
     def __repr__(self) -> str:
         """Detailed string representation of ProductInstallable."""
         return (
-            f"ProductInstallable(name='{self.name}', version='{self.version}', "
-            f"type='{self.type}', parents={self.parents}, categories={self.categories})"
+            f"ProductInstallable(name='{self.product.name}', "
+            f"version='{self.product.version.to_str()}', type='{self.product.type}', "
+            f"parents={self.product.parent_names}, "
+            f"categories={self.product.category_names})"
         )
+
+
+ProductCollection.model_rebuild()
