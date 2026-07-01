@@ -412,7 +412,7 @@ class TestCommandIntegration:
         """Test download command help."""
         result = self.runner.invoke(cli, ["download", "--help"])
         assert result.exit_code == 0
-        assert "Download a kbot product" in result.output
+        assert "Download kbot products from a product version or a bundle descriptor" in result.output
 
     def test_list_help(self) -> None:
         """Test list command help."""

@@ -19,7 +19,7 @@ from typing import Annotated, Any, Literal, cast
 from typing_extensions import Self, override
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from tomlkit.exceptions import TOMLKitError
 
 from installer_support.installer_utils import ensure_directory, version_to_branch
@@ -44,6 +44,24 @@ KbotConfigResult = dict[str, ProductConfig]
 
 DEFAULT_PROVIDERS: list[str] = ["storage", "github", "bitbucket"]
 
+_PRODUCT_FACTORY_KWARG_KEYS = frozenset(
+    {
+        "name",
+        "version",
+        "build",
+        "date",
+        "product_type",
+        "type",
+        "docs",
+        "parents",
+        "categories",
+        "license_info",
+        "license",
+        "display",
+        "build_details",
+    }
+)
+
 
 class ProductInstallable(BaseModel, InstallableBase):
     """Orchestrates a Product and installable operations.
@@ -62,6 +80,22 @@ class ProductInstallable(BaseModel, InstallableBase):
     branch_used: str | None = None
     branch: str | None = None
     _provider: ProviderBase = PrivateAttr()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _build_product_from_factory_kwargs(cls, data: object) -> object:
+        """Nest a Product when flat factory keyword arguments are provided."""
+        if not isinstance(data, dict) or "product" in data or "name" not in data:
+            return data
+
+        payload = dict(data)
+        product_kwargs = {
+            key: payload.pop(key)
+            for key in list(payload)
+            if key in _PRODUCT_FACTORY_KWARG_KEYS
+        }
+        payload["product"] = Product.from_dict(product_kwargs)
+        return payload
 
     @override
     def model_post_init(self, __context: Any) -> None:
@@ -112,17 +146,21 @@ class ProductInstallable(BaseModel, InstallableBase):
         if base_path:
             cloned_product_path = base_path / product_name
             if (cloned_product_path / "description.xml").exists():
-                product = create_installable(
-                    name=product_name,
-                    providers=providers,
-                    version=version,
-                    branch=branch,
+                loaded = cast(
+                    Self,
+                    create_installable(
+                        "product",
+                        name=product_name,
+                        providers=providers,
+                        version=version,
+                        branch=branch,
+                    ),
                 )
-                product.load_from_installer_folder(cloned_product_path)
+                loaded.load_from_installer_folder(cloned_product_path)
                 # If description.xml doesn't specify a version, keep the default version
-                if not product.product.version and version:
-                    product.product.version = Version.parse(version)
-                return cast(Self, product)
+                if not loaded.product.version and version:
+                    loaded.product.version = Version.parse(version)
+                return loaded
 
         # Otherwise, create a minimal product instance with just the name using factory
         # The provider will handle the actual loading when cloning
@@ -130,6 +168,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         return cast(
             Self,
             create_installable(
+                "product",
                 name=product_name, providers=providers, version=version, branch=branch
             ),
         )
@@ -181,7 +220,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             return None
 
         try:
-            product = create_installable(name=path.name)
+            product = create_installable("product", name=path.name)
             product.load_from_installer_folder(path)
         except (ValueError, FileNotFoundError):
             return None

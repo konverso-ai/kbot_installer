@@ -4,7 +4,9 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
+from typing import cast
 
+from installable.factory import create_installable
 from installable.product_installable import ProductInstallable
 from installable.dependency_graph import DependencyGraph
 from installable.product_collection import ProductCollection
@@ -15,7 +17,9 @@ from git.provider import (
 )
 from git.provider.base import ProviderBase
 from git.provider.config import ProvidersConfig
-from storage.base import StorageBackend
+from git.provider.credential_manager import CredentialManager
+from git.provider.storage_provider import StorageProvider
+from storage.base import StorageBackend, StorageBase
 
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
@@ -74,13 +78,14 @@ class InstallerService:
         self.installer_dir = Path(installer_dir)
         self.providers = providers or ["storage", "github", "bitbucket"]
         self.verbose = verbose
-        config = _providers_config_with_storage_backend(storage_backend)
+        self._providers_config = _providers_config_with_storage_backend(storage_backend)
+        self._storage: StorageBase | None = None
 
         # Initialize services
         self.selector_provider: ProviderBase = create_provider(
             name="selector",
             providers=self.providers,
-            config=config,
+            config=self._providers_config,
             quiet=not verbose,
         )
         self.installation_table = InstallationTable(verbose=verbose)
@@ -129,6 +134,40 @@ class InstallerService:
             self._install_dependencies_recursively(product_name, version)
 
         logger.info("Installation completed for product '%s'", product_name)
+
+    def download_bundle(
+        self,
+        bundle_name: str,
+        bundle_version: str,
+        top_product: str,
+        *,
+        include_dependencies: bool = True,
+    ) -> None:
+        """Download products from a bundle descriptor stored in object storage.
+
+        This method corresponds to the bundle mode of the ``download`` CLI command.
+
+        Args:
+            bundle_name: Name of the bundle.
+            bundle_version: Version of the bundle.
+            top_product: Root product defining the highest installation level.
+            include_dependencies: Whether to download parent dependencies.
+
+        Raises:
+            ValueError: If the bundle or top product cannot be resolved.
+        """
+        installable = create_installable(
+            "bundle",
+            bundle_name=bundle_name,
+            bundle_version=bundle_version,
+            top_product=top_product,
+            installer_dir=self.installer_dir,
+            storage=self._get_storage(),
+            installation_table=self.installation_table,
+            storage_backend=self._providers_config.storage.backend,
+            verbose=self.verbose,
+        )
+        installable.download(dependencies=include_dependencies)
 
     def list_products(self, *, as_tree: bool = False, verbose: bool = False) -> str:
         """List installed products.
@@ -297,6 +336,20 @@ class InstallerService:
         return self.installation_table
 
     # Private helper methods
+
+    def _get_storage(self) -> StorageBase:
+        """Return the configured object storage backend."""
+        if self._storage is None:
+            credential_manager = CredentialManager(self._providers_config)
+            auth = credential_manager.get_auth_for_provider("storage")
+            provider = create_provider(
+                "storage",
+                config=self._providers_config,
+                auth=auth,
+                quiet=not self.verbose,
+            )
+            self._storage = cast(StorageProvider, provider)._storage
+        return self._storage
 
     def _load_product_from_repository(self, product_name: str, version: str) -> None:
         """Load a single product from repository."""

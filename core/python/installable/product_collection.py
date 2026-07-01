@@ -5,7 +5,7 @@ from __future__ import annotations
 import fnmatch
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
@@ -176,7 +176,10 @@ class ProductCollection(BaseModel):
 
         for product_name in product_folders:
             try:
-                product = create_installable(name=product_name)
+                product = cast(
+                    "ProductInstallable",
+                    create_installable("product", name=product_name),
+                )
                 product.load_from_installer_folder(resolved_path / product_name)
                 products.append(product)
             except (ValueError, FileNotFoundError) as e:
@@ -244,7 +247,10 @@ class ProductCollection(BaseModel):
             return None
 
         try:
-            product = create_installable(name=product_name)
+            product = cast(
+                "ProductInstallable",
+                create_installable("product", name=product_name),
+            )
             product.load_from_installer_folder(product_folder)
         except (ValueError, FileNotFoundError):
             return None

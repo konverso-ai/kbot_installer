@@ -31,6 +31,7 @@ class TestProduct:
     def test_initialization(self) -> None:
         """Test Product initialization."""
         product = create_installable(
+            "product",
             name="test",
             version="1.0.0",
             product_type="solution",
@@ -46,7 +47,7 @@ class TestProduct:
 
     def test_initialization_minimal(self) -> None:
         """Test Product initialization with minimal parameters."""
-        product = create_installable(name="test")
+        product = create_installable("product", name="test")
 
         assert product.product.name == "test"
         assert product.product.version.to_str() == ""  # Default empty string
@@ -245,6 +246,7 @@ class TestProduct:
     def test_merge_xml_json(self) -> None:
         """Test merging XML and JSON products."""
         xml_product = create_installable(
+            "product",
             name="jira",
             version="2025.02",
             type="solution",
@@ -253,6 +255,7 @@ class TestProduct:
         )
 
         json_product = create_installable(
+            "product",
             name="jira",
             version="2025.03",  # Different version
             type="solution",
@@ -281,8 +284,9 @@ class TestProduct:
 
     def test_merge_xml_json_different_names(self) -> None:
         """Test merging products with different names."""
-        xml_product = create_installable(name="jira", version="1.0.0", type="solution")
+        xml_product = create_installable("product", name="jira", version="1.0.0", type="solution")
         json_product = create_installable(
+            "product",
             name="confluence", version="1.0.0", type="solution"
         )
 
@@ -302,7 +306,7 @@ class TestProduct:
             xml_file = product_dir / "description.xml"
             xml_file.write_text(xml_content)
 
-            product = create_installable(name="jira")
+            product = create_installable("product", name="jira")
             product.load_from_installer_folder(product_dir)
             assert product.product.name == "jira"
             assert product.product.version.to_str() == _version_str("2025.02")
@@ -334,7 +338,7 @@ class TestProduct:
             json_file = product_dir / "description.json"
             json_file.write_text(json_content)
 
-            product = create_installable(name="jira")
+            product = create_installable("product", name="jira")
             product.load_from_installer_folder(product_dir)
             assert product.product.name == "jira"
             assert product.product.version.to_str() == _version_str("2025.03")  # From JSON
@@ -344,6 +348,7 @@ class TestProduct:
     def test_to_xml(self) -> None:
         """Test converting Product to XML."""
         product = create_installable(
+            "product",
             name="jira",
             version="2025.02",
             type="solution",
@@ -363,6 +368,7 @@ class TestProduct:
     def test_to_json(self) -> None:
         """Test converting Product to JSON."""
         product = create_installable(
+            "product",
             name="jira",
             version="2025.02",
             type="solution",
@@ -417,7 +423,7 @@ class TestProduct:
 
     def test_str_representation(self) -> None:
         """Test string representation of ProductInstallable."""
-        product = create_installable(name="jira", version="2025.02", type="solution")
+        product = create_installable("product", name="jira", version="2025.02", type="solution")
         assert (
             str(product)
             == f"ProductInstallable(name='jira', version='{_version_str('2025.02')}', type='solution')"
@@ -426,6 +432,7 @@ class TestProduct:
     def test_repr_representation(self) -> None:
         """Test detailed string representation of ProductInstallable."""
         product = create_installable(
+            "product",
             name="jira",
             version="2025.02",
             type="solution",
@@ -440,7 +447,7 @@ class TestProduct:
 
     def test_load_product_by_name(self) -> None:
         """Test _load_product_by_name method."""
-        product = create_installable(name="test", version="1.0.0")
+        product = create_installable("product", name="test", version="1.0.0")
         loaded_product = product._load_product_by_name("new-product")
 
         assert loaded_product.product.name == "new-product"
@@ -473,7 +480,7 @@ class TestProduct:
             json_file.write_text(json_content)
 
             # Create a product instance and load data into it
-            product = create_installable(name="jira")
+            product = create_installable("product", name="jira")
             product.load_from_installer_folder(product_dir)
 
             assert product.product.name == "jira"  # Should remain unchanged
@@ -487,13 +494,15 @@ class TestProduct:
         """Test get_dependencies method."""
         # Create a product with dependencies
         product_a = create_installable(
+            "product",
             name="product-a", version="1.0.0", parents=["product-b", "product-c"]
         )
         product_b = create_installable(
+            "product",
             name="product-b", version="1.0.0", parents=["product-d"]
         )
-        product_c = create_installable(name="product-c", version="1.0.0")
-        product_d = create_installable(name="product-d", version="1.0.0")
+        product_c = create_installable("product", name="product-c", version="1.0.0")
+        product_d = create_installable("product", name="product-d", version="1.0.0")
 
         # Mock the _load_product_by_name method to return our test products
         def mock_load_product(
@@ -506,7 +515,7 @@ class TestProduct:
                 "product-c": product_c,
                 "product-d": product_d,
             }
-            return products.get(name, create_installable(name=name))
+            return products.get(name, create_installable("product", name=name))
 
         product_a._load_product_by_name = mock_load_product
 
@@ -528,7 +537,7 @@ class TestProduct:
         """Test download method without dependencies."""
         from unittest.mock import Mock, patch
 
-        product = create_installable(name="test-product", version="1.0.0")
+        product = create_installable("product", name="test-product", version="1.0.0")
         mock_provider = Mock()
         mock_provider.get_name.return_value = "nexus"
         mock_provider.get_branch.return_value = "master"
@@ -565,9 +574,10 @@ class TestProduct:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create products with dependencies
             product_a = create_installable(
+                "product",
                 name="product-a", version="1.0.0", parents=["product-b"]
             )
-            product_b = create_installable(name="product-b", version="1.0.0")
+            product_b = create_installable("product", name="product-b", version="1.0.0")
 
             # Mock providers
             mock_provider_a = Mock()
@@ -587,7 +597,7 @@ class TestProduct:
             ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
-                return create_installable(name=name)
+                return create_installable("product", name=name)
 
             product_a._load_product_by_name = mock_load_product  # noqa: SLF001
 
@@ -636,9 +646,10 @@ class TestProduct:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create product with self as dependency (shouldn't happen but tests path logic)
             product_a = create_installable(
+                "product",
                 name="product-a", version="1.0.0", parents=["product-b"]
             )
-            product_b = create_installable(name="product-b", version="1.0.0")
+            product_b = create_installable("product", name="product-b", version="1.0.0")
 
             # Mock providers
             mock_provider_a = Mock()
@@ -658,7 +669,7 @@ class TestProduct:
             ) -> ProductInstallable:
                 if name == "product-b":
                     return product_b
-                return create_installable(name=name)
+                return create_installable("product", name=name)
 
             product_a._load_product_by_name = mock_load_product  # noqa: SLF001
 

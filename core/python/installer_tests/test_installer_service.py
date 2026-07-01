@@ -990,3 +990,63 @@ class TestInstallerService:
 
                 # Verify
                 assert result is None
+
+
+class TestInstallerServiceBundleDownload:
+    """Test cases for bundle download delegation."""
+
+    def test_download_bundle_valid_delegates_to_bundle_installable(self) -> None:
+        """Test InstallerService delegates bundle downloads to BundleInstallable."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = InstallerService(temp_dir)
+            mock_installable = MagicMock()
+            mock_storage = MagicMock()
+
+            with (
+                patch(
+                    "installer_support.installer_service.create_installable",
+                    return_value=mock_installable,
+                ) as mock_create,
+                patch.object(service, "_get_storage", return_value=mock_storage),
+            ):
+                service.download_bundle(
+                    "release",
+                    "2025.03",
+                    "kbot",
+                    include_dependencies=True,
+                )
+
+            mock_create.assert_called_once_with(
+                "bundle",
+                bundle_name="release",
+                bundle_version="2025.03",
+                top_product="kbot",
+                installer_dir=service.installer_dir,
+                storage=mock_storage,
+                installation_table=service.installation_table,
+                storage_backend=service._providers_config.storage.backend,
+                verbose=service.verbose,
+            )
+            mock_installable.download.assert_called_once_with(dependencies=True)
+
+    def test_download_bundle_valid_without_dependencies(self) -> None:
+        """Test InstallerService forwards include_dependencies to BundleInstallable."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = InstallerService(temp_dir)
+            mock_installable = MagicMock()
+
+            with (
+                patch(
+                    "installer_support.installer_service.create_installable",
+                    return_value=mock_installable,
+                ),
+                patch.object(service, "_get_storage", return_value=MagicMock()),
+            ):
+                service.download_bundle(
+                    "release",
+                    "2025.03",
+                    "kbot",
+                    include_dependencies=False,
+                )
+
+            mock_installable.download.assert_called_once_with(dependencies=False)

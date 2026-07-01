@@ -40,7 +40,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             product.dirname = product_dir
 
             # Create pyproject.toml
@@ -52,7 +52,7 @@ class TestProductInstall:
 
     def test_pyproject_path_no_dirname(self) -> None:
         """Test pyproject_path property when dirname is not set."""
-        product = create_installable(name="test-product")
+        product = create_installable("product", name="test-product")
         product.dirname = None
 
         with pytest.raises(FileNotFoundError, match="has no dirname set"):
@@ -64,7 +64,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             product.dirname = product_dir
 
             with pytest.raises(FileNotFoundError, match=r"pyproject\.toml not found"):
@@ -84,7 +84,7 @@ class TestProductInstall:
                 "[database]\nhost = localhost\nport = 5432\n\n[app]\nname = test\n"
             )
 
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             product.dirname = product_dir
 
             with patch.object(
@@ -123,10 +123,10 @@ class TestProductInstall:
                 "[database]\nhost = db2\n\n[logging]\nlevel = debug\n"
             )
 
-            product1 = create_installable(name="product1")
+            product1 = create_installable("product", name="product1")
             product1.dirname = product1_dir
 
-            product2 = create_installable(name="product2", parents=["product1"])
+            product2 = create_installable("product", name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             with patch.object(
@@ -156,7 +156,7 @@ class TestProductInstall:
             product_dir = Path(temp_dir) / "test-product"
             product_dir.mkdir()
 
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             product.dirname = product_dir
 
             with patch.object(
@@ -183,10 +183,10 @@ class TestProductInstall:
             product2_dir = Path(temp_dir) / "product2"
             product2_dir.mkdir()
 
-            product1 = create_installable(name="product1")
+            product1 = create_installable("product", name="product1")
             product1.dirname = product1_dir
 
-            product2 = create_installable(name="product2", parents=["product1"])
+            product2 = create_installable("product", name="product2", parents=["product1"])
             product2.dirname = product2_dir
 
             with patch.object(
@@ -201,7 +201,7 @@ class TestProductInstall:
 
     def test_get_kconf_invalid_product(self) -> None:
         """Test get_kconf with invalid product name."""
-        product = create_installable(name="test-product")
+        product = create_installable("product", name="test-product")
 
         with patch.object(
             ProductInstallable,
@@ -226,7 +226,7 @@ logs = ["httpd"]
             pyproject_file.write_text(pyproject_content)
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -259,7 +259,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -294,7 +294,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -337,7 +337,7 @@ core = ["RunBot.py", "Learn.py"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -383,8 +383,8 @@ core = ["RunBot.py", "Learn.py"]
 """
             )
 
-            product1 = create_installable(name="product1")
-            product2 = create_installable(name="product2", parents=["product1"])
+            product1 = create_installable("product", name="product1")
+            product2 = create_installable("product", name="product2", parents=["product1"])
 
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "product1", product1_dir
@@ -394,9 +394,9 @@ core = ["RunBot.py", "Learn.py"]
                 '<product name="product2"><parents><parent name="product1"/></parents></product>'
             )
 
-            loaded_product1 = create_installable(name="product1")
+            loaded_product1 = create_installable("product", name="product1")
             loaded_product1.load_from_installer_folder(installer_dir / "product1")
-            loaded_product2 = create_installable(name="product2", parents=["product1"])
+            loaded_product2 = create_installable("product", name="product2", parents=["product1"])
             loaded_product2.load_from_installer_folder(installer_dir / "product2")
 
             workarea = Path(temp_dir) / "workarea"
@@ -441,7 +441,7 @@ ui = ["static"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -473,7 +473,7 @@ bin = []
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )
@@ -491,7 +491,7 @@ bin = []
             product_dir.mkdir()
 
             workarea = Path(temp_dir) / "workarea"
-            create_installable(name="test-product")
+            create_installable("product", name="test-product")
             installer_dir = Path(temp_dir) / "installer"
             installer_product_dir = installer_dir / "test-product"
             installer_product_dir.mkdir(parents=True)
@@ -500,7 +500,7 @@ bin = []
             )
 
             # Should not raise error, just skip
-            create_installable(name="test-product").install(
+            create_installable("product", name="test-product").install(
                 workarea, dependencies=False, installer_path=installer_dir
             )
 
@@ -523,7 +523,7 @@ bin = []
             )
 
             # Should not raise error, just skip
-            create_installable(name="test-product").install(
+            create_installable("product", name="test-product").install(
                 workarea, dependencies=False, installer_path=installer_dir
             )
 
@@ -565,7 +565,7 @@ bin = ["*.sh"]
             )
 
             workarea = Path(temp_dir) / "workarea"
-            product = create_installable(name="test-product")
+            product = create_installable("product", name="test-product")
             installer_dir = _prepare_installer_product(
                 Path(temp_dir), "test-product", product_dir
             )

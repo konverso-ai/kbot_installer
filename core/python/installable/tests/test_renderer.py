@@ -21,6 +21,7 @@ class TestDependencyTreeRenderer:
         """Create sample products for testing."""
         return [
             create_installable(
+                "product",
                 name="root1",
                 version="1.0.0",
                 type="solution",
@@ -28,6 +29,7 @@ class TestDependencyTreeRenderer:
                 categories=["category1"],
             ),
             create_installable(
+                "product",
                 name="root2",
                 version="2.0.0",
                 type="solution",
@@ -35,6 +37,7 @@ class TestDependencyTreeRenderer:
                 categories=["category2"],
             ),
             create_installable(
+                "product",
                 name="dep1",
                 version="1.1.0",
                 type="framework",
@@ -42,6 +45,7 @@ class TestDependencyTreeRenderer:
                 categories=["category1"],
             ),
             create_installable(
+                "product",
                 name="dep2",
                 version="1.2.0",
                 type="framework",
@@ -49,6 +53,7 @@ class TestDependencyTreeRenderer:
                 categories=["category1", "category2"],
             ),
             create_installable(
+                "product",
                 name="leaf1",
                 version="2.1.0",
                 type="customer",
@@ -56,6 +61,7 @@ class TestDependencyTreeRenderer:
                 categories=["category1"],
             ),
             create_installable(
+                "product",
                 name="leaf2",
                 version="2.2.0",
                 type="customer",
@@ -69,6 +75,7 @@ class TestDependencyTreeRenderer:
         """Create products with circular dependencies for testing."""
         return [
             create_installable(
+                "product",
                 name="circular1",
                 version="1.0.0",
                 type="solution",
@@ -76,6 +83,7 @@ class TestDependencyTreeRenderer:
                 categories=["category1"],
             ),
             create_installable(
+                "product",
                 name="circular2",
                 version="2.0.0",
                 type="solution",
@@ -108,7 +116,7 @@ class TestDependencyTreeRenderer:
 
     def test_render_uv_tree_style_single_product(self, renderer) -> None:
         """Test rendering single product in UV tree style."""
-        products = [create_installable(name="single", version="1.0.0", type="solution")]
+        products = [create_installable("product", name="single", version="1.0.0", type="solution")]
         graph = DependencyGraph(products)
         result = renderer.render_uv_tree_style(graph)
 
@@ -152,7 +160,7 @@ class TestDependencyTreeRenderer:
 
     def test_render_file_tree_style_single_product(self, renderer) -> None:
         """Test rendering single product in file tree style."""
-        products = [create_installable(name="single", version="1.0.0", type="solution")]
+        products = [create_installable("product", name="single", version="1.0.0", type="solution")]
         graph = DependencyGraph(products)
         result = renderer.render_file_tree_style(graph)
 
@@ -379,9 +387,11 @@ class TestDependencyTreeRenderer:
         # Create products where all have dependencies (no clear roots)
         products = [
             create_installable(
+                "product",
                 name="dep1", version="1.0.0", type="solution", parents=["dep2"]
             ),
             create_installable(
+                "product",
                 name="dep2", version="2.0.0", type="solution", parents=["dep1"]
             ),
         ]
@@ -398,9 +408,11 @@ class TestDependencyTreeRenderer:
         # Create products where all have dependencies (no clear roots)
         products = [
             create_installable(
+                "product",
                 name="dep1", version="1.0.0", type="solution", parents=["dep2"]
             ),
             create_installable(
+                "product",
                 name="dep2", version="2.0.0", type="solution", parents=["dep1"]
             ),
         ]
@@ -416,6 +428,7 @@ class TestDependencyTreeRenderer:
         """Test rendering product info for product with no categories."""
         products = [
             create_installable(
+                "product",
                 name="no_cat", version="1.0.0", type="solution", categories=[]
             )
         ]
@@ -429,6 +442,7 @@ class TestDependencyTreeRenderer:
         """Test rendering product info for product with no dependencies."""
         products = [
             create_installable(
+                "product",
                 name="no_deps", version="1.0.0", type="solution", parents=[]
             )
         ]
@@ -443,6 +457,7 @@ class TestDependencyTreeRenderer:
         """Test rendering product info for product with no dependents."""
         products = [
             create_installable(
+                "product",
                 name="no_dependents", version="1.0.0", type="solution", parents=[]
             )
         ]
@@ -456,21 +471,27 @@ class TestDependencyTreeRenderer:
         """Test rendering with complex dependency structure."""
         products = [
             create_installable(
+                "product",
                 name="root", version="1.0.0", type="solution", parents=[]
             ),
             create_installable(
+                "product",
                 name="middle1", version="2.0.0", type="framework", parents=["root"]
             ),
             create_installable(
+                "product",
                 name="middle2", version="2.1.0", type="framework", parents=["root"]
             ),
             create_installable(
+                "product",
                 name="leaf1", version="3.0.0", type="customer", parents=["middle1"]
             ),
             create_installable(
+                "product",
                 name="leaf2", version="3.1.0", type="customer", parents=["middle2"]
             ),
             create_installable(
+                "product",
                 name="leaf3",
                 version="3.2.0",
                 type="customer",
@@ -498,12 +519,15 @@ class TestDependencyTreeRenderer:
         """Test rendering with complex circular dependencies."""
         products = [
             create_installable(
+                "product",
                 name="a", version="1.0.0", type="solution", parents=["b"]
             ),
             create_installable(
+                "product",
                 name="b", version="2.0.0", type="solution", parents=["c"]
             ),
             create_installable(
+                "product",
                 name="c", version="3.0.0", type="solution", parents=["a"]
             ),
         ]

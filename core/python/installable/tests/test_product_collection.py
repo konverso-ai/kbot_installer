@@ -23,6 +23,7 @@ class TestProductCollection:
         """Create sample products for testing."""
         return [
             create_installable(
+                "product",
                 name="product1",
                 version="1.0.0",
                 type="solution",
@@ -33,6 +34,7 @@ class TestProductCollection:
                 license="MIT",
             ),
             create_installable(
+                "product",
                 name="product2",
                 version="2.0.0",
                 type="framework",
@@ -43,6 +45,7 @@ class TestProductCollection:
                 license="Apache",
             ),
             create_installable(
+                "product",
                 name="product3",
                 version="3.0.0",
                 type="customer",

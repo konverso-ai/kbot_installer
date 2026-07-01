@@ -1,93 +1,30 @@
-"""Pydantic models for product definitions."""
+"""Product model and serialization helpers."""
 
 # Pydantic model fields are validated at runtime; pylint infers FieldInfo on access.
 # pylint: disable=no-member
 
-from pathlib import Path
-from typing import Annotated, Any, Literal
-
 import json
+from pathlib import Path
+from typing import Any, Literal
 
 import tomlkit
 import xmltodict
-from writer.factory import add_writer
 from pydantic import (
     AliasChoices,
     BaseModel,
-    BeforeValidator,
     ConfigDict,
     Field,
     ValidationError,
     field_serializer,
     field_validator,
 )
+from writer.factory import add_writer
+
+from utils.product.build import Build
+from utils.product.categories import Categories
+from utils.product.loc_display_mapper import LocDisplayMapper
+from utils.product.parents import Parents
 from utils.version import Version
-
-
-def _as_list(value: Any) -> list[Any]:
-    if not value:
-        return []
-    return value if isinstance(value, list) else [value]
-
-
-class LocMapper(BaseModel):
-    """Localization mapper model."""
-
-    en: str
-    fr: str | None = None
-
-
-class LocDisplayMapper(BaseModel):
-    """Localization display mapper model."""
-
-    name: LocMapper | None = None
-    description: LocMapper | None = None
-
-
-class Build(BaseModel):
-    """Build model."""
-
-    timestamp: str = ""
-    branch: str = ""
-    commit: str = ""
-
-
-class Parent(BaseModel):
-    """Parent product reference."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    name: str = Field(
-        validation_alias=AliasChoices("@name", "name"),
-        serialization_alias="@name",
-    )
-
-
-class Category(BaseModel):
-    """Product category."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    name: str = Field(
-        validation_alias=AliasChoices("@name", "name"),
-        serialization_alias="@name",
-    )
-
-
-class Parents(BaseModel):
-    """Product parents container."""
-
-    parent: Annotated[list[Parent], BeforeValidator(_as_list)] = Field(
-        default_factory=list
-    )
-
-
-class Categories(BaseModel):
-    """Product categories container."""
-
-    category: Annotated[list[Category], BeforeValidator(_as_list)] = Field(
-        default_factory=list
-    )
 
 
 class Product(BaseModel):
@@ -241,6 +178,64 @@ class Product(BaseModel):
         return cls.from_xml(path.read_text(encoding="utf-8"))
 
     @classmethod
+    def _normalize_dict(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Normalize legacy and factory keyword aliases before validation.
+
+        Args:
+            data: Raw product dictionary, possibly with legacy field names.
+
+        Returns:
+            Dictionary with canonical Product field names.
+        """
+        normalized = dict(data)
+
+        product_type = normalized.pop("product_type", "solution")
+        product_kind = normalized.pop("type", None)
+        normalized["type"] = (
+            product_kind if product_kind is not None else product_type
+        )
+
+        license_info = normalized.pop("license_info", None)
+        license_value = normalized.pop("license", None)
+        if license_value is not None:
+            normalized["license"] = license_value
+        elif license_info is not None:
+            normalized["license"] = license_info
+
+        docs = normalized.pop("docs", None)
+        if docs:
+            normalized["doc"] = ",".join(docs)
+
+        build_details = normalized.pop("build_details", None)
+        if build_details and "build" not in normalized:
+            normalized["build"] = {
+                "timestamp": build_details.get("timestamp", ""),
+                "branch": build_details.get("branch", ""),
+                "commit": build_details.get("commit", ""),
+            }
+
+        return normalized
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Product":
+        """Create Product from a dictionary with optional legacy field aliases.
+
+        Args:
+            data: Product dictionary. Supports legacy keys such as ``product_type``,
+                ``license_info``, ``docs``, and ``build_details``.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            ValueError: If the product name is missing.
+        """
+        if "name" not in data:
+            msg = "Product name is required"
+            raise ValueError(msg)
+        return cls.model_validate(cls._normalize_dict(data))
+
+    @classmethod
     def from_json(cls, json_content: str | dict[str, Any]) -> "Product":
         """Create Product from JSON content.
 
@@ -262,10 +257,10 @@ class Product(BaseModel):
         except json.JSONDecodeError as exc:
             msg = f"Invalid JSON content: {exc}"
             raise ValueError(msg) from exc
-        if not isinstance(data, dict) or "name" not in data:
+        if not isinstance(data, dict):
             msg = "Product name is required"
             raise ValueError(msg)
-        return cls.model_validate(data)
+        return cls.from_dict(data)
 
     @classmethod
     def from_json_file(cls, json_path: str | Path) -> "Product":
@@ -308,6 +303,16 @@ class Product(BaseModel):
             raise ValueError(msg)
 
         build = json_product.build or xml_product.build
+        parents = (
+            json_product.parents
+            if json_product.parent_names
+            else xml_product.parents
+        )
+        categories = (
+            json_product.categories
+            if json_product.category_names
+            else xml_product.categories
+        )
         return cls(
             name=xml_product.name,
             version=json_product.version or xml_product.version,
@@ -315,8 +320,8 @@ class Product(BaseModel):
             build=build,
             date=json_product.date or xml_product.date,
             type=json_product.type or xml_product.type,
-            parents=json_product.parents or xml_product.parents,
-            categories=json_product.categories or xml_product.categories,
+            parents=parents,
+            categories=categories,
             license=json_product.license or xml_product.license,
             display=json_product.display or xml_product.display,
         )
