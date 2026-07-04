@@ -27,7 +27,7 @@ from git.provider.base import ProviderBase
 from git.provider import create_provider
 
 from installable.factory import create_installable
-from installable.installable_base import InstallableBase
+from installable.base import InstallableBase
 from installable.product_collection import ProductCollection
 from utils.product import Product
 from utils.version import Version

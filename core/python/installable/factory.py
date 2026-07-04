@@ -2,7 +2,7 @@
 
 from typing import Literal, cast
 
-from installable.installable_base import InstallableBase
+from installable.base import InstallableBase
 from utils.factory.factory import factory_class
 
 

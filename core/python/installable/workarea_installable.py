@@ -14,7 +14,7 @@ from setup.database_setup import (
 )
 from typing_extensions import override
 
-from installable.installable_base import InstallableBase
+from installable.base import InstallableBase
 from installable.product_collection import ProductCollection
 
 logger = logging.getLogger(__name__)
