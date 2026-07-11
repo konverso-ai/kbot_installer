@@ -169,9 +169,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    def push_branches(
-        self, repository_path: str | Path, branches: list[str]
-    ) -> None:
+    def push_branches(self, repository_path: str | Path, branches: list[str]) -> None:
         """Push multiple branches to the remote in a single operation.
 
         Args:

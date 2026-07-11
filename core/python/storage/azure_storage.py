@@ -214,7 +214,7 @@ class AzureStorage(StorageBase):
 
             for item in blob_hierarchy:
                 if isinstance(item, BlobPrefix):
-                    folder_name = item.prefix[len(path):].rstrip("/")
+                    folder_name = item.prefix[len(path) :].rstrip("/")
                     if folder_name:
                         folder_count += 1
                         yield folder_name

@@ -204,9 +204,7 @@ class DulwichVersioner(StrReprMixin):
         """Return True when the index has staged changes."""
         status = porcelain.status(repo)
         staged = status.staged
-        return bool(
-            staged.get("add") or staged.get("delete") or staged.get("modify")
-        )
+        return bool(staged.get("add") or staged.get("delete") or staged.get("modify"))
 
     def _get_current_branch_name(self, repo: Repo) -> str:
         """Return the current branch name from HEAD.
@@ -373,9 +371,7 @@ class DulwichVersioner(StrReprMixin):
             raise VersionerError(error_msg) from e
 
     @override
-    def push_branches(
-        self, repository_path: str | Path, branches: list[str]
-    ) -> None:
+    def push_branches(self, repository_path: str | Path, branches: list[str]) -> None:
         """Push multiple branches to the remote in a single operation using Dulwich.
 
         Args:
@@ -488,16 +484,12 @@ class DulwichVersioner(StrReprMixin):
             remote_kwargs = self._dulwich_remote_kwargs()
             refs = porcelain.ls_remote(repository_url, **remote_kwargs)
         except _DULWICH_ERRORS as e:
-            error_msg = (
-                f"Failed to list remote branches for {repository_url}: {e}"
-            )
+            error_msg = f"Failed to list remote branches for {repository_url}: {e}"
             raise VersionerError(error_msg) from e
         except VersionerError:
             raise
         except Exception as e:
-            error_msg = (
-                f"Failed to list remote branches for {repository_url}: {e}"
-            )
+            error_msg = f"Failed to list remote branches for {repository_url}: {e}"
             raise VersionerError(error_msg) from e
 
         branches: list[str] = []

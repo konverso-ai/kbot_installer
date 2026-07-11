@@ -7,7 +7,7 @@ from utils.factory.factory import factory_class
 
 
 def create_installable(
-    installable_name: Literal["product", "bundle"],
+    installable_name: Literal["product", "bundle", "workarea"],
     **kwargs: object,
 ) -> InstallableBase:
     """Create an installable instance by name.
@@ -17,7 +17,7 @@ def create_installable(
     - Class: ``{Name}Installable`` (e.g. ``ProductInstallable``)
 
     Args:
-        installable_name: Installable type (``product`` or ``bundle``).
+        installable_name: Installable type (``product``, ``bundle`` or ``workarea``).
         **kwargs: Keyword arguments passed to the class constructor.
 
     Returns:

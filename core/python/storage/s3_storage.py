@@ -32,9 +32,6 @@ class S3Storage(StorageBase):
         self,
         bucket_name: str,
         cluster_name: str | None = None,
-        region_name: str = "eu-west-1",
-        aws_access_key_id: str | None = None,
-        aws_secret_access_key: str | None = None,
         backend: BackendBase | None = None,
     ) -> None:
         """Initialize S3 storage.
@@ -48,15 +45,7 @@ class S3Storage(StorageBase):
             backend: Pre-configured S3 backend. Used mainly in tests.
 
         """
-        if backend is None:
-            self._backend = create_backend(
-                "s3",
-                region_name=region_name,
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-            )
-        else:
-            self._backend = backend
+        self._backend = backend or create_backend(name="s3")
         self.bucket_name = bucket_name
         self.cluster_name = cluster_name
         log.debug(
@@ -262,7 +251,7 @@ class S3Storage(StorageBase):
                 for obj in page["Contents"]:
                     object_key = obj["Key"]
                     if cluster_prefix and object_key.startswith(cluster_prefix):
-                        object_key = object_key[len(cluster_prefix):]
+                        object_key = object_key[len(cluster_prefix) :]
                     yield object_key
 
         except Exception as e:

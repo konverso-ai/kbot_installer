@@ -26,10 +26,13 @@ dependencies = [
     "tqdm",
     "xmltodict>=1.0.4",
     "tomlkit>=0.15.0",
+    "psycopg2>=2.9.12",
+    "drf-yasg>=1.21.15",
 ]
 
 [project.scripts]
 kbot-installer = "cli.__main__:main"
+tries = "tools.tries:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -67,6 +70,7 @@ lint = [
 
 typecheck = [
     "ty",
+    "mypy-boto3-s3",
 ]
 
 test = [
@@ -80,6 +84,7 @@ dev = [
     { include-group = "lint" },
     { include-group = "typecheck" },
     { include-group = "test" },
+    "psycopg2-binary",
 ]
 
 [tool.deptry]
@@ -95,6 +100,7 @@ known_first_party = [
     "cli",
     "config",
     "credentials",
+    "database",
     "errors",
     "git",
     "installable",
@@ -105,6 +111,7 @@ known_first_party = [
     "setup",
     "storage",
     "utils",
+    "workarea",
     "writer",
 ]
 
@@ -116,7 +123,7 @@ python-json-logger = "pythonjsonlogger"
 
 [tool.deptry.per_rule_ignores]
 DEP001 = ["tomllib", "Bot"]
-DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm"]
+DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm", "drf-yasg"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]
 

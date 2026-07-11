@@ -9,11 +9,10 @@ import click
 from git.models import GitProvider
 from installable.factory import create_installable
 from installable.product_installable import ProductInstallable
-from installable.workarea_installable import WorkareaInstallable
 from installer_support.installer_service import InstallerService
 from installer_support.logging_config import setup_logging
-from interactivity.database_prompter import DatabasePrompter
 from storage.base import StorageBackend
+from workarea.workarea import Workarea
 
 # Setup logging from configuration file
 setup_logging()
@@ -44,43 +43,22 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command()
 @click.option(
-    "-i",
-    "--interactive",
-    is_flag=True,
-    default=False,
-    help="Interactive mode",
-)
-@click.option(
-    "-e",
-    "--env",
-    type=click.Choice(["dev", "prod"], case_sensitive=False),
-    default="dev",
-    help="Environment type (dev or prod)",
-)
-@click.option(
     "-w",
     "--workarea",
     type=click.Path(),
     default=lambda: str(Path.cwd()),
     help="Workarea directory path (default: current directory)",
 )
-def init(
-    *,
-    interactive: bool = False,
-    env: str = "dev",
-    workarea: str,
-) -> None:
-    """Initialize a UV workspace and create an empty database.
+def init(*, workarea: str) -> None:
+    """Initialize a UV workspace and lay out the workarea directory structure.
 
-    This command creates a UV workspace in the specified directory and initializes
-    an empty PostgreSQL database (without schema). Products should be installed
-    separately using the 'download' command.
+    This command creates a UV workspace in the specified directory and sets up
+    the workarea structure (conf, logs, var, products, ...). Products should be
+    installed separately using the 'download' command.
 
     \b
     Examples:
         kbot-installer init
-        kbot-installer init --env prod
-        kbot-installer init --interactive --env dev
         kbot-installer init -w /path/to/workarea
     """  # noqa: D301
     try:
@@ -121,47 +99,18 @@ def init(
         except subprocess.CalledProcessError as e:
             _handle_uv_init_error(e)
 
-        # Get database parameters (interactive or default)
-        db_name = f"kbot_db_{env}"
-        db_user = f"kbot_db_user_{env}"
-        db_password = "kbot_db_pwd"  # noqa: S105  # Default password (can be changed in interactive mode)
-        db_port = "5432"
-        db_internal = True
-
-        if interactive:
-            prompter = DatabasePrompter()
-            # Prompt for database parameters
-            config = {}
-            db_params = prompter.prompt_database_parameters(
-                config,
-                basic_installation=True,
-            )
-            db_name = db_params.get("db_name", db_name)
-            db_user = db_params.get("db_user", db_user)
-            db_password = db_params.get("db_password", db_password)
-            db_port = db_params.get("db_port", db_port)
-            db_internal = db_params.get("db_internal", db_internal)
-
-        # Create WorkareaInstallable instance
-        workarea_installable = WorkareaInstallable(
-            name=workarea_path.name,
-            target=workarea_path,
-            installer_path=None,  # No installer at init stage
-            db_internal=db_internal,
-            db_port=db_port,
-            db_name=db_name,
-            db_user=db_user,
-            db_password=db_password,
-            prompter=DatabasePrompter() if interactive else None,
-            silent_mode=not interactive,
+        # Lay out the workarea structure (no products yet, install adds them later)
+        workarea_installable = create_installable(
+            "workarea",
+            workarea=Workarea(
+                installer_root=workarea_path,
+                work_root=workarea_path,
+                products=[],
+            ),
         )
-
-        # Setup database only (no schema)
-        click.echo(f"Initializing empty database for environment: {env}")
-        workarea_installable.setup_database_only(workarea_path)
+        workarea_installable.install()
 
         click.echo(f"✅ Workarea initialized successfully at {workarea_path}")
-        click.echo(f"   Database '{db_name}' created and ready for schema loading")
 
     except Exception as e:
         click.echo(f"Error initializing workarea: {e}", err=True)
@@ -474,16 +423,13 @@ def download(
             )
 
             click.echo(
-                f"Installing product '{product}' version '{version}' "
-                f"to '{installer_dir}'"
+                f"Installing product '{product}' version '{version}' to '{installer_dir}'"
             )
 
             if selected_providers:
                 click.echo(f"Using providers: {', '.join(selected_providers)}")
             else:
-                click.echo(
-                    "Using all available providers: storage, github, bitbucket"
-                )
+                click.echo("Using all available providers: storage, github, bitbucket")
             click.echo(f"Using storage backend: {storage_backend.value}")
 
             if include_dependencies:
@@ -526,7 +472,9 @@ def download(
     is_flag=True,
     help="Show all subtrees even if already displayed (default: hide redundant subtrees)",
 )
-def list_products(*, tree: bool = False, installer_dir: str, verbose: bool = False) -> None:
+def list_products(
+    *, tree: bool = False, installer_dir: str, verbose: bool = False
+) -> None:
     """List installed kbot products.
 
     This command displays a list of all products that are currently installed
@@ -567,9 +515,7 @@ def list_products(*, tree: bool = False, installer_dir: str, verbose: bool = Fal
 @click.option(
     "-p", "--product", required=True, type=str, help="Name of the product to repair"
 )
-def repair(
-    installer_dir: str, version: str | None = None, product: str = ""
-) -> None:
+def repair(installer_dir: str, version: str | None = None, product: str = "") -> None:
     """Repair a kbot product by reinstalling missing dependencies.
 
     This command detects missing products in the installer directory and

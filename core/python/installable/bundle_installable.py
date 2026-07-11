@@ -108,6 +108,7 @@ class BundleInstallable(BaseModel):
 
         Raises:
             ValueError: If the bundle or top product cannot be resolved.
+
         """
         return cls(
             bundle_name=bundle_name,
@@ -125,12 +126,12 @@ class BundleInstallable(BaseModel):
 
         Args:
             dependencies: Whether to download parent dependencies.
+
         """
         bundle = self.bundle
         assert bundle is not None
         logger.info(
-            "Installing bundle '%s' version '%s' from product '%s' "
-            "(dependencies: %s)",
+            "Installing bundle '%s' version '%s' from product '%s' (dependencies: %s)",
             self.bundle_name or bundle.name,
             self.bundle_version or bundle.version.to_str(),
             self.top_product,
@@ -237,10 +238,13 @@ class BundleInstallable(BaseModel):
             bundle_commit = (
                 bundle_product.build.commit if bundle_product.build else None
             )
-            needs_download = not self._is_product_installed(
-                self.installer_dir,
-                product_name,
-            ) or installed_commit != bundle_commit
+            needs_download = (
+                not self._is_product_installed(
+                    self.installer_dir,
+                    product_name,
+                )
+                or installed_commit != bundle_commit
+            )
 
             if include_dependencies:
                 for parent_name in bundle_product.parent_names:

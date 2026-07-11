@@ -131,9 +131,7 @@ class Version:
     def __repr__(self) -> str:
         if self._empty:
             return "Version(empty)"
-        return (
-            f"Version(major={self.major}, minor={self.minor}, patch={self.patch})"
-        )
+        return f"Version(major={self.major}, minor={self.minor}, patch={self.patch})"
 
     @override
     def __str__(self) -> str:

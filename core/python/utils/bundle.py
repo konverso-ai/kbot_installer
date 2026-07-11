@@ -51,11 +51,10 @@ class Bundle(BaseModel):
 
         Returns:
             Validated Bundle instance.
+
         """
         data = (
-            json.loads(json_content)
-            if isinstance(json_content, str)
-            else json_content
+            json.loads(json_content) if isinstance(json_content, str) else json_content
         )
         return cls.model_validate(data)
 
@@ -64,6 +63,7 @@ class Bundle(BaseModel):
 
         Returns:
             Dictionary representation suitable for :meth:`from_json` round-trip.
+
         """
         return {
             "name": self.name,
@@ -84,6 +84,7 @@ class Bundle(BaseModel):
 
         Raises:
             AttributeError: If no ``to_{mode}`` method exists on the bundle.
+
         """
         content = getattr(self, f"to_{mode}")()
         if not isinstance(content, str):

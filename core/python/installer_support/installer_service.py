@@ -155,6 +155,7 @@ class InstallerService:
 
         Raises:
             ValueError: If the bundle or top product cannot be resolved.
+
         """
         installable = create_installable(
             "bundle",
@@ -621,7 +622,9 @@ class InstallerService:
 
         return "unknown"
 
-    def _install_single_product(self, product: ProductInstallable, version: str) -> None:
+    def _install_single_product(
+        self, product: ProductInstallable, version: str
+    ) -> None:
         """Install a single product."""
         logger.debug(
             "Installing single product: %s (version: %s)",

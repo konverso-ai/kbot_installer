@@ -12,6 +12,7 @@ class BundlePublisher:
 
         Args:
             storage: Storage backend used to persist bundles.
+
         """
         self._storage = storage
 
@@ -20,6 +21,7 @@ class BundlePublisher:
 
         Args:
             bundle: Bundle to publish.
+
         """
         self._storage.set(
             f"{bundle.name}-{bundle.version}.json",

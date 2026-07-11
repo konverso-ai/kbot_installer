@@ -16,4 +16,5 @@ class Writer(Protocol):
             content: Serialized text to write.
             file_path: Destination file path.
             **kwargs: Optional arguments forwarded to ``Path.write_text``.
+
         """

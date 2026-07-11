@@ -16,7 +16,9 @@ class DependencyTreeRenderer:
         """Initialize the renderer."""
         self._visited = set()
 
-    def render_uv_tree_style(self, graph: DependencyGraph, verbose: bool = False) -> str:
+    def render_uv_tree_style(
+        self, graph: DependencyGraph, verbose: bool = False
+    ) -> str:
         """Render dependency tree in UV tree style.
 
         Args:
@@ -176,7 +178,9 @@ class DependencyTreeRenderer:
             new_prefix = prefix + ("    " if is_last else "│   ")
             new_connector = "└── " if is_last else "├── "
 
-            self._render_uv_node(graph, dep, new_prefix, new_connector, lines, verbose=verbose)
+            self._render_uv_node(
+                graph, dep, new_prefix, new_connector, lines, verbose=verbose
+            )
 
     def _render_file_node(
         self,

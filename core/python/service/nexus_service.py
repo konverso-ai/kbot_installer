@@ -26,13 +26,17 @@ class NexusService:
     def _get_rest_client(self) -> AsyncAPIClient:
         return AsyncAPIClient(self._base_url, prefix=REST_PREFIX, auth=self._auth)
 
-    async def get_file(self, repository_path: str, target_file_path: str) -> httpx.Response:
+    async def get_file(
+        self, repository_path: str, target_file_path: str
+    ) -> httpx.Response:
         """Download a repository file to a local path."""
         if not repository_path.startswith("/"):
             repository_path = f"/{repository_path}"
 
         try:
-            async with AsyncAPIClient(self._base_url, prefix="", auth=self._auth) as client:
+            async with AsyncAPIClient(
+                self._base_url, prefix="", auth=self._auth
+            ) as client:
                 return await client.download_file(
                     target_file_path,
                     f"repository{repository_path}",
@@ -93,7 +97,9 @@ class NexusService:
             repository_path = f"/{repository_path}"
 
         try:
-            async with AsyncAPIClient(self._base_url, prefix="", auth=self._auth) as client:
+            async with AsyncAPIClient(
+                self._base_url, prefix="", auth=self._auth
+            ) as client:
                 await client.head(f"repository{repository_path}")
         except httpx.HTTPStatusError:
             return False

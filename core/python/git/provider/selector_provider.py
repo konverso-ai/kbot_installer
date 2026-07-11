@@ -715,7 +715,9 @@ class SelectorProvider(ProviderBase):
             )
             error_msg = f"❌ All providers failed to clone repository '{repository_identifier}':\n{error_details}"
         else:
-            error_msg = f"❌ No provider could clone repository '{repository_identifier}'"
+            error_msg = (
+                f"❌ No provider could clone repository '{repository_identifier}'"
+            )
         raise ProviderError(error_msg)
 
     def _clone_by_url(
@@ -732,9 +734,7 @@ class SelectorProvider(ProviderBase):
             ProviderError: If all providers fail to clone the repository.
 
         """
-        self._clone_with_providers(
-            repository_url, target_path, branch, by_url=True
-        )
+        self._clone_with_providers(repository_url, target_path, branch, by_url=True)
 
     def _clone_by_name(
         self, repository_name: str, target_path: str | Path, branch: str | None = None
@@ -753,9 +753,7 @@ class SelectorProvider(ProviderBase):
             ProviderError: If all providers fail to clone the repository.
 
         """
-        self._clone_with_providers(
-            repository_name, target_path, branch, by_url=False
-        )
+        self._clone_with_providers(repository_name, target_path, branch, by_url=False)
 
     @override
     def check_remote_repository_exists(self, repository_url: str) -> bool:

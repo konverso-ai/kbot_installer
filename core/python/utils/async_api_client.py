@@ -37,7 +37,9 @@ class AsyncAPIClient:
         if self.__client:
             await self.__client.aclose()
 
-    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def get(
+        self, endpoint: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Make a GET request"""
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
@@ -46,7 +48,9 @@ class AsyncAPIClient:
         response.raise_for_status()
         return response.json()
 
-    async def head(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def head(
+        self, endpoint: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Make a HEAD request"""
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
@@ -105,8 +109,7 @@ class AsyncAPIClient:
         return await asyncio.gather(*tasks)
 
     async def post_multiple(
-        self,
-        requests: Iterator[tuple[str, dict[str, Any]]]
+        self, requests: Iterator[tuple[str, dict[str, Any]]]
     ) -> list[dict[str, Any]]:
         """Send multiple POST requests in parallel
 
@@ -137,11 +140,15 @@ class AsyncAPIClient:
             async with semaphore:
                 return await coro
 
-        results = await asyncio.gather(*(fetch_with_semaphore(r) for r in requests), return_exceptions=True)
+        results = await asyncio.gather(
+            *(fetch_with_semaphore(r) for r in requests), return_exceptions=True
+        )
 
         return results
 
-    async def post_multiple_batches(self, requests, max_concurrent: int = 10, batch_size: int = 50):
+    async def post_multiple_batches(
+        self, requests, max_concurrent: int = 10, batch_size: int = 50
+    ):
         if not self.__client:
             raise RuntimeError("Client not initialized")
 
@@ -149,10 +156,16 @@ class AsyncAPIClient:
 
         r = []
         for batch in batched(requests, batch_size):
-            r.extend(await self.post_multiple_semaphore(requests=batch, max_concurrent=max_concurrent))
+            r.extend(
+                await self.post_multiple_semaphore(
+                    requests=batch, max_concurrent=max_concurrent
+                )
+            )
         return r
 
-    async def upload_file(self, file_name: str, folder_uuid: str, override: bool = True):
+    async def upload_file(
+        self, file_name: str, folder_uuid: str, override: bool = True
+    ):
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
 
@@ -181,7 +194,9 @@ class AsyncAPIClient:
                     await fd.write(chunk)
             return response
 
-    async def download_and_untar_file(self, target_dir: str | Path, endpoint: str) -> None:
+    async def download_and_untar_file(
+        self, target_dir: str | Path, endpoint: str
+    ) -> None:
         if not self.__client:
             raise RuntimeError("Client not initialized. Use 'async with'.")
 

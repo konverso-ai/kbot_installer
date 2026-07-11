@@ -9,12 +9,14 @@ import os
 from product import Product
 
 
-def build_dependency_file_rec(product_name, installer_path, products, visit_status=None):
+def build_dependency_file_rec(
+    product_name, installer_path, products, visit_status=None
+):
     visit_status = visit_status or {}
     product_path = os.path.join(installer_path, product_name)
     description_xml_path = os.path.join(product_path, "description.xml")
 
-    product_start =  Product.from_xml_file(description_xml_path)
+    product_start = Product.from_xml_file(description_xml_path)
 
     json_def = product_start.to_json()
     json_def["path"] = product_path
@@ -27,7 +29,9 @@ def build_dependency_file_rec(product_name, installer_path, products, visit_stat
         return True
 
     for parent in json_def["parents"]:
-        status = build_dependency_file_rec(parent, installer_path, products, visit_status)
+        status = build_dependency_file_rec(
+            parent, installer_path, products, visit_status
+        )
         if not status:
             return False
 
@@ -37,7 +41,9 @@ def build_dependency_file_rec(product_name, installer_path, products, visit_stat
     return json_def
 
 
-def build_work_area_dependency_file(product_name, installer_path, work_area_path, products=None):
+def build_work_area_dependency_file(
+    product_name, installer_path, work_area_path, products=None
+):
     """Build a dependency file under work/var/products.json"""
     target_folder = os.path.join(work_area_path, "var")
     if not os.path.exists(target_folder):
@@ -48,10 +54,14 @@ def build_work_area_dependency_file(product_name, installer_path, work_area_path
         with open(target_file, "w", encoding="utf-8") as fd:
             json.dump(products, fd, indent=4)
 
-    return build_dependency_file(product_name, installer_path, target_file, products=None)
+    return build_dependency_file(
+        product_name, installer_path, target_file, products=None
+    )
 
 
-def build_dependency_file(product_name, installer_path, dependency_file_path, products=None):
+def build_dependency_file(
+    product_name, installer_path, dependency_file_path, products=None
+):
     """Build a dependency file under work/var/products.json"""
     products = products or []
     build_dependency_file_rec(product_name, installer_path, products)
@@ -60,12 +70,14 @@ def build_dependency_file(product_name, installer_path, dependency_file_path, pr
     with open(dependency_file_path, "w", encoding="utf-8") as fd:
         json.dump(products, fd, indent=4)
 
+
 def get_dependency(product_name, installer_path, work_area_path):
     products = []
     build_dependency_file_rec(product_name, installer_path, products)
     products.reverse()
 
     return products
+
 
 if __name__ == "__main__":
     nostart = True

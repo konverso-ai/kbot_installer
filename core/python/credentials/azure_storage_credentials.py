@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import override
 
 from credentials.base import ClientSecretCredentialsBase
-from credentials.factory import create_credentials
+from credentials.factory import add_credentials
 
 AzureCredentialType: TypeAlias = Annotated[
     Literal["default_azure", "client_secret"],
@@ -20,9 +20,13 @@ AzureCredentialType: TypeAlias = Annotated[
 class AzureStorageCredentials(BaseSettings):
     """Azure storage credentials, with optional client-secret env requirements."""
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore", env_prefix="BUNDLE_")
 
     credential_type: AzureCredentialType
+
+    azure_blob_url: str | None = Field(default=None)
+    provider: str | None = Field(default=None)
+
     _client_secret: ClientSecretCredentialsBase = PrivateAttr()
 
     @override
@@ -30,7 +34,7 @@ class AzureStorageCredentials(BaseSettings):
         """Initialize nested client-secret credentials."""
         self._client_secret = cast(
             ClientSecretCredentialsBase,
-            create_credentials("azure_client_secret"),
+            add_credentials("azure_client_secret"),
         )
 
     def missing_env_vars(self) -> list[str]:

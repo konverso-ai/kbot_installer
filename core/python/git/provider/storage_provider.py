@@ -66,10 +66,7 @@ class StorageProvider(ProviderBase):
     def _build_object_key(repository_name: str, branch: str | None) -> str:
         """Build the object key for a repository archive."""
         branch_name = branch or "master"
-        return (
-            f"{branch_name}/{repository_name}/"
-            f"{repository_name}_latest.tar.gz"
-        )
+        return f"{branch_name}/{repository_name}/{repository_name}_latest.tar.gz"
 
     def _clone_from_storage(
         self,

@@ -47,9 +47,7 @@ class UnsupportedOpsMixin(VersionerBase):
         raise VersionerError(self.git_ops_unsupported)
 
     @override
-    def push_branches(
-        self, _repository_path: str | Path, _branches: list[str]
-    ) -> None:
+    def push_branches(self, _repository_path: str | Path, _branches: list[str]) -> None:
         """Push multiple branches to the remote in a single operation."""
         raise VersionerError(self.git_ops_unsupported)
 
@@ -66,9 +64,7 @@ class UnsupportedOpsMixin(VersionerBase):
         raise VersionerError(self.select_branch_unsupported)
 
     @override
-    def stash(
-        self, _repository_path: str | Path, _message: str | None = None
-    ) -> bool:
+    def stash(self, _repository_path: str | Path, _message: str | None = None) -> bool:
         """Stash current changes in the repository."""
         raise VersionerError(self.stash_unsupported)
 

@@ -3,7 +3,7 @@
 # Cache directory will be set to a temporary location to avoid cluttering the repository
 
 # Target Python version
-target-version = "py310"
+target-version = "py312"
 
 # Line length (used by both linter and formatter)
 line-length = 88
@@ -25,7 +25,7 @@ exclude = [
     "**/__init__.py"
 ]
 
-output-format = "grouped"
+#output-format = "grouped"
 
 # Ruff configuration: stricte + complète
 
@@ -45,7 +45,7 @@ line-ending = "auto"
 
 # Linting rules
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["ALL"]
 
 # ✅ Fix automatique (optionnel, utile en CI locale)
 # fix = true
@@ -109,3 +109,25 @@ ignore = [
 
 [lint.mccabe]
 max-complexity = 10
+
+[lint.isort]
+known-first-party = [
+    "auth",
+    "backend",
+    "cli",
+    "config",
+    "credentials",
+    "database",
+    "errors",
+    "git",
+    "installable",
+    "installer_support",
+    "interactivity",
+    "publisher",
+    "service",
+    "setup",
+    "storage",
+    "utils",
+    "workarea",
+    "writer",
+]

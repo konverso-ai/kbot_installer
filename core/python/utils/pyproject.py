@@ -46,6 +46,7 @@ class ForceInclude(BaseModel):
 
         Returns:
             Force-include mapping pointing at installer assets.
+
         """
         base = f"installer/{name}"
         return cls(
@@ -220,6 +221,7 @@ class PyProject(BaseModel):
 
         Returns:
             Validated pyproject.toml model with derived force-include paths.
+
         """
         wheel_target = wheel or WheelTarget(
             force_include=ForceInclude.for_project(project.name)
@@ -228,9 +230,7 @@ class PyProject(BaseModel):
             project=project,
             tool=Tool(
                 hatch=Hatch(
-                    build=HatchBuild(
-                        targets=HatchBuildTargets(wheel=wheel_target)
-                    )
+                    build=HatchBuild(targets=HatchBuildTargets(wheel=wheel_target))
                 ),
                 uv=ToolUv(index=uv_indexes or _default_uv_indexes()),
                 kbot=kbot,
@@ -243,6 +243,7 @@ class PyProject(BaseModel):
 
         Returns:
             TOML document as a string.
+
         """
         return tomlkit.dumps(_build_toml_document(self))
 
@@ -251,6 +252,7 @@ class PyProject(BaseModel):
 
         Args:
             file_path: Destination TOML file path.
+
         """
         path = ensure_path(file_path)
         with path.open(mode="w", encoding="utf-8") as file:
@@ -279,7 +281,9 @@ def _build_toml_document(pyproject: PyProject) -> tomlkit.TOMLDocument:
     """Build a tomlkit document from a pyproject model."""
     data = pyproject.model_dump(mode="python", by_alias=True, exclude_none=True)
     doc = tomlkit.document()
-    doc.update({key: value for key, value in data.items() if key != "dependency-groups"})
+    doc.update(
+        {key: value for key, value in data.items() if key != "dependency-groups"}
+    )
     doc["dependency-groups"] = _dependency_groups_to_table(pyproject.dependency_groups)
     return doc
 

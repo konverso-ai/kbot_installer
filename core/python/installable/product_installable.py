@@ -74,7 +74,9 @@ class ProductInstallable(BaseModel, InstallableBase):
 
     product: Product
     env: Literal["dev", "prod"] = "dev"
-    providers: Annotated[list[str], Field(default_factory=lambda: list(DEFAULT_PROVIDERS))]
+    providers: Annotated[
+        list[str], Field(default_factory=lambda: list(DEFAULT_PROVIDERS))
+    ]
     dirname: Path | None = None
     provider_name_used: str | None = None
     branch_used: str | None = None
@@ -169,7 +171,10 @@ class ProductInstallable(BaseModel, InstallableBase):
             Self,
             create_installable(
                 "product",
-                name=product_name, providers=providers, version=version, branch=branch
+                name=product_name,
+                providers=providers,
+                version=version,
+                branch=branch,
             ),
         )
 
@@ -214,6 +219,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         Returns:
             Loaded product installable, or ``None`` when the folder is missing
             or invalid.
+
         """
         path = Path(folder_path)
         if not path.exists() or not (path / "description.xml").exists():
@@ -282,9 +288,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         # Use specified branch if provided, otherwise convert version to branch name
         # Store the calculated branch in self.branch so it's preserved and can be used by dependencies
         if not self.branch and self.product.version:
-            self.branch = version_to_branch(
-                self.product.version.to_str(), env=self.env
-            )
+            self.branch = version_to_branch(self.product.version.to_str(), env=self.env)
         branch = self.branch
 
         if not dependencies:
@@ -991,6 +995,7 @@ class ProductInstallable(BaseModel, InstallableBase):
 
         Raises:
             ValueError: If the installer path cannot be determined.
+
         """
         if installer_path is not None:
             return installer_path.resolve()
@@ -1012,6 +1017,7 @@ class ProductInstallable(BaseModel, InstallableBase):
 
         Returns:
             Products to process, loaded from cloned repositories when available.
+
         """
         if not dependencies:
             product_dir = installer_path / self.product.name
@@ -1069,17 +1075,23 @@ class ProductInstallable(BaseModel, InstallableBase):
         link_external_config = link_section.get("external", {})
 
         if init_config:
-            logger.warning("Processing init section for product %s", product.product.name)
+            logger.warning(
+                "Processing init section for product %s", product.product.name
+            )
             self._handle_work_init(workarea_root, init_config, processed)
 
         if copy_config and product.dirname is not None:
-            logger.warning("Processing copy section for product %s", product.product.name)
+            logger.warning(
+                "Processing copy section for product %s", product.product.name
+            )
             self._handle_work_copy(
                 workarea_root, product.dirname, copy_config, ignore_config, processed
             )
 
         if link_config and product.dirname is not None:
-            logger.warning("Processing link section for product %s", product.product.name)
+            logger.warning(
+                "Processing link section for product %s", product.product.name
+            )
             self._handle_work_link(
                 workarea_root, product.dirname, link_config, ignore_config, processed
             )
@@ -1135,7 +1147,9 @@ class ProductInstallable(BaseModel, InstallableBase):
             )
 
         if not products:
-            msg = f"No products found in installer directory: {effective_installer_path}"
+            msg = (
+                f"No products found in installer directory: {effective_installer_path}"
+            )
             raise FileNotFoundError(msg)
 
         logger.warning(

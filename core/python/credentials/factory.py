@@ -6,7 +6,7 @@ from credentials.base import CredentialsBase
 from utils.factory.factory import factory_method
 
 
-def create_credentials(name: str, **kwargs: object) -> CredentialsBase:
+def add_credentials(name: str, **kwargs: object) -> CredentialsBase:
     """Create a credentials instance by name.
 
     Naming convention:

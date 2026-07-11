@@ -5,11 +5,11 @@ from credentials.base import (
     CredentialsBase,
     StorageCredentialsBase,
 )
-from credentials.factory import create_credentials
+from credentials.factory import add_credentials
 
 __all__ = [
     "ClientSecretCredentialsBase",
     "CredentialsBase",
     "StorageCredentialsBase",
-    "create_credentials",
+    "add_credentials",
 ]

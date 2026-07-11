@@ -138,6 +138,7 @@ class Product(BaseModel):
 
         Raises:
             ValueError: If XML is invalid or missing required fields.
+
         """
         try:
             parsed = xmltodict.parse(xml_content)
@@ -150,9 +151,7 @@ class Product(BaseModel):
         try:
             return cls.model_validate(parsed["product"])
         except ValidationError as exc:
-            if any(
-                error["loc"] in (("name",), ("@name",)) for error in exc.errors()
-            ):
+            if any(error["loc"] in (("name",), ("@name",)) for error in exc.errors()):
                 msg = "Product name is required"
                 raise ValueError(msg) from exc
             raise
@@ -170,6 +169,7 @@ class Product(BaseModel):
         Raises:
             FileNotFoundError: If the XML file does not exist.
             ValueError: If XML is invalid or missing required fields.
+
         """
         path = Path(xml_path)
         if not path.exists():
@@ -186,14 +186,13 @@ class Product(BaseModel):
 
         Returns:
             Dictionary with canonical Product field names.
+
         """
         normalized = dict(data)
 
         product_type = normalized.pop("product_type", "solution")
         product_kind = normalized.pop("type", None)
-        normalized["type"] = (
-            product_kind if product_kind is not None else product_type
-        )
+        normalized["type"] = product_kind if product_kind is not None else product_type
 
         license_info = normalized.pop("license_info", None)
         license_value = normalized.pop("license", None)
@@ -229,6 +228,7 @@ class Product(BaseModel):
 
         Raises:
             ValueError: If the product name is missing.
+
         """
         if "name" not in data:
             msg = "Product name is required"
@@ -247,6 +247,7 @@ class Product(BaseModel):
 
         Raises:
             ValueError: If JSON is invalid or missing required fields.
+
         """
         try:
             data = (
@@ -275,6 +276,7 @@ class Product(BaseModel):
         Raises:
             FileNotFoundError: If the JSON file does not exist.
             ValueError: If JSON is invalid or missing required fields.
+
         """
         path = Path(json_path)
         if not path.exists():
@@ -295,6 +297,7 @@ class Product(BaseModel):
 
         Raises:
             ValueError: If product names do not match.
+
         """
         if xml_product.name != json_product.name:
             msg = (
@@ -304,9 +307,7 @@ class Product(BaseModel):
 
         build = json_product.build or xml_product.build
         parents = (
-            json_product.parents
-            if json_product.parent_names
-            else xml_product.parents
+            json_product.parents if json_product.parent_names else xml_product.parents
         )
         categories = (
             json_product.categories
@@ -331,6 +332,7 @@ class Product(BaseModel):
 
         Returns:
             XML representation of the product.
+
         """
         product: dict[str, Any] = {
             "@name": self.name,
@@ -387,6 +389,7 @@ class Product(BaseModel):
 
         Raises:
             AttributeError: If no ``to_{mode}`` method exists on the product.
+
         """
         content = getattr(self, f"to_{mode}")()
         add_writer("text").write(content, path)

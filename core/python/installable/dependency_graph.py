@@ -211,7 +211,9 @@ class DependencyGraph:
         # Kahn's algorithm
         in_degree = defaultdict(int)
         for product in self.products:
-            in_degree[product.product.name] = len(self.dependencies[product.product.name])
+            in_degree[product.product.name] = len(
+                self.dependencies[product.product.name]
+            )
 
         queue = deque([name for name, degree in in_degree.items() if degree == 0])
         result = []
@@ -308,7 +310,9 @@ class DependencyGraph:
 
         return result
 
-    def get_bfs_ordered_products(self, root_product_name: str) -> list[ProductInstallable]:
+    def get_bfs_ordered_products(
+        self, root_product_name: str
+    ) -> list[ProductInstallable]:
         """Get Product instances in BFS order.
 
         Args:

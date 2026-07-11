@@ -18,6 +18,7 @@ class TextWriter:
             **kwargs: Optional arguments forwarded to ``Path.write_text``
                 (e.g. ``encoding``, ``errors``, ``newline``). Defaults to
                 UTF-8 encoding when ``encoding`` is not provided.
+
         """
         path = ensure_file_path(file_path)
         write_kwargs = {"encoding": "utf-8", **kwargs}

@@ -2,17 +2,33 @@
 
 from typing import Annotated, TypeAlias
 
-from pydantic import Field
+from pydantic import Field, SecretStr, AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AwsAccessKeyId: TypeAlias = Annotated[
-    str | None,
+    SecretStr | None,
     Field(default=None, validation_alias="AWS_ACCESS_KEY_ID"),
 ]
 AwsSecretAccessKey: TypeAlias = Annotated[
-    str | None,
+    SecretStr | None,
     Field(default=None, validation_alias="AWS_SECRET_ACCESS_KEY"),
 ]
+AwsSessionToken: TypeAlias = Annotated[
+    SecretStr | None,
+    Field(default=None, validation_alias="AWS_SESSION_TOKEN"),
+]
+RegionName: TypeAlias = Annotated[
+    SecretStr | None,
+    Field(default="eu-west-1", validation_alias="AWS_DEFAULT_REGION"),
+]
+
+
+def secret_value(secret: SecretStr | None) -> str | None:
+    match secret:
+        case None:
+            return None
+        case SecretStr():
+            return secret.get_secret_value()
 
 
 class S3Credentials(BaseSettings):
@@ -20,15 +36,24 @@ class S3Credentials(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    aws_access_key_id: AwsAccessKeyId
-    aws_secret_access_key: AwsSecretAccessKey
+    region_name: RegionName
+    endpoint_url: Annotated[AnyHttpUrl | None, Field(default=None)]
+
+    max_pool_connections: Annotated[int, Field(default=10, ge=1)]
+    retry_max_attempts: Annotated[int, Field(default=3, ge=1)]
+
+    access_key_id: AwsAccessKeyId
+    secret_access_key: AwsSecretAccessKey
+    session_token: AwsAccessKeyId
 
     def missing_env_vars(self) -> list[str]:
         missing: list[str] = []
-        if not self.aws_access_key_id:
+        if not self.access_key_id:
             missing.append("AWS_ACCESS_KEY_ID")
-        if not self.aws_secret_access_key:
+        if not self.secret_access_key:
             missing.append("AWS_SECRET_ACCESS_KEY")
+        if not self.session_token:
+            missing.append("AWS_SESSION_TOKEN")
         return missing
 
     def auth_kwargs(self) -> dict[str, str] | None:
@@ -37,6 +62,7 @@ class S3Credentials(BaseSettings):
     def storage_kwargs(self) -> dict[str, str | None]:
         """Return AWS credential fields for storage backend construction."""
         return {
-            "aws_access_key_id": self.aws_access_key_id,
-            "aws_secret_access_key": self.aws_secret_access_key,
+            "aws_access_key_id": secret_value(self.access_key_id),
+            "aws_secret_access_key": secret_value(self.secret_access_key),
+            "aws_session_token": secret_value(self.session_token),
         }

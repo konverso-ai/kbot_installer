@@ -254,9 +254,7 @@ class TestInstallationTable:
     def test_display_row_creation_with_error_message(self, installation_table) -> None:
         """Test that display creates rows correctly with error messages."""
         with (
-            patch(
-                "installer_support.installation_table.Console"
-            ) as mock_console_class,
+            patch("installer_support.installation_table.Console") as mock_console_class,
             patch("installer_support.installation_table.Table") as mock_table_class,
         ):
             mock_console = MagicMock()
@@ -285,9 +283,7 @@ class TestInstallationTable:
     def test_display_row_creation_with_skipped(self, installation_table) -> None:
         """Test that display creates rows correctly for skipped installations."""
         with (
-            patch(
-                "installer_support.installation_table.Console"
-            ) as mock_console_class,
+            patch("installer_support.installation_table.Console") as mock_console_class,
             patch("installer_support.installation_table.Table") as mock_table_class,
         ):
             mock_console = MagicMock()
@@ -316,9 +312,7 @@ class TestInstallationTable:
     def test_display_row_creation_with_success(self, installation_table) -> None:
         """Test that display creates rows correctly for successful installations."""
         with (
-            patch(
-                "installer_support.installation_table.Console"
-            ) as mock_console_class,
+            patch("installer_support.installation_table.Console") as mock_console_class,
             patch("installer_support.installation_table.Table") as mock_table_class,
         ):
             mock_console = MagicMock()
@@ -345,9 +339,7 @@ class TestInstallationTable:
     def test_display_style_application(self, installation_table) -> None:
         """Test that display applies correct styles to rows."""
         with (
-            patch(
-                "installer_support.installation_table.Console"
-            ) as mock_console_class,
+            patch("installer_support.installation_table.Console") as mock_console_class,
             patch("installer_support.installation_table.Table") as mock_table_class,
         ):
             mock_console = MagicMock()
@@ -384,9 +376,7 @@ class TestInstallationTable:
         mock_console_class.return_value = mock_console
         installation_table = InstallationTable(verbose=False)
 
-        installation_table.complete_installation(
-            "prod1", "storage (cached)", "skipped"
-        )
+        installation_table.complete_installation("prod1", "storage (cached)", "skipped")
 
         mock_console.print.assert_not_called()
         assert len(installation_table.results) == 1

@@ -11,7 +11,9 @@ from service.nexus_file import NexusFile
 from typing_extensions import override
 
 NexusFileItems: TypeAlias = Annotated[list[NexusFile], Field(default_factory=list)]
-ContinuationToken: TypeAlias = Annotated[str | None, Field(default=None, alias="continuationToken")]
+ContinuationToken: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="continuationToken")
+]
 
 
 class NexusFiles(BaseModel):
@@ -65,7 +67,8 @@ class NexusFiles(BaseModel):
 
         if folder_starts_with:
             files = [
-                item for item in files
+                item
+                for item in files
                 if item.folder_name and item.folder_name.startswith(folder_starts_with)
             ]
 
@@ -74,13 +77,15 @@ class NexusFiles(BaseModel):
 
         if ends_with:
             files = [
-                item for item in files
+                item
+                for item in files
                 if item.file_name and item.file_name.endswith(ends_with)
             ]
 
         if not_ends_with:
             files = [
-                item for item in files
+                item
+                for item in files
                 if item.file_name and not item.file_name.endswith(not_ends_with)
             ]
 
@@ -95,7 +100,9 @@ class NexusFiles(BaseModel):
         """Return the most recently modified file, if any."""
         if not self.files:
             return None
-        return sorted(self.files, key=lambda item: item.last_modified or "", reverse=True)[0]
+        return sorted(
+            self.files, key=lambda item: item.last_modified or "", reverse=True
+        )[0]
 
     @override
     def __iter__(self):

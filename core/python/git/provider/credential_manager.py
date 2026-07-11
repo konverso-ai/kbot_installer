@@ -109,9 +109,7 @@ class CredentialManager:
             )
             return None
 
-    def get_auth_for_provider(
-        self, provider_name: str
-    ) -> HttpAuthBase | None:
+    def get_auth_for_provider(self, provider_name: str) -> HttpAuthBase | None:
         """Get authentication object for a specific provider.
 
         Args:

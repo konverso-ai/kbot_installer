@@ -18,7 +18,7 @@ WORK_DIR = os.path.join(DEV_DIR, "work")
 BIN_DIR = os.path.join(WORK_DIR, "bin")
 PYTHON_PATH = os.path.join(BIN_DIR, "python.sh")
 
-log = logger.getPackageLogger('report')
+log = logger.getPackageLogger("report")
 
 LOG_FILE = "automatic_kbot_actions.log"
 LOG_FILENAME = os.path.join(DEV_DIR, LOG_FILE)
@@ -33,6 +33,7 @@ def get_bucket_provider():
         raise RuntimeError(_msg)
     return bucket_provider
 
+
 def get_bundle_descriptor(bucket_provider, bundle_name):
     # We retrieve the file
     fname = bundle_name + ".json"
@@ -43,6 +44,7 @@ def get_bundle_descriptor(bucket_provider, bundle_name):
 
     bundle_json_descriptor = json.loads(bundle_descriptor)
     return bundle_json_descriptor
+
 
 def install(version, product, create_workarea=False, no_learn=False, recurse=True):
     """Recursive installation of the product and all its related parents,
@@ -61,14 +63,20 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
             raise RuntimeError(msg)
 
     bucket_repo = get_bucket_provider()
-    bundle_json_descriptor = get_bundle_descriptor(bucket_provider=bucket_repo, bundle_name=version)
+    bundle_json_descriptor = get_bundle_descriptor(
+        bucket_provider=bucket_repo, bundle_name=version
+    )
 
     if not bundle_json_descriptor:
-        print(f"Bundle '{version}' is not currently available. Check name or check it was properly pushed on this bucket")
+        print(
+            f"Bundle '{version}' is not currently available. Check name or check it was properly pushed on this bucket"
+        )
         sys.exit(1)
-    
+
     # Load all the required products
-    recurse_product_download(bundle_json_descriptor, product, version, visited=[], recurse=recurse)
+    recurse_product_download(
+        bundle_json_descriptor, product, version, visited=[], recurse=recurse
+    )
 
     if not create_workarea:
         return
@@ -152,12 +160,16 @@ def _get_product_definition(bundle_json_descriptor, product_name):
     versions = bundle_json_descriptor.get("versions")
     products = [x for x in versions if x.get("name") == product_name]
 
-    if not products: 
-        log.debug("Failed to find product '%s' in: %s",
-                  product_name, ", ".join(x.get("name") for x in versions))
+    if not products:
+        log.debug(
+            "Failed to find product '%s' in: %s",
+            product_name,
+            ", ".join(x.get("name") for x in versions),
+        )
         return None
 
     return products[0]
+
 
 def _xml_products_sorting(xml_product_descriptions):
     """Given a list of xm product definitions (in dict format),
@@ -218,16 +230,13 @@ def _get_tree(xml_descriptions, recurse=True):
             )
         child_list.append(xml_description)
 
-
         if not recurse:
             break
 
     return child_list
 
 
-def _tree_recurse_visite(
-    xml_description, xml_descriptions, visited_product_names
-):
+def _tree_recurse_visite(xml_description, xml_descriptions, visited_product_names):
     """Reccursivity helper function of _get_tree"""
     child_list = []
     for parent_name in xml_description.get("parents", []):
@@ -237,8 +246,10 @@ def _tree_recurse_visite(
             ][0]
         except IndexError:
             print(
-                (f"Failed to find referenced product: '{parent_name}' "
-                 f"in product '{xml_description.get('name')}'")
+                (
+                    f"Failed to find referenced product: '{parent_name}' "
+                    f"in product '{xml_description.get('name')}'"
+                )
             )
             continue
 
@@ -265,7 +276,9 @@ def tree_print(elements, level=1, visited=None, recurse=True):
             tree_print(element.get("parents"), level + 1, visited=visited)
 
 
-def recurse_product_download(bundle_json_descriptor, product_name, version, visited, recurse=True):
+def recurse_product_download(
+    bundle_json_descriptor, product_name, version, visited, recurse=True
+):
     """
     Recursively retrieve the products, based on the "parent" definition
     found inside the Product definition.
@@ -274,7 +287,7 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
         if product is Customer or Solution, then do GIT download
         if product is Solution or Framework, then do NEXUS download
 
-    Arguments: 
+    Arguments:
         bundle_json_descriptor: A list of product json descriptors (from the bundle)
         version: a bundle name
     """
@@ -284,15 +297,19 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
 
     print("Checking product:", product_name)
     log.debug("recurse_product_download for product '%s'", product_name)
-    #log.warning("Returning get_bundle_descriptor: %s", json.dumps(bundle_json_descriptor, indent=4))
+    # log.warning("Returning get_bundle_descriptor: %s", json.dumps(bundle_json_descriptor, indent=4))
 
     if not version:
         print("Missing version info. Please add the -v flag")
 
-    # The NEW proposed 
-    bundle_product_descriptor = _get_product_definition(bundle_json_descriptor, product_name)
+    # The NEW proposed
+    bundle_product_descriptor = _get_product_definition(
+        bundle_json_descriptor, product_name
+    )
 
-    log.debug("Using product descriptor: %s", json.dumps(bundle_product_descriptor, indent=4))
+    log.debug(
+        "Using product descriptor: %s", json.dumps(bundle_product_descriptor, indent=4)
+    )
 
     # Check if the product is already installed through Nexus
     json_product_description = _get_json_product_description(product_name)
@@ -324,7 +341,9 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
 
             # Product already installed. We check if anything new is in the bundle
             installed_commit_id = json_product_description.get("build").get("commit")
-            nexus_commit_id = _get_commit_id_from_nexus_path(bundle_product_descriptor.get("build").get("commit"))
+            nexus_commit_id = _get_commit_id_from_nexus_path(
+                bundle_product_descriptor.get("build").get("commit")
+            )
 
             if nexus_commit_id == installed_commit_id:
                 print(
@@ -343,7 +362,12 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
 
         if recurse:
             for parent_product_name in bundle_product_descriptor.get("parents"):
-                recurse_product_download(bundle_json_descriptor, parent_product_name, version, visited=visited)
+                recurse_product_download(
+                    bundle_json_descriptor,
+                    parent_product_name,
+                    version,
+                    visited=visited,
+                )
 
         # Product not yet installed. We retrieved its path from the bundle
         if download:
@@ -359,12 +383,14 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
 
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
-            recurse_product_download(bundle_json_descriptor, parent, version, visited=visited)
+            recurse_product_download(
+                bundle_json_descriptor, parent, version, visited=visited
+            )
         return
 
     #
     # Product was NEVER installed. Install it
-    #raise "No product found on %s" % product_name
+    # raise "No product found on %s" % product_name
 
     # Case of product not existing in repository
     if not json_product_description:
@@ -375,7 +401,10 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
                 f"cd {installation_path} ; git clone https://bitbucket.org/konversoai/{product_name}.git"
             )
             if response:
-                print("ERROR: Cannot clone the git repository '%s'. Error code: %s" % (product_name, response))
+                print(
+                    "ERROR: Cannot clone the git repository '%s'. Error code: %s"
+                    % (product_name, response)
+                )
                 return
 
         if os.path.exists(os.path.join(installation_path, product_name, ".git")):
@@ -397,7 +426,9 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
         # Kick of the recursion on all required products before exiting.
         parents = _get_xml_product_description(product_name).get("parents")
         for parent in parents:
-            recurse_product_download(bundle_json_descriptor, parent, version, visited=visited)
+            recurse_product_download(
+                bundle_json_descriptor, parent, version, visited=visited
+            )
 
         return
 
@@ -416,14 +447,23 @@ def _bundle_product_download(bundle_product_descriptor, product_name):
 
     Returns the description.json dictionnary of the loaded file
     """
-    log.debug("_bundle_product_download: %s: %s", product_name, bundle_product_descriptor)
+    log.debug(
+        "_bundle_product_download: %s: %s", product_name, bundle_product_descriptor
+    )
     # Path in Bucket: release-2026.02/workday/workday_9f9b0818e7e51c68f34cb828dadcd0f000ff9259.tar.gz'
     # description: build': {'timestamp': '2026/04/20 07:38:34', 'branch': 'release-2025.02', 'commit': '2ca706c23e038d116bdc5322c9f6c2fdc6bb60b0'}, 'license': 'kbot-included', 'display': {'name': {'en': '', 'fr': ''}, 'description': {'en': '', 'fr': ''}}}
     path = bundle_product_descriptor.get("build").get("branch") + "/"
-    path += bundle_product_descriptor.get("name") + "/" 
-    path += bundle_product_descriptor.get("name") + "_" + bundle_product_descriptor.get("build").get("commit") + ".tar.gz"
+    path += bundle_product_descriptor.get("name") + "/"
+    path += (
+        bundle_product_descriptor.get("name")
+        + "_"
+        + bundle_product_descriptor.get("build").get("commit")
+        + ".tar.gz"
+    )
 
-    print(f"    Downloading product {product_name}  using bundle description: {bundle_product_descriptor.get('build').get('timestamp')}")
+    print(
+        f"    Downloading product {product_name}  using bundle description: {bundle_product_descriptor.get('build').get('timestamp')}"
+    )
     start = time.time()
     bucket_artifact_providers.download(path, f"/tmp/{product_name}.tar.gz")
     seconds = int(time.time() - start)
@@ -491,7 +531,9 @@ def _get_commit_id_from_nexus_path(nexus_path):
     return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
 
 
-def _list_or_update(products=None, update=False, backup=None, target_version=None, recurse=True):
+def _list_or_update(
+    products=None, update=False, backup=None, target_version=None, recurse=True
+):
     """List or Update the given products.
     Arguments:
         - target_version: A bundle name
@@ -513,10 +555,9 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
     #
     xml_product_descriptions = []
     for product_name in os.listdir(installation_path):
-
         if products and not recurse and product_name not in products:
             continue
-            
+
         # print(f"Checking {product_name}")
         xml_product_description = _get_xml_product_description(product_name)
         if not xml_product_description:
@@ -551,12 +592,13 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         #
         if json_product_description:
             # The version (2024.02-dev) is the branch minute the "release-"
-            version = json_product_description.get("build").get("branch")[len("release-"):]
+            version = json_product_description.get("build").get("branch")[
+                len("release-") :
+            ]
             if version:
                 print(f"    On product branch '{version}'")
 
         elif xml_product_description:
-
             if os.path.exists(f"{installation_path}/{product_name}/.git"):
                 # Attempt to find the related GIT branch
                 cmd = f"cd {installation_path}/{product_name} ; git status"
@@ -604,13 +646,11 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                         "    Product is already on latest available code: "
                         f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
                     )
-                else: # Print
-                    branch = latest_nexus_definition.js.get('downloadUrl').split("/")[5]
+                else:  # Print
+                    branch = latest_nexus_definition.js.get("downloadUrl").split("/")[5]
                     # 'https://nexus.konverso.ai/repository/kbot_raw/release-2025.02/kbot/kbot_399b792296e65da681895427e9c65e69950cbf7a.tar.gz'
                     #  0       2                 3          4        5               6
-                    print(
-                        f"    Product on branch: {branch}"
-                    )
+                    print(f"    Product on branch: {branch}")
 
                     print(
                         "    Product on latest available code: "
@@ -622,9 +662,7 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                     f"{json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
                 )
                 if update:
-                    _bundle_product_download(
-                        latest_nexus_definition, product_name
-                    )
+                    _bundle_product_download(latest_nexus_definition, product_name)
                 else:
                     print(
                         f"        Could upgrade to: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
@@ -664,7 +702,7 @@ if __name__ == "__main__":
             "--action",
             help="upgrade or update",
             dest="action",
-            default="installer-only"
+            default="installer-only",
         )
         parser.add_argument(
             "-b",
@@ -758,8 +796,10 @@ if __name__ == "__main__":
         #
         if _result.git:
             print(
-                ("Git password is in command line. This is unsecure. "
-                 "Prefere setting variables GIT_USERNAME and GIT_PASSWORD")
+                (
+                    "Git password is in command line. This is unsecure. "
+                    "Prefere setting variables GIT_USERNAME and GIT_PASSWORD"
+                )
             )
             user, password = _result.git.split(":", 1)
             os.environ["GIT_USERNAME"] = user
@@ -784,52 +824,67 @@ if __name__ == "__main__":
         # Case of command line configuration
         if _result.bucket:
             print(
-                ("Nexus password is in command line. This is unsecure. "
-                 "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
+                (
+                    "Nexus password is in command line. This is unsecure. "
+                    "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD"
+                )
             )
 
             from utils.bucket_storage.AzureBlob import AzureBlob
 
             _bucket_type, account_url = _result.bucket.split("::", 1)
-            bucket_provider = AzureBlob(account_url=account_url, container_name="bundles")
-            bucket_artifact_providers = AzureBlob(account_url=account_url, container_name="artifacts")
+            bucket_provider = AzureBlob(
+                account_url=account_url, container_name="bundles"
+            )
+            bucket_artifact_providers = AzureBlob(
+                account_url=account_url, container_name="artifacts"
+            )
 
         # Case of Azure:
-        elif (
-            os.environ.get("BUNDLE_PROVIDER") == "azure_blob"
-            and os.environ.get("BUNDLE_AZURE_BLOB_URL")):
-
+        elif os.environ.get("BUNDLE_PROVIDER") == "azure_blob" and os.environ.get(
+            "BUNDLE_AZURE_BLOB_URL"
+        ):
             from utils.bucket_storage.AzureBlob import AzureBlob
+
             log.debug("Blob URL: %s", os.environ.get("BUNDLE_AZURE_BLOB_URL"))
             bucket_provider = AzureBlob(
                 account_url=os.environ.get("BUNDLE_AZURE_BLOB_URL"),
-                container_name="bundles")
+                container_name="bundles",
+            )
             bucket_artifact_providers = AzureBlob(
                 account_url=os.environ.get("BUNDLE_AZURE_BLOB_URL"),
-                container_name="artifacts")
+                container_name="artifacts",
+            )
 
         # Case of Amazon S3:
         elif (
             os.environ.get("BUNDLE_PROVIDER") == "amazon_s3"
             and os.environ.get("BUNDLE_AMAZON_S3_REGION")
-            and os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME")):
-
+            and os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME")
+        ):
             from utils.bucket_storage.AmazonS3 import AmazonS3
-            bucket_provider =  AmazonS3(
-                region_name=os.environ.get("BUNDLE_AMAZON_S3_REGION"),
-                bucket_name=os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME"),
-                cluster_name="bundles")
 
-            bucket_artifact_providers =  AmazonS3(
+            bucket_provider = AmazonS3(
                 region_name=os.environ.get("BUNDLE_AMAZON_S3_REGION"),
                 bucket_name=os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME"),
-                cluster_name="artifacts")
+                cluster_name="bundles",
+            )
+
+            bucket_artifact_providers = AmazonS3(
+                region_name=os.environ.get("BUNDLE_AMAZON_S3_REGION"),
+                bucket_name=os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME"),
+                cluster_name="artifacts",
+            )
         else:
             print(usage())
             print("Blob Storage repository details are required")
-            print("BUNDLE_PROVIDER='%s' and BUNDLE_AZURE_BLOB_URL='%s'" % (
-                os.environ.get("BUNDLE_PROVIDER"),
-                os.environ.get("BUNDLE_AZURE_BLOB_URL")))
+            print(
+                "BUNDLE_PROVIDER='%s' and BUNDLE_AZURE_BLOB_URL='%s'"
+                % (
+                    os.environ.get("BUNDLE_PROVIDER"),
+                    os.environ.get("BUNDLE_AZURE_BLOB_URL"),
+                )
+            )
             sys.exit(1)
 
         # Setup the installer folder and a new work-area
@@ -855,14 +910,16 @@ if __name__ == "__main__":
                 products=products,
                 update=True,
                 target_version=bundle_name,
-                recurse=recurse
+                recurse=recurse,
             )
 
         # Only setup the installer folder
         elif action == "installer-only":
             if not bundle_name:
                 print(usage())
-                print("A version (-v flag) is mandatory for the action 'installer-only'")
+                print(
+                    "A version (-v flag) is mandatory for the action 'installer-only'"
+                )
                 sys.exit(1)
             if len(products) != 1:
                 print(usage())
@@ -871,7 +928,12 @@ if __name__ == "__main__":
                     products,
                 )
                 sys.exit(1)
-            install(version=bundle_name, product=products[0], create_workarea=False, recurse=recurse)
+            install(
+                version=bundle_name,
+                product=products[0],
+                create_workarea=False,
+                recurse=recurse,
+            )
 
         # List the currently installed products
         elif action == "list":
@@ -883,5 +945,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
     except Exception as exp:
-        log.error("Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True)
+        log.error(
+            "Exception occurred during Kbot actions:\n%s", str(exp), exc_info=True
+        )
         raise SystemExit(99) from exp

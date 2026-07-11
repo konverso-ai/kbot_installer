@@ -18,7 +18,9 @@ class AzureBackend(BackendBase):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     account_url: str
-    credential_type: Annotated[Literal["default_azure", "client_secret"], Field(default="default_azure")]
+    credential_type: Annotated[
+        Literal["default_azure", "client_secret"], Field(default="default_azure")
+    ]
 
     tenant_id: Annotated[str | None, Field(default=None)]
     client_id: Annotated[str | None, Field(default=None)]

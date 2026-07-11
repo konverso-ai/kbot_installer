@@ -86,9 +86,7 @@ class GithubProvider(GitMixin):
             msg = "repository_name is required"
             raise ValueError(msg)
         repository_url = self.build_repository_url(repository_name)
-        super().clone_and_checkout(
-            target_path, branch, repository_url=repository_url
-        )
+        super().clone_and_checkout(target_path, branch, repository_url=repository_url)
 
     @override
     def check_remote_repository_exists(self, repository_name: str) -> bool:

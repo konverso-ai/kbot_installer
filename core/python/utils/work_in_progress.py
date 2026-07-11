@@ -14,6 +14,7 @@ from pydantic import (
     model_validator,
     RootModel,
 )
+
 if TYPE_CHECKING:
     from utils.bundle import Bundle
 
@@ -189,3 +190,16 @@ class Settings(RootModel[dict[str, Setting]]):
     @override
     def __str__(self) -> str:
         return f"<Settings [{len(self.root)} setting(s)] keys={list(self.root.keys())}>"
+
+
+class JsonModel(BaseModel):
+    @classmethod
+    def from_json(cls, data: str | bytes):
+        return cls.model_validate_json(data)
+
+    def to_json(self, indent: int | None) -> str:
+        return self.model_dump_json(
+            indent=indent,
+            exclude_defaults=True,
+            exclude_none=True,
+        )

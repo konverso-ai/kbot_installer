@@ -21,16 +21,24 @@ Repository: TypeAlias = Annotated[str | None, Field(default=None)]
 Format: TypeAlias = Annotated[str | None, Field(default=None)]
 ChecksumField: TypeAlias = Annotated[Checksum, Field(default_factory=Checksum)]
 ContentType: TypeAlias = Annotated[str | None, Field(default=None, alias="contentType")]
-LastModified: TypeAlias = Annotated[str | None, Field(default=None, alias="lastModified")]
-LastDownloaded: TypeAlias = Annotated[str | None, Field(default=None, alias="lastDownloaded")]
+LastModified: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="lastModified")
+]
+LastDownloaded: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="lastDownloaded")
+]
 Uploader: TypeAlias = Annotated[str | None, Field(default=None)]
 UploaderIp: TypeAlias = Annotated[str | None, Field(default=None, alias="uploaderIp")]
 FileSize: TypeAlias = Annotated[int, Field(default=0, alias="fileSize")]
 BlobCreated: TypeAlias = Annotated[str | None, Field(default=None, alias="blobCreated")]
-BlobStoreName: TypeAlias = Annotated[str | None, Field(default=None, alias="blobStoreName")]
+BlobStoreName: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="blobStoreName")
+]
 BlobUpdated: TypeAlias = Annotated[str | None, Field(default=None, alias="blobUpdated")]
 BlobRef: TypeAlias = Annotated[str | None, Field(default=None, alias="blobRef")]
-LastVerified: TypeAlias = Annotated[str | None, Field(default=None, alias="lastVerified")]
+LastVerified: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="lastVerified")
+]
 Raw: TypeAlias = Annotated[dict[str, Any], Field(default_factory=dict)]
 
 

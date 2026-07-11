@@ -8,8 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from credentials import create_credentials
-from credentials.base import ClientSecretCredentialsBase, CredentialsBase, StorageCredentialsBase
+from credentials import add_credentials
+from credentials.base import (
+    ClientSecretCredentialsBase,
+    CredentialsBase,
+    StorageCredentialsBase,
+)
 
 if TYPE_CHECKING:
     from auth.base import HttpAuthBase
@@ -81,7 +85,7 @@ class S3StorageSettings(BaseModel):
 
     def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
         """Return kwargs for ``create_bucket_storage("s3", ...)``."""
-        credentials = cast(StorageCredentialsBase, create_credentials("s3"))
+        credentials = cast(StorageCredentialsBase, add_credentials("s3"))
         return {
             "bucket_name": self.bucket_name,
             "cluster_name": self.cluster_name or None,
@@ -117,9 +121,7 @@ class AzureStorageSettings(BaseModel):
             kwargs.update(
                 cast(
                     ClientSecretCredentialsBase,
-                    create_credentials(
-                        "azure_storage", credential_type="client_secret"
-                    ),
+                    add_credentials("azure_storage", credential_type="client_secret"),
                 ).client_secret_kwargs()
             )
         return kwargs
@@ -154,20 +156,20 @@ class ProvidersConfig(BaseModel):
         if provider_name == "storage":
             backend = self.storage.backend
             if backend == "azure":
-                return create_credentials(
+                return add_credentials(
                     "azure_storage",
                     credential_type=self.storage.azure.credential_type,
                 )
-            return create_credentials(backend)
+            return add_credentials(backend)
 
         if provider_name not in self.provider:
             return None
 
         provider_config = self.provider[provider_name]
         if provider_config.auth_type == "ssh":
-            return create_credentials("ssh")
+            return add_credentials("ssh")
 
-        return create_credentials(provider_name)
+        return add_credentials(provider_name)
 
     def get_provider_config(self, provider_name: str) -> ProviderConfig | None:
         """Get configuration for a specific provider.

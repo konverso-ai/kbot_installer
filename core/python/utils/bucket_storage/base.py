@@ -1,4 +1,5 @@
 """Bucket storage abstractions for cloud object stores."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Iterator
 
@@ -17,6 +18,7 @@ class BucketStorage(ABC):
         Returns:
             The decoded object content, or ``None`` if the object does not exist
             or cannot be retrieved.
+
         """
 
     @abstractmethod
@@ -26,10 +28,13 @@ class BucketStorage(ABC):
         Args:
             key: Destination object key.
             local_file_path: Local path to the file to be created
+
         """
 
     @abstractmethod
-    def set(self, key: str, value: Any, encoding: str = "utf-8", raise_on_status=False) -> None:
+    def set(
+        self, key: str, value: Any, encoding: str = "utf-8", raise_on_status=False
+    ) -> None:
         """Upload an object to the storage.
 
         Args:
@@ -37,6 +42,7 @@ class BucketStorage(ABC):
             value: Object content. Strings are encoded before upload.
             encoding: Character encoding used when ``value`` is a string.
             raise_on_status: If True, then raise an exception in case of failure. If False, returns None in case of failure
+
         """
 
     @abstractmethod
@@ -45,6 +51,7 @@ class BucketStorage(ABC):
 
         Args:
             key: Object key to delete.
+
         """
 
     @abstractmethod
@@ -58,6 +65,7 @@ class BucketStorage(ABC):
 
         Yields:
             Object keys found under the prefix.
+
         """
 
     @abstractmethod
@@ -70,6 +78,7 @@ class BucketStorage(ABC):
 
         Yields:
             Object keys found in the folder.
+
         """
 
     @abstractmethod
@@ -78,6 +87,7 @@ class BucketStorage(ABC):
 
         Args:
             key: Folder prefix to delete.
+
         """
 
     @abstractmethod
@@ -90,6 +100,7 @@ class BucketStorage(ABC):
         Returns:
             ``True`` if the object is available after the operation,
             ``False`` otherwise.
+
         """
 
     @abstractmethod
@@ -103,4 +114,5 @@ class BucketStorage(ABC):
 
         Yields:
             Folder names directly inside ``path``, without their full path.
+
         """

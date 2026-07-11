@@ -392,7 +392,9 @@ class TestInstallerService:
 
                 # Verify
                 assert result == "tree output"
-                mock_renderer.render_uv_tree_style.assert_called_once_with(mock_graph, verbose=False)
+                mock_renderer.render_uv_tree_style.assert_called_once_with(
+                    mock_graph, verbose=False
+                )
 
     def test_repair_success(self) -> None:
         """Test successful repair operation."""
@@ -540,7 +542,9 @@ class TestInstallerService:
             with (
                 patch.object(service, "_get_product", side_effect=mock_get_product),
                 patch.object(service, "_is_product_installed", return_value=False),
-                patch.object(service, "_detect_cached_provider", return_value="storage"),
+                patch.object(
+                    service, "_detect_cached_provider", return_value="storage"
+                ),
                 patch.object(
                     service.installation_table, "begin_installation"
                 ) as mock_begin,
@@ -569,9 +573,7 @@ class TestInstallerService:
             service = InstallerService(temp_dir)
 
             # Mock products - main product with dependencies, and dependency products with no dependencies
-            mock_main_product = _mock_installable(
-                "test-product", parent_names=["dep1"]
-            )
+            mock_main_product = _mock_installable("test-product", parent_names=["dep1"])
 
             mock_dep_product = _mock_installable("dep", parent_names=[])
 
@@ -670,9 +672,7 @@ class TestInstallerService:
             product_dir.mkdir()
 
             with (
-                patch(
-                    "installer_support.installer_service.subprocess.run"
-                ) as mock_run,
+                patch("installer_support.installer_service.subprocess.run") as mock_run,
                 patch(
                     "installer_support.installer_service.version_to_branch",
                     return_value="release-1.0.0",
@@ -700,9 +700,7 @@ class TestInstallerService:
             product_dir.mkdir()
 
             with (
-                patch(
-                    "installer_support.installer_service.subprocess.run"
-                ) as mock_run,
+                patch("installer_support.installer_service.subprocess.run") as mock_run,
                 patch(
                     "installer_support.installer_service.version_to_branch",
                     return_value="release-1.0.0",

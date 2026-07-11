@@ -33,6 +33,7 @@ class StoragePinnedProductInstallable:
             storage: Storage backend used to fetch the archive.
             installation_table: Table used to report download progress.
             storage_backend: Active storage backend name for display labels.
+
         """
         self.product = product
         self.installer_dir = installer_dir
@@ -52,6 +53,7 @@ class StoragePinnedProductInstallable:
 
         Raises:
             ValueError: If build metadata is incomplete.
+
         """
         if not product.build or not product.build.branch or not product.build.commit:
             msg = f"Product '{product.name}' has incomplete build metadata in bundle"

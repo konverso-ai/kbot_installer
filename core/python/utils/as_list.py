@@ -11,6 +11,7 @@ def as_list(value: Any) -> list[Any]:
 
     Returns:
         Empty list when value is falsy; otherwise a list of items.
+
     """
     if not value:
         return []

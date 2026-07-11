@@ -83,9 +83,7 @@ class NexusStorage(StorageBase):
 
     def exists(self, key: str) -> bool:
         """Return True when an object exists in the repository."""
-        return self._run_async(
-            self._service.file_exists(self._repository_path(key))
-        )
+        return self._run_async(self._service.file_exists(self._repository_path(key)))
 
     @override
     def get(self, key: str, encoding: str = "utf-8") -> str | None:
@@ -130,9 +128,7 @@ class NexusStorage(StorageBase):
     @override
     def list(self, prefix: str = "") -> Iterator[str]:
         """List object keys under the given prefix."""
-        nexus_files = self._run_async(
-            self._service.list_repository(self._repository)
-        )
+        nexus_files = self._run_async(self._service.list_repository(self._repository))
         normalized_prefix = self._normalize_prefix(prefix)
 
         for nexus_file in nexus_files:
@@ -145,7 +141,7 @@ class NexusStorage(StorageBase):
         """List object keys contained directly in a folder."""
         normalized_folder = self._normalize_prefix(folder_path)
         for key in self.list(normalized_folder):
-            relative_key = key[len(normalized_folder):] if normalized_folder else key
+            relative_key = key[len(normalized_folder) :] if normalized_folder else key
             if "/" not in relative_key.rstrip("/"):
                 yield key
 
@@ -168,7 +164,7 @@ class NexusStorage(StorageBase):
         seen: set[str] = set()
 
         for key in self.list(normalized_path):
-            relative_key = key[len(normalized_path):] if normalized_path else key
+            relative_key = key[len(normalized_path) :] if normalized_path else key
             if "/" not in relative_key:
                 continue
             folder_name = relative_key.split("/", 1)[0]

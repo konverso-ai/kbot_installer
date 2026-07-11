@@ -1,336 +1,237 @@
 """WorkareaInstallable class for managing workarea installations."""
 
+import getpass
 import logging
-import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+import os
+import shutil
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from installer_support.installer_utils import ensure_directory
-from interactivity.base import InteractivePrompter
-from setup.database_setup import (
-    ExternalDatabaseSetupManager,
-    InternalDatabaseSetupManager,
-)
+from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from installable.base import InstallableBase
 from installable.product_collection import ProductCollection
+from installable.updater.factory import UpdaterName, add_updater
+from workarea.utils import (
+    apply_rules,
+    cleanup_unused_tests_dir,
+    is_broken_symlink,
+    setup_drf_yasg_static,
+    setup_kbot_conf,
+    setup_products,
+    setup_runtime_dirs,
+)
+from workarea.workarea import Workarea
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class WorkareaInstallable(InstallableBase):
-    """Represents a workarea with its products and database configuration.
+class WorkareaInstallable(BaseModel, InstallableBase):
+    """Installable that lays out and maintains a whole workarea on disk.
+
+    Unlike `ProductInstallable`/`BundleInstallable`, this installable does not
+    represent a single downloadable unit: it applies workarea rules for every
+    product already present under `workarea.installer_root` and delegates
+    updates to the configured updater strategy (see `installable.updater`).
 
     Attributes:
-        name: Workarea name (typically derived from path).
-        target: Path to the workarea directory.
-        installer_path: Path to installer directory (contains cloned products).
-        db_internal: Whether to use internal PostgreSQL database.
-        db_host: Database hostname (for external database).
-        db_port: Database port number.
-        db_name: Database name.
-        db_user: Database user name.
-        db_password: Database password.
-        products: Product collection loaded from installer.
-        prompter: Optional InteractivePrompter for user interaction.
-        silent_mode: Suppress interactive prompts.
+        workarea: The `Workarea` model describing installer root, work root, products, and rules.
+        update_mode: Updater strategy used by `update`.
+        runtime_pythonpath: Paths (relative to `work_root`) exposed on `PYTHONPATH` at runtime.
 
     """
 
-    name: str = "workarea"
-    target: Path = field(default_factory=lambda: Path.cwd())
-    installer_path: Path | None = None
-    db_internal: bool = True
-    db_host: str = "localhost"
-    db_port: str = "5432"
-    db_name: str = "kbot_db"
-    db_user: str = "kbot_db_user"
-    db_password: str = "kbot_db_pwd"  # noqa: S105  # Default password
-    products: ProductCollection = field(default_factory=ProductCollection)
-    prompter: InteractivePrompter | None = None
-    silent_mode: bool = False
+    workarea: Workarea
+
+    update_mode: Annotated[UpdaterName, Field(default=UpdaterName.SMOOTH)]
+
+    runtime_pythonpath: Annotated[
+        list[Path],
+        Field(
+            default_factory=lambda: [
+                Path("core/python"),
+                Path("rest"),
+            ],
+        ),
+    ]
+
+    @override
+    def install(self) -> None:
+        """Build the workarea from scratch.
+
+        Creates the work root, applies workarea rules for every existing
+        product, then sets up the kbot configuration, runtime directories,
+        product registry, and static assets, and removes unused test
+        directories.
+        """
+        self.workarea.work_root.mkdir(parents=True, exist_ok=True)
+
+        runtime_variables = self._runtime_variables()
+
+        for product_root in self._iter_product_roots():
+            apply_rules(
+                product_root=product_root,
+                work_root=self.workarea.work_root,
+                rules=self.workarea.rules,
+                runtime_variables=runtime_variables,
+            )
+
+        setup_kbot_conf(self.workarea.work_root)
+        setup_runtime_dirs(self.workarea.work_root)
+        setup_products(self.workarea.work_root, self.workarea.products)
+        setup_drf_yasg_static(self.workarea.work_root)
+        cleanup_unused_tests_dir(
+            self.workarea.work_root,
+            self.workarea.products,
+            interactive=self.update_mode == UpdaterName.INTERACTIVE,
+        )
+
+    @override
+    def update(self) -> None:
+        """Update the workarea using the configured updater strategy.
+
+        Resolves the updater named by `update_mode` (see `installable.updater.factory`)
+        and runs it against this workarea.
+        """
+        updater = add_updater(name=self.update_mode.value, workarea=self)
+        updater()
+
+    @override
+    def repair(self) -> None:
+        """Repair the workarea using the `repair` updater strategy, regardless of `update_mode`."""
+        updater = add_updater(name=UpdaterName.REPAIR.value, workarea=self)
+        updater()
+
+    def clear(self) -> None:
+        """Remove every file, symlink, and directory directly under the work root."""
+        for child in self.workarea.work_root.iterdir():
+            if child.is_symlink() or child.is_file():
+                child.unlink()
+            else:
+                shutil.rmtree(child)
+
+    def repair_broken_links(self, *, interactive: bool = False) -> None:
+        """Find and remove broken symlinks under the work root.
+
+        Args:
+            interactive: If True, prompt for confirmation before removing each broken
+                symlink; otherwise remove them all without asking.
+
+        """
+        for path in self.workarea.work_root.rglob("*"):
+            if not is_broken_symlink(path=path):
+                continue
+
+            if interactive:
+                answer: str = input(f"Broken symlink {path}. Rebuild it? [y/N] ")
+                if answer.lower() not in {"y", "yes"}:
+                    continue
+
+            path.unlink()
+
+    def _iter_product_roots(self) -> Iterable[Path]:
+        for product in self.workarea.products:
+            product_root = self.workarea.installer_root / product
+            if product_root.exists():
+                yield product_root
+
+    def _runtime_variables(self) -> dict[str, str]:
+        return {
+            "__KBOT_HOME__": str(self.workarea.work_root.resolve()),
+            "__KBOT_USER__": getpass.getuser(),
+        }
+
+    def pythonpath(self) -> str:
+        """Build the runtime `PYTHONPATH` value for this workarea.
+
+        Returns:
+            `os.pathsep`-joined, resolved absolute paths for each entry in
+            `runtime_pythonpath`, rooted at `workarea.work_root`.
+
+        """
+        return os.pathsep.join(
+            str((self.workarea.work_root / path).resolve())
+            for path in self.runtime_pythonpath
+        )
+
+    def runtime_env(self) -> dict[str, str]:
+        """Build the environment to run kbot processes against this workarea.
+
+        Returns:
+            A copy of the current process environment with `PYTHONPATH` set to
+            `pythonpath()`.
+
+        Raises:
+            FileNotFoundError: If a `runtime_pythonpath` entry is missing under `work_root`.
+
+        """
+        self._assert_runtime_ready()
+        env = os.environ.copy()
+        env["PYTHONPATH"] = self.pythonpath()
+        return env
+
+    def _assert_runtime_ready(self) -> None:
+        for path in self.runtime_pythonpath:
+            full_path = self.workarea.work_root / path
+            if not full_path.exists():
+                msg = f"Missing runtime PYTHONPATH entry: {full_path}"
+                raise FileNotFoundError(msg)
 
     @override
     def load_from_installer_folder(self, folder_path: Path) -> None:
-        """Load workarea data from installer folder.
-
-        Args:
-            folder_path: Path to installer directory with cloned product folders.
+        """Not supported for a workarea.
 
         Raises:
-            NotADirectoryError: If the installer path is not a directory.
-            ValueError: If product loading fails.
+            NotImplementedError: Always; a workarea is not loaded from a single installer folder.
 
         """
-        self.installer_path = folder_path.resolve()
-        self.products = ProductCollection.from_installer(str(folder_path))
+        msg = "load_from_installer_folder is not implemented for WorkareaInstallable"
+        raise NotImplementedError(msg)
 
     @override
     def to_xml(self) -> str:
-        """Convert Workarea to XML string.
+        """Not supported for a workarea.
 
-        Returns:
-            XML string representation.
+        Raises:
+            NotImplementedError: Always; a workarea has no XML description.
 
         """
-        root = ET.Element("workarea")
-        root.set("name", self.name)
-        root.set("target", str(self.target))
-        if self.installer_path:
-            root.set("installer_path", str(self.installer_path))
-
-        db_elem = ET.SubElement(root, "database")
-        db_elem.set("internal", str(self.db_internal).lower())
-        db_elem.set("host", self.db_host)
-        db_elem.set("port", self.db_port)
-        db_elem.set("name", self.db_name)
-        db_elem.set("user", self.db_user)
-
-        products_elem = ET.SubElement(root, "products")
-        products_elem.set("count", str(len(self.products.products)))
-
-        return ET.tostring(root, encoding="unicode")
+        msg = "to_xml is not implemented for WorkareaInstallable"
+        raise NotImplementedError(msg)
 
     @override
     def to_json(self) -> dict[str, Any]:
-        """Convert Workarea to a JSON-serializable dictionary.
+        """Not supported for a workarea.
 
-        Returns:
-            Dictionary representation of the workarea.
+        Raises:
+            NotImplementedError: Always; a workarea has no JSON description.
 
         """
-        return {
-            "name": self.name,
-            "target": str(self.target),
-            "installer_path": str(self.installer_path) if self.installer_path else None,
-            "database": {
-                "internal": self.db_internal,
-                "host": self.db_host,
-                "port": self.db_port,
-                "name": self.db_name,
-                "user": self.db_user,
-                # Note: password is not included in JSON for security
-            },
-            "products_count": len(self.products.products),
-        }
+        msg = "to_json is not implemented for WorkareaInstallable"
+        raise NotImplementedError(msg)
 
     @override
     def download(self, path: Path, *, dependencies: bool = True) -> None:
-        """Download is not applicable for workarea.
-
-        Args:
-            path: Path to download to (not used).
-            dependencies: Whether to download dependencies (not used).
+        """Not supported for a workarea.
 
         Raises:
-            NotImplementedError: Always raised as download is not applicable for workarea.
+            NotImplementedError: Always; a workarea is assembled from already-downloaded products,
+                not downloaded itself.
 
         """
-        msg = "Download is not applicable for workarea. Use install() instead."
+        msg = "download is not implemented for WorkareaInstallable"
         raise NotImplementedError(msg)
 
     @override
     def get_dependencies(self) -> ProductCollection:
-        """Get ProductCollection containing all products in workarea.
+        """Not supported for a workarea.
 
-        Returns:
-            ProductCollection with all products.
-
-        """
-        return self.products
-
-    @override
-    def install(self, path: Path, *, _dependencies: bool = True) -> None:
-        """Install the workarea and set up database.
-
-        Args:
-            path: Path to install workarea to (same as target if not specified).
-            dependencies: Whether to install dependencies (ignored, all products are used).
+        Raises:
+            NotImplementedError: Always; a workarea aggregates a fixed product list rather
+                than resolving dependencies of its own.
 
         """
-        self.target = path.resolve()
-        ensure_directory(self.target)
-
-        # Ensure that logs directory exists
-        logs_dir = self.target / "logs"
-        ensure_directory(logs_dir)
-
-        # Ensure we have products loaded
-        if not self.products.products and self.installer_path:
-            try:
-                self.products = ProductCollection.from_installer(str(self.installer_path))
-            except (NotADirectoryError, ValueError) as exc:
-                logger.warning(
-                    "Failed to load products from %s: %s. "
-                    "Database setup will proceed without products.",
-                    self.installer_path,
-                    exc,
-                )
-
-        # Set up database using appropriate manager
-        if self.db_internal:
-            db_manager = InternalDatabaseSetupManager(
-                target=self.target,
-                products=self.products.products,
-                prompter=self.prompter,
-                db_port=self.db_port,
-                db_name=self.db_name,
-                db_user=self.db_user,
-                db_password=self.db_password,
-                silent_mode=self.silent_mode,
-            )
-        else:
-            db_manager = ExternalDatabaseSetupManager(
-                target=self.target,
-                products=self.products.products,
-                prompter=self.prompter,
-                db_host=self.db_host,
-                db_port=self.db_port,
-                db_name=self.db_name,
-                db_user=self.db_user,
-                db_password=self.db_password,
-                silent_mode=self.silent_mode,
-            )
-
-        logger.info("Setting up database for workarea at %s", self.target)
-        db_manager.setup()
-
-    def setup_database_only(self, path: Path) -> None:
-        """Set up database only (without loading schema).
-
-        Args:
-            path: Path to install workarea to.
-
-        """
-        self.target = path.resolve()
-        ensure_directory(self.target)
-
-        # Ensure that logs directory exists
-        logs_dir = self.target / "logs"
-        ensure_directory(logs_dir)
-
-        # Set up database using appropriate manager (without schema)
-        if self.db_internal:
-            db_manager = InternalDatabaseSetupManager(
-                target=self.target,
-                products=[],  # No products at init stage
-                prompter=self.prompter,
-                db_port=self.db_port,
-                db_name=self.db_name,
-                db_user=self.db_user,
-                db_password=self.db_password,
-                silent_mode=self.silent_mode,
-            )
-            db_manager.setup_database_only()
-        else:
-            db_manager = ExternalDatabaseSetupManager(
-                target=self.target,
-                products=[],  # No products at init stage
-                prompter=self.prompter,
-                db_host=self.db_host,
-                db_port=self.db_port,
-                db_name=self.db_name,
-                db_user=self.db_user,
-                db_password=self.db_password,
-                silent_mode=self.silent_mode,
-            )
-            db_manager.setup_database_only()
-
-        logger.info(
-            "Database initialized (without schema) for workarea at %s", self.target
-        )
-
-    @override
-    def update(self, path: Path, *, dependencies: bool = True) -> None:
-        """Update the workarea.
-
-        Args:
-            path: Path to update workarea at.
-            dependencies: Whether to update dependencies.
-
-        """
-        msg = "Update is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def uninstall(self, path: Path) -> None:
-        """Uninstall the workarea.
-
-        Args:
-            path: Path to uninstall workarea from.
-
-        """
-        msg = "Uninstall is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def repair(self, path: Path, *, dependencies: bool = True) -> None:
-        """Repair the workarea.
-
-        Args:
-            path: Path to repair workarea at.
-            dependencies: Whether to repair dependencies.
-
-        """
-        msg = "Repair is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def upgrade(self, path: Path, *, dependencies: bool = True) -> None:
-        """Upgrade the workarea.
-
-        Args:
-            path: Path to upgrade workarea at.
-            dependencies: Whether to upgrade dependencies.
-
-        """
-        msg = "Upgrade is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def downgrade(self, path: Path, *, dependencies: bool = True) -> None:
-        """Downgrade the workarea.
-
-        Args:
-            path: Path to downgrade workarea at.
-            dependencies: Whether to downgrade dependencies.
-
-        """
-        msg = "Downgrade is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def backup(self, path: Path) -> None:
-        """Backup the workarea.
-
-        Args:
-            path: Path to backup workarea from.
-
-        """
-        msg = "Backup is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def restore(self, path: Path) -> None:
-        """Restore the workarea.
-
-        Args:
-            path: Path to restore workarea from.
-
-        """
-        msg = "Restore is not implemented yet"
-        raise NotImplementedError(msg)
-
-    @override
-    def delete(self, path: Path) -> None:
-        """Delete the workarea.
-
-        Args:
-            path: Path to delete workarea from.
-
-        """
-        msg = "Delete is not implemented yet"
+        msg = "get_dependencies is not implemented for WorkareaInstallable"
         raise NotImplementedError(msg)
