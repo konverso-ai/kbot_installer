@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from typing import Annotated, Any, TypeAlias
-from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from typing_extensions import Self, override
 
 from service.nexus_file import NexusFile
-from typing_extensions import override
 
 NexusFileItems: TypeAlias = Annotated[list[NexusFile], Field(default_factory=list)]
 ContinuationToken: TypeAlias = Annotated[

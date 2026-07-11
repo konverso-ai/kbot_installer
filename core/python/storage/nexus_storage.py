@@ -3,14 +3,15 @@
 import asyncio
 import logging
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Coroutine, Iterator
 from pathlib import Path
 from typing import Any
+
+from typing_extensions import override
 
 from auth.base import HttpAuthBase
 from service.nexus_service import NexusService
 from storage.base import StorageBase
-from typing_extensions import override
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class NexusStorage(StorageBase):
         return self._repository
 
     @staticmethod
-    def _run_async(coro):
+    def _run_async(coro: Coroutine[Any, Any, Any]):
         """Run an async coroutine from synchronous storage methods."""
         return asyncio.run(coro)
 
@@ -71,8 +72,7 @@ class NexusStorage(StorageBase):
             return ""
         normalized = path.lstrip("/")
         repository_prefix = f"{self._repository}/"
-        normalized = normalized.removeprefix(repository_prefix)
-        return normalized
+        return normalized.removeprefix(repository_prefix)
 
     def _normalize_prefix(self, prefix: str) -> str:
         """Normalize a storage prefix for list operations."""
@@ -118,12 +118,14 @@ class NexusStorage(StorageBase):
     @override
     def set(self, key: str, value: Any, encoding: str = "utf-8") -> None:
         """Upload is not supported for Nexus repositories."""
-        raise NotImplementedError("Upload is not supported for Nexus storage")
+        msg = "Upload is not supported for Nexus storage"
+        raise NotImplementedError(msg)
 
     @override
     def delete(self, key: str) -> None:
         """Delete is not supported for Nexus repositories."""
-        raise NotImplementedError("Delete is not supported for Nexus storage")
+        msg = "Delete is not supported for Nexus storage"
+        raise NotImplementedError(msg)
 
     @override
     def list(self, prefix: str = "") -> Iterator[str]:
@@ -148,14 +150,14 @@ class NexusStorage(StorageBase):
     @override
     def delete_folder(self, key: str) -> None:
         """Delete is not supported for Nexus repositories."""
-        raise NotImplementedError("Delete is not supported for Nexus storage")
+        msg = "Delete is not supported for Nexus storage"
+        raise NotImplementedError(msg)
 
     @override
     def restore_soft_deleted_blob(self, key: str) -> bool:
         """Soft delete restoration is not supported for Nexus repositories."""
-        raise NotImplementedError(
-            "Soft delete restoration is not supported for Nexus storage"
-        )
+        msg = "Soft delete restoration is not supported for Nexus storage"
+        raise NotImplementedError(msg)
 
     @override
     def list_folders(self, path: str = "") -> Iterator[str]:

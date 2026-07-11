@@ -8,10 +8,10 @@ from GitHub using dulwich.
 import logging
 from pathlib import Path
 
-from auth.base import HttpAuthBase
-
-from git.provider.git_mixin import GitMixin
 from typing_extensions import override
+
+from auth.base import HttpAuthBase
+from git.provider.git_mixin import GitMixin
 
 logger = logging.getLogger(__name__)
 

@@ -17,4 +17,4 @@ def create_backend(name: str, **kwargs: object) -> BackendBase:
         An instance of the specified backend.
 
     """
-    return cast(BackendBase, factory_method(name, "backend", **kwargs))
+    return cast("BackendBase", factory_method(name, "backend", **kwargs))

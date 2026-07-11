@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+
 from installer_support.installer_utils import (
     calculate_relative_path,
     ensure_directory,

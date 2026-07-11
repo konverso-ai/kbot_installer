@@ -11,8 +11,8 @@ from pydantic import (
     field_validator,
 )
 
-from utils.version import Version
 from utils.product import Product
+from utils.version import Version
 from writer.factory import add_writer
 
 

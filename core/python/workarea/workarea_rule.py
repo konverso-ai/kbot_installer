@@ -1,8 +1,10 @@
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, RootModel
 from typing_extensions import override
+
 from utils.work_in_progress import JsonModel
 from workarea.rule_action import RuleAction
 
@@ -25,7 +27,7 @@ class WorkareaRule(JsonModel):
 
 class WorkareaRules(RootModel[list[WorkareaRule]], JsonModel):
     @override
-    def __iter__(self):
+    def __iter__(self) -> Iterator[WorkareaRule]:
         return iter(self.root)
 
     def __len__(self) -> int:

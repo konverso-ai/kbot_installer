@@ -18,13 +18,13 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-from writer.factory import add_writer
 
 from utils.product.build import Build
 from utils.product.categories import Categories
 from utils.product.loc_display_mapper import LocDisplayMapper
 from utils.product.parents import Parents
 from utils.version import Version
+from writer.factory import add_writer
 
 
 class Product(BaseModel):

@@ -6,11 +6,6 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
-from installable.factory import create_installable
-from installable.product_installable import ProductInstallable
-from installable.dependency_graph import DependencyGraph
-from installable.product_collection import ProductCollection
-from installable.renderer import DependencyTreeRenderer
 from git.provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
@@ -19,10 +14,14 @@ from git.provider.base import ProviderBase
 from git.provider.config import ProvidersConfig
 from git.provider.credential_manager import CredentialManager
 from git.provider.storage_provider import StorageProvider
-from storage.base import StorageBackend, StorageBase
-
+from installable.dependency_graph import DependencyGraph
+from installable.factory import create_installable
+from installable.product_collection import ProductCollection
+from installable.product_installable import ProductInstallable
+from installable.renderer import DependencyTreeRenderer
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
+from storage.base import StorageBackend, StorageBase
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +348,7 @@ class InstallerService:
                 auth=auth,
                 quiet=not self.verbose,
             )
-            self._storage = cast(StorageProvider, provider)._storage
+            self._storage = cast("StorageProvider", provider)._storage
         return self._storage
 
     def _load_product_from_repository(self, product_name: str, version: str) -> None:

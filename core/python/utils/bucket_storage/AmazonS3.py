@@ -2,15 +2,15 @@
 
 import itertools
 import time
-from typing import Any
 from collections.abc import Iterator
+from typing import Any
+from typing_extensions import override
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from typing_extensions import override
 
-from utils.Logger import logger
 from utils.bucket_storage.base import BucketStorage
+from utils.Logger import logger
 
 log = logger.getPackageLogger("bucket_storage")
 
@@ -360,7 +360,7 @@ class AmazonS3(BucketStorage):
             log.error(
                 "S3 client unavailable. Retrieval aborted. '%s'", self.bucket_name
             )
-            return None
+            return
 
         with open(local_file_path, "wb") as local_file:
             s3_client.download_fileobj(self.bucket_name, key, local_file)
@@ -378,13 +378,13 @@ class AmazonS3(BucketStorage):
         s3_client = self.get_s3_client()
         if not s3_client:
             log.error("S3 client unavailable. Deletion aborted.")
-            return None
+            return
         try:
             s3_client.delete_object(Bucket=self.bucket_name, Key=key)
             log.debug("Successfully deleted object from AWS S3: %s", key)
         except Exception as e:
             log.exception("Deletion failed for key='%s': %s", key, e)
-        return None
+        return
 
     @override
     def delete_folder(self, key: str) -> None:

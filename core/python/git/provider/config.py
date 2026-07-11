@@ -85,7 +85,7 @@ class S3StorageSettings(BaseModel):
 
     def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
         """Return kwargs for ``create_bucket_storage("s3", ...)``."""
-        credentials = cast(StorageCredentialsBase, add_credentials("s3"))
+        credentials = cast("StorageCredentialsBase", add_credentials("s3"))
         return {
             "bucket_name": self.bucket_name,
             "cluster_name": self.cluster_name or None,
@@ -120,7 +120,7 @@ class AzureStorageSettings(BaseModel):
         if self.credential_type == "client_secret":
             kwargs.update(
                 cast(
-                    ClientSecretCredentialsBase,
+                    "ClientSecretCredentialsBase",
                     add_credentials("azure_storage", credential_type="client_secret"),
                 ).client_secret_kwargs()
             )

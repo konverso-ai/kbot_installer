@@ -21,4 +21,4 @@ def add_credentials(name: str, **kwargs: object) -> CredentialsBase:
         An instance of the specified credentials class.
 
     """
-    return cast(CredentialsBase, factory_method(name, "credentials", **kwargs))
+    return cast("CredentialsBase", factory_method(name, "credentials", **kwargs))

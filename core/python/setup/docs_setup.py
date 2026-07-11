@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
-from setup.base import BaseSetupManager
 from typing_extensions import override
+
+from setup.base import BaseSetupManager
 
 
 class PythonDocsSetupManager(BaseSetupManager):

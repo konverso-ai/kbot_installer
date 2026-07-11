@@ -3,8 +3,9 @@
 from pathlib import Path
 from typing import ClassVar
 
-from git.versioner.base import VersionerBase, VersionerError
 from typing_extensions import override
+
+from git.versioner.base import VersionerBase, VersionerError
 
 
 class UnsupportedOpsMixin(VersionerBase):

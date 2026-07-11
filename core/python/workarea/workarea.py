@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, Field
+
 from workarea.workarea_rule import WorkareaRule
 
 

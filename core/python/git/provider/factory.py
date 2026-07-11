@@ -2,9 +2,8 @@
 
 from typing import cast
 
-from utils.factory.factory import factory_method
-
 from git.provider.base import ProviderBase
+from utils.factory.factory import factory_method
 
 
 def create_provider(name: str, **kwargs: object) -> ProviderBase:
@@ -28,4 +27,4 @@ def create_provider(name: str, **kwargs: object) -> ProviderBase:
         StorageProvider()
 
     """
-    return cast(ProviderBase, factory_method(name, "git.provider", **kwargs))
+    return cast("ProviderBase", factory_method(name, "git.provider", **kwargs))

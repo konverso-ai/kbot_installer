@@ -25,4 +25,4 @@ def create_installable(
 
     """
     cls = factory_class(installable_name, "installable")
-    return cast(InstallableBase, cls(**kwargs))
+    return cast("InstallableBase", cls(**kwargs))

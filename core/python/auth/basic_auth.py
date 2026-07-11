@@ -3,10 +3,9 @@
 import base64
 from typing import Annotated, TypeAlias
 
-from typing_extensions import Self, override
-
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Self, override
 
 from auth.auth_mixin import AuthMixin
 from auth.base import RemoteKwargs

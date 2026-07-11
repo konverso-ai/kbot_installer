@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
-from typing_extensions import Self
 
 from installable.storage_pinned_product import StoragePinnedProductInstallable
 from installer_support.installation_table import InstallationTable

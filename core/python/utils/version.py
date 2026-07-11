@@ -2,9 +2,10 @@
 
 from functools import total_ordering
 from typing import Any, Literal
-from typing_extensions import override
 
-from packaging.version import InvalidVersion, Version as PackagingVersion, parse
+from packaging.version import InvalidVersion, parse
+from packaging.version import Version as PackagingVersion
+from typing_extensions import override
 
 
 @total_ordering
@@ -35,9 +36,11 @@ class Version:
         try:
             parsed = parse(version)
         except InvalidVersion as exc:
-            raise ValueError(f"Invalid version: {version!r}") from exc
+            msg = f"Invalid version: {version!r}"
+            raise ValueError(msg) from exc
         if not isinstance(parsed, PackagingVersion):
-            raise ValueError(f"Invalid version: {version!r}")
+            msg = f"Invalid version: {version!r}"
+            raise TypeError(msg)
         self.major = parsed.major
         self.minor = parsed.minor
         self.patch = parsed.micro
@@ -49,7 +52,7 @@ class Version:
         return cls("")
 
     @classmethod
-    def parse(cls, value: Any) -> "Version":
+    def parse(cls, value: "str | Version | None") -> "Version":
         """Build a version from a string, existing instance, or empty value."""
         if isinstance(value, Version):
             return value
@@ -57,11 +60,10 @@ class Version:
             return cls.empty()
         if isinstance(value, str):
             return cls(value)
-        raise TypeError(
-            f"Expected version string or Version, got {type(value).__name__}"
-        )
+        msg = f"Expected version string or Version, got {type(value).__name__}"
+        raise TypeError(msg)
 
-    def to_str(self, with_patch: bool = True, with_env: bool = False) -> str:
+    def to_str(self, *, with_patch: bool = True, with_env: bool = False) -> str:
         """Return the version as ``major.minor.patch`` with a zero-padded patch."""
         if self._empty:
             return ""
@@ -141,6 +143,6 @@ class Version:
     def __hash__(self) -> int:
         return hash(self._key())
 
-    def to_branch(self, with_patch: bool = False, with_env: bool = False) -> str:
+    def to_branch(self, *, with_patch: bool = False, with_env: bool = False) -> str:
         """Return the version as a branch name."""
         return f"release-{self.to_str(with_patch=with_patch, with_env=with_env)}"

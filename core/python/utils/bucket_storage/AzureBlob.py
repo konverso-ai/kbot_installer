@@ -2,18 +2,20 @@
 
 import itertools
 import time
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
+from typing_extensions import override
 
 from azure.core.exceptions import (
-    ResourceNotFoundError,
     ClientAuthenticationError,
     ResourceExistsError,
+    ResourceNotFoundError,
 )
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobPrefix, BlobServiceClient, ContainerClient
-from typing_extensions import override
-from utils.Logger import logger
+
 from utils.bucket_storage.base import BucketStorage
+from utils.Logger import logger
 
 log = logger.getPackageLogger("bucket_storage")
 
@@ -298,7 +300,7 @@ class AzureBlob(BucketStorage):
                 "Container client unavailable. Retrieval aborted. '%s'",
                 self.container_name,
             )
-            return None
+            return
 
         blob_client = container_client.get_blob_client(key)
         with open(local_file_path, "wb") as local_file:
@@ -406,13 +408,13 @@ class AzureBlob(BucketStorage):
         container_client = self.get_container_client()
         if not container_client:
             log.error("Container client unavailable. Retrieval aborted.")
-            return None
+            return
         try:
             container_client.delete_blob(key)
             log.debug("Successfully deleted object from Azure Blob Storage: %s", key)
         except Exception:
             log.exception("Deletion failed for key='%s'")
-        return None
+        return
 
     @override
     def delete_folder(self, key: str) -> None:

@@ -10,7 +10,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from auth.base import HttpAuthBase, RemoteKwargs
 from dulwich import porcelain
 from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
@@ -18,6 +17,7 @@ from dulwich.refs import Ref
 from dulwich.repo import Repo
 from typing_extensions import override
 
+from auth.base import HttpAuthBase, RemoteKwargs
 from git.versioner.author import Author
 from git.versioner.base import VersionerError
 from git.versioner.str_repr_mixin import StrReprMixin
@@ -89,7 +89,7 @@ class DulwichVersioner(StrReprMixin):
 
     def _dulwich_remote_kwargs(self) -> dict[str, Any]:
         """Return remote kwargs typed for Dulwich porcelain calls."""
-        return cast(dict[str, Any], self._get_remote_kwargs())
+        return cast("dict[str, Any]", self._get_remote_kwargs())
 
     def _git_cli_environment(self) -> dict[str, str] | None:
         """Return git subprocess environment from auth, when supported."""
@@ -213,7 +213,7 @@ class DulwichVersioner(StrReprMixin):
             VersionerError: If HEAD does not point to a local branch.
 
         """
-        _, branch_ref = repo.refs.follow(cast(Ref, b"HEAD"))
+        _, branch_ref = repo.refs.follow(cast("Ref", b"HEAD"))
         if branch_ref is None or not branch_ref.startswith(_LOCAL_BRANCH_PREFIX):
             error_msg = "No current branch found"
             raise VersionerError(error_msg)

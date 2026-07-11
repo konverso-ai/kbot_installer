@@ -10,7 +10,6 @@ import logging
 
 from auth.base import HttpAuthBase
 from auth.factory import create_auth
-
 from git.provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProviderConfig,

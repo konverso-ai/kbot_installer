@@ -394,7 +394,7 @@ def optimized_download_and_extract_ter(  # noqa: C901
 
         # Extract using pipe mode for sequential reading
         reader = StreamingReader()
-        with tarfile.open(fileobj=cast(IO[bytes], reader), mode="r|gz") as tar:
+        with tarfile.open(fileobj=cast("IO[bytes]", reader), mode="r|gz") as tar:
             for member in tar:
                 extract_tar_member(tar, member, target_dir)
 

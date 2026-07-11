@@ -7,10 +7,10 @@ from Bitbucket using Dulwich.
 
 from pathlib import Path
 
-from auth.base import HttpAuthBase
-
-from git.provider.git_mixin import GitMixin
 from typing_extensions import override
+
+from auth.base import HttpAuthBase
+from git.provider.git_mixin import GitMixin
 
 
 class BitbucketProvider(GitMixin):
@@ -34,7 +34,7 @@ class BitbucketProvider(GitMixin):
         self,
         account_name: str,
         auth: HttpAuthBase | None = None,
-        **kwargs,  # noqa: ARG002, ANN003
+        **kwargs,  # noqa: ARG002
     ) -> None:
         """Initialize the Bitbucket provider.
 

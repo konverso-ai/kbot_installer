@@ -4,9 +4,9 @@ from collections.abc import Iterator
 
 import httpx
 from pydantic import computed_field
+from typing_extensions import override
 
 from auth.base import HttpAuthBase, RemoteKwargs
-from typing_extensions import override
 
 
 class AuthMixin(HttpAuthBase):

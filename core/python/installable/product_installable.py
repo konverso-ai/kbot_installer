@@ -16,19 +16,17 @@ from collections import deque
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
-from typing_extensions import Self, override
-
 import tomlkit
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 from tomlkit.exceptions import TOMLKitError
+from typing_extensions import Self, override
 
-from installer_support.installer_utils import ensure_directory, version_to_branch
-from git.provider.base import ProviderBase
 from git.provider import create_provider
-
-from installable.factory import create_installable
+from git.provider.base import ProviderBase
 from installable.base import InstallableBase
+from installable.factory import create_installable
 from installable.product_collection import ProductCollection
+from installer_support.installer_utils import ensure_directory, version_to_branch
 from utils.product import Product
 from utils.version import Version
 
@@ -149,7 +147,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             cloned_product_path = base_path / product_name
             if (cloned_product_path / "description.xml").exists():
                 loaded = cast(
-                    Self,
+                    "Self",
                     create_installable(
                         "product",
                         name=product_name,
@@ -168,7 +166,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         # The provider will handle the actual loading when cloning
         # Pass providers, version, and branch to ensure dependencies use the same as the main product
         return cast(
-            Self,
+            "Self",
             create_installable(
                 "product",
                 name=product_name,
@@ -231,7 +229,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         except (ValueError, FileNotFoundError):
             return None
         else:
-            return cast(Self, product)
+            return cast("Self", product)
 
     @override
     def to_xml(self) -> str:
@@ -1022,14 +1020,14 @@ class ProductInstallable(BaseModel, InstallableBase):
         if not dependencies:
             product_dir = installer_path / self.product.name
             loaded = ProductInstallable.from_installer_folder(product_dir)
-            return [cast(Self, loaded)] if loaded else []
+            return [cast("Self", loaded)] if loaded else []
 
         root_dir = installer_path / self.product.name
         if root_dir.exists() and (root_dir / "description.xml").exists():
             self.load_from_installer_folder(root_dir)
 
         return cast(
-            list[Self],
+            "list[Self]",
             self.get_dependencies(base_path=installer_path).products,
         )
 

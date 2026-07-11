@@ -2,10 +2,11 @@ from installable.updater.factory import UpdaterName
 
 
 def main():
-    from workarea.workarea_rule import WorkareaRules
     from pathlib import Path
+
     from installable.workarea_installable import WorkareaInstallable
     from workarea.workarea import Workarea
+    from workarea.workarea_rule import WorkareaRules
 
     rules = WorkareaRules.from_json(Path("conf/rules.json").read_text())
     wa = WorkareaInstallable(

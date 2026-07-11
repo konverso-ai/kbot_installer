@@ -20,57 +20,52 @@ def connect(settings: DbSettings, *, database: str | None = None):
 def execute_sql_file(settings: DbSettings, path: Path) -> None:
     sql = path.read_text(encoding="utf-8")
 
-    with connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql)
+    with connect(settings) as conn, conn.cursor() as cur:
+        cur.execute(sql)
 
 
 def ensure_version_table(settings: DbSettings) -> None:
-    with connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
+    with connect(settings) as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
                     CREATE TABLE IF NOT EXISTS {SCHEMA_VERSION_TABLE} (
                         version TEXT PRIMARY KEY,
                         applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
                 """
-            )
+        )
 
 
 def get_applied_version(settings: DbSettings) -> set[str]:
     ensure_version_table(settings)
 
-    with connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT version from {SCHEMA_VERSION_TABLE}")
-            return {row[0] for row in cur.fetchall()}
+    with connect(settings) as conn, conn.cursor() as cur:
+        cur.execute(f"SELECT version from {SCHEMA_VERSION_TABLE}")
+        return {row[0] for row in cur.fetchall()}
 
 
 def mark_version_applied(settings: DbSettings, version: str) -> None:
-    with connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
+    with connect(settings) as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
                     INSERT INTO {SCHEMA_VERSION_TABLE} (version)
                     VALUES (%s)
                     ON CONFLICT DO NOTHING
                 """,
-                (version,),
-            )
+            (version,),
+        )
 
 
 def is_database_empty(settings: DbSettings) -> bool:
-    with connect(settings) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with connect(settings) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                     SELECT COUNT(*)
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
                 """
-            )
-            return cur.fetchone()[0] == 0
+        )
+        return cur.fetchone()[0] == 0
 
 
 def apply_schema(settings: DbSettings) -> None:

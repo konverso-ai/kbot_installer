@@ -6,10 +6,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from interactivity.base import InteractivePrompter
-
-from setup.base import BaseSetupManager
 from typing_extensions import override
+
+from interactivity.base import InteractivePrompter
+from setup.base import BaseSetupManager
 
 
 class InternalDatabaseSetupManager(BaseSetupManager):

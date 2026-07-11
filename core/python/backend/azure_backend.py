@@ -5,9 +5,10 @@ from typing import Annotated, Any, Literal
 
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
-from backend.base import BackendBase
 from pydantic import ConfigDict, Field, PrivateAttr
 from typing_extensions import override
+
+from backend.base import BackendBase
 
 log = logging.getLogger(__name__)
 

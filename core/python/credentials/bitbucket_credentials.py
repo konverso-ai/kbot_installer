@@ -35,6 +35,6 @@ class BitbucketCredentials(BaseSettings):
         if self.missing_env_vars():
             return None
         return cast(
-            dict[str, str],
+            "dict[str, str]",
             {"username": self.username, "password": self.password},
         )

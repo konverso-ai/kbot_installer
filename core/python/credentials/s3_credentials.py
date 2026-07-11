@@ -2,7 +2,7 @@
 
 from typing import Annotated, TypeAlias
 
-from pydantic import Field, SecretStr, AnyHttpUrl
+from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AwsAccessKeyId: TypeAlias = Annotated[

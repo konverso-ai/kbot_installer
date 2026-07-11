@@ -3,7 +3,7 @@
 # Cache directory will be set to a temporary location to avoid cluttering the repository
 
 # Target Python version
-target-version = "py312"
+target-version = "py310"
 
 # Line length (used by both linter and formatter)
 line-length = 88
@@ -12,9 +12,12 @@ line-length = 88
 cache-dir = "/tmp/ruff_cache"
 
 exclude = [
-    "nexus.py",
-    "kbot.py",
-    "setup_workarea.py",
+    "core/python/utils/bundle.py",
+    "core/python/utils/nexus.py",
+    "core/python/utils/kbot.py",
+    "core/python/utils/deps.py",
+    "core/python/utils/setup_workarea.py",
+    "core/python/utils/bucket_storage",
     "gitpassword.py",
     ".git",
     ".mypy_cache",
@@ -25,7 +28,7 @@ exclude = [
     "**/__init__.py"
 ]
 
-#output-format = "grouped"
+output-format = "grouped"
 
 # Ruff configuration: stricte + complète
 
@@ -51,6 +54,8 @@ select = ["ALL"]
 # fix = true
 
 ignore = [
+    "ANN002",    # type annotation missing on function return
+    "ANN003",    # type annotation missing on function return
     "BLE001",    # blind except (justified for download error handling)
     "COM812",    # trailing comma (conflicts with formatter)
     "D203",      # incorrect blank line before class

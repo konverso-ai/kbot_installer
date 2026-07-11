@@ -2,9 +2,8 @@
 
 from typing import cast
 
-from utils.factory.factory import factory_method
-
 from git.versioner.base import VersionerBase
+from utils.factory.factory import factory_method
 
 
 def create_versioner(name: str, **kwargs: object) -> VersionerBase:
@@ -28,4 +27,4 @@ def create_versioner(name: str, **kwargs: object) -> VersionerBase:
         DulwichVersioner()
 
     """
-    return cast(VersionerBase, factory_method(name, "git.versioner", **kwargs))
+    return cast("VersionerBase", factory_method(name, "git.versioner", **kwargs))

@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 
 import httpx
-from auth.base import HttpAuthBase
-from storage.download_utils import extract_tar_gz_archive
-from utils.async_api_client import AsyncAPIClient
 
+from auth.base import HttpAuthBase
 from service.errors import NexusHttpError
 from service.nexus_files import NexusFiles
+from storage.download_utils import extract_tar_gz_archive
+from utils.async_api_client import AsyncAPIClient
 
 REST_PREFIX = "service/rest"
 

@@ -17,4 +17,4 @@ def create_bucket_storage(name: str, **kwargs: object) -> StorageBase:
         An instance of the specified bucket storage.
 
     """
-    return cast(StorageBase, factory_method(name, "storage", **kwargs))
+    return cast("StorageBase", factory_method(name, "storage", **kwargs))

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import click
+
 from git.models import GitProvider
 from installable.factory import create_installable
 from installable.product_installable import ProductInstallable
@@ -212,7 +213,7 @@ def add(
 
         # Create installable product
         installable = cast(
-            ProductInstallable,
+            "ProductInstallable",
             create_installable(
                 "product",
                 name=name,

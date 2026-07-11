@@ -6,17 +6,17 @@ that can be shared across different repository providers.
 
 from pathlib import Path
 
+from typing_extensions import override
+
 from auth.base import HttpAuthBase
 from auth.ssh_auth import SshAuth
-from typing_extensions import override
+from git.provider.base import ProviderBase
+from git.provider.errors import ProviderError
 from git.versioner import (
     VersionerBase,
     VersionerError,
     create_versioner,
 )
-
-from git.provider.base import ProviderBase
-from git.provider.errors import ProviderError
 
 
 class GitMixin(ProviderBase):

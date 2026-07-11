@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
-from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
+from typing_extensions import Self, override
 
 from service.checksum import Checksum
 from service.errors import NexusHttpError
-from typing_extensions import override
 
 if TYPE_CHECKING:
     from service.nexus_service import NexusService

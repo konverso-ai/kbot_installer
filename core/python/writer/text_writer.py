@@ -1,7 +1,6 @@
 """Text writer implementation."""
 
 from pathlib import Path
-from typing import Any
 
 from utils.path_utils import ensure_file_path
 
@@ -9,7 +8,7 @@ from utils.path_utils import ensure_file_path
 class TextWriter:
     """Write string content to a file."""
 
-    def write(self, content: str, file_path: str | Path, **kwargs: Any) -> None:
+    def write(self, content: str, file_path: str | Path, **kwargs) -> None:
         """Write text content to a file.
 
         Args:

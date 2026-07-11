@@ -9,17 +9,18 @@ import logging
 import re
 from pathlib import Path
 
-from installer_support.env_loader import format_missing_env_vars_message
+from typing_extensions import override
+
+from git.provider.base import ProviderBase
 from git.provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProvidersConfig,
 )
-from typing_extensions import override
 from git.provider.credential_manager import CredentialManager
-from git.provider.factory import create_provider
-from git.provider.base import ProviderBase
 from git.provider.errors import ProviderError
+from git.provider.factory import create_provider
 from git.provider.git_mixin import GitMixin
+from installer_support.env_loader import format_missing_env_vars_message
 
 logger = logging.getLogger(__name__)
 

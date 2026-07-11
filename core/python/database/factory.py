@@ -12,7 +12,7 @@ def add_settings(mode: DbMode, **kwargs) -> DbSettings:
         raise RuntimeError(msg)
 
     return cast(
-        DbSettings,
+        "DbSettings",
         factory_method(
             name=mode,
             package=package,
@@ -27,7 +27,7 @@ def add_db(mode: DbMode, **kwargs) -> DatabaseBackend:
         msg = "package cannot be None or empty."
         raise RuntimeError(msg)
     return cast(
-        DatabaseBackend,
+        "DatabaseBackend",
         factory_method(
             name=mode,
             package=package,

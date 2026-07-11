@@ -1,19 +1,17 @@
 """Work-in-progress models for bundle serialization."""
 
-from typing import TYPE_CHECKING, Any, Protocol
 from collections.abc import Iterator
-
-
-from typing_extensions import override
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import (
     BaseModel,
     ConfigDict,
-    field_validator,
-    field_serializer,
-    model_validator,
     RootModel,
+    field_serializer,
+    field_validator,
+    model_validator,
 )
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from utils.bundle import Bundle

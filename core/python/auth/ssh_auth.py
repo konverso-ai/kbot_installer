@@ -7,14 +7,13 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Annotated, TypeAlias
-from typing_extensions import Self
 
 import httpx
 from pydantic import Field, PrivateAttr, SecretStr, model_validator
+from typing_extensions import Self, override
 
 from auth.auth_mixin import AuthMixin
 from auth.base import RemoteKwargs
-from typing_extensions import override
 
 GitUsername: TypeAlias = Annotated[str, Field(default="git")]
 StrictHostKeyChecking: TypeAlias = Annotated[str, Field(default="accept-new")]

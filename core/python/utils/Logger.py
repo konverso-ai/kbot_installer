@@ -8,6 +8,7 @@ import sys
 import time
 import traceback
 import warnings
+from collections.abc import KeysView
 from logging.handlers import RotatingFileHandler
 from typing import TYPE_CHECKING, cast
 
@@ -27,7 +28,7 @@ FINEST = 8
 
 levels = {
     0: logging.CRITICAL,
-    1: logging.WARN,
+    1: logging.WARNING,
     2: logging.INFO,
     3: logging.DEBUG,
     4: FINE,
@@ -64,7 +65,7 @@ _srcfile = os.path.normcase(NormalizeLevel.__code__.co_filename)
 class KbotLogger(logging.Logger):
     """Logger for Kbot"""
 
-    def __init__(self, name, level=logging.NOTSET):
+    def __init__(self, name: str, level: int = logging.NOTSET):
         super().__init__(name, level)
 
         # key: a package name
@@ -76,36 +77,36 @@ class KbotLogger(logging.Logger):
         self.__filters: dict[str, int] = {}
 
     @property
-    def packages(self):
+    def packages(self) -> KeysView[str]:
         """Returns an iterator that contains all the registered package names"""
         return self.__packages.keys()
 
     @override
-    def setLevel(self, level):
+    def setLevel(self, level: int) -> None:
         self.addPackage("all", level)
 
-    def fine(self, msg, *args, **kwargs):
+    def fine(self, msg, *args, **kwargs) -> None:
         """FINE debug level"""
         self._log(FINE, msg, args, **kwargs)
 
-    def finest(self, msg, *args, **kwargs):
+    def finest(self, msg: str, *args, **kwargs) -> None:
         """FINEST debug level"""
         self._log(FINEST, msg, args, **kwargs)
 
     @override
-    def debug(self, msg, *args, **kwargs):
+    def debug(self, msg: str, *args, **kwargs) -> None:
         self._log(logging.DEBUG, msg, args, **kwargs)
 
     @override
-    def info(self, msg, *args, **kwargs):
+    def info(self, msg: str, *args, **kwargs):
         self._log(logging.INFO, msg, args, **kwargs)
 
     @override
-    def warning(self, msg, *args, **kwargs):
+    def warning(self, msg: str, *args, **kwargs):
         self._log(logging.WARNING, msg, args, **kwargs)
 
     @override
-    def warn(self, msg, *args, **kwargs):
+    def warn(self, msg: str, *args, **kwargs):
         warnings.warn(
             "The 'warn' method is deprecated, use 'warning' instead",
             DeprecationWarning,
@@ -114,19 +115,19 @@ class KbotLogger(logging.Logger):
         self.warning(msg, *args, **kwargs)
 
     @override
-    def error(self, msg, *args, **kwargs):
+    def error(self, msg: str, *args, **kwargs):
         self._log(logging.ERROR, msg, args, **kwargs)
 
     @override
-    def exception(self, msg, *args, exc_info=True, **kwargs):
+    def exception(self, msg: str, *args, exc_info=True, **kwargs):
         self.error(msg, *args, exc_info=exc_info, **kwargs)
 
     @override
-    def critical(self, msg, *args, **kwargs):
+    def critical(self, msg: str, *args, **kwargs):
         self._log(logging.CRITICAL, msg, args, **kwargs)
 
     @override
-    def isEnabledFor(self, level, package: str = "all") -> bool:
+    def isEnabledFor(self, level: int, package: str = "all") -> bool:
         if package not in self.__filters:
             package = "all"
         return level >= self.__filters[package]
@@ -134,14 +135,14 @@ class KbotLogger(logging.Logger):
     @override
     def _log(
         self,
-        level,
-        msg,
-        args,
-        exc_info=None,
-        extra=None,
-        stack_info=False,
-        stacklevel=1,
-        package="",
+        level: int,
+        msg: str,
+        args: tuple[object, ...],
+        exc_info: bool | None = None,
+        extra: dict[str, object] | None = None,
+        stack_info: bool = False,
+        stacklevel: int = 1,
+        package: str = "",
     ):
         if not self.isEnabledFor(level, package or "all"):
             return
@@ -159,7 +160,7 @@ class KbotLogger(logging.Logger):
         )
 
     @override
-    def findCaller(self, stack_info=False, stacklevel=1):
+    def findCaller(self, stack_info: bool = False, stacklevel: int = 1) -> tuple[str, int, str, str | None]:
         # stdlib's Logger._log() already traps the ValueError this raises when
         # the stack isn't deep enough (e.g. some IronPython versions).
         f = sys._getframe(4)
@@ -183,23 +184,23 @@ class KbotLogger(logging.Logger):
             return co.co_filename, f.f_lineno, co.co_name, sinfo
         return "(unknown file)", 0, "(unknown function)", None
 
-    def getPackageLogger(self, name):
+    def getPackageLogger(self, name: str) -> "KbotPackageLogger":
         """Get package logger"""
         if name not in self.__packages:
             self.__packages[name] = KbotPackageLogger(name, self)
         return self.__packages[name]
 
-    def addPackage(self, name, level):
+    def addPackage(self, name: str, level: int) -> None:
         """Log this package"""
         self.__filters[name] = level
 
-    def remPackage(self, name):
+    def remPackage(self, name: str) -> None:
         """Remove this package from logging"""
         if name == "all":
             return
         self.__filters.pop(name, None)
 
-    def buildHandler(self, level, path=None):
+    def buildHandler(self, level: int, path: str | None = None) -> None:
         """Build handlers according the entry point.
 
         GetProducts generates a side effect, the logs are deactivated
@@ -378,7 +379,7 @@ class DataDogFormatter(JsonFormatter):
 logging.addLevelName(FINE, "FINE")
 logging.addLevelName(FINEST, "FINEST")
 logging.setLoggerClass(KbotLogger)
-log = cast(KbotLogger, logging.getLogger("kbot"))
+log = cast("KbotLogger", logging.getLogger("kbot"))
 # WARNING: This might not be a real fix but a work-around.
 # I did not find the root cause of the log duplication.
 log.propagate = False

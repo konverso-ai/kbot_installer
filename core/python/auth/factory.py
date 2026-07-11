@@ -2,9 +2,8 @@
 
 from typing import cast
 
-from utils.factory.factory import factory_method
-
 from auth.base import HttpAuthBase
+from utils.factory.factory import factory_method
 
 
 def create_auth(name: str, **kwargs: object) -> HttpAuthBase:
@@ -22,4 +21,4 @@ def create_auth(name: str, **kwargs: object) -> HttpAuthBase:
         An instance of the specified authentication class.
 
     """
-    return cast(HttpAuthBase, factory_method(name, "auth", **kwargs))
+    return cast("HttpAuthBase", factory_method(name, "auth", **kwargs))

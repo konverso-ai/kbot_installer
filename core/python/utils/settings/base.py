@@ -4,7 +4,6 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
-
 Simple = str | int | float | None
 Choice = list[Simple]
 Choices = list[Choice]

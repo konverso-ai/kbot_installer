@@ -6,13 +6,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from backend.base import BackendBase
-from backend.factory import create_backend
 from botocore.exceptions import ClientError, NoCredentialsError
 from more_itertools import chunked
+from typing_extensions import override
+
+from backend.base import BackendBase
+from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
-from typing_extensions import override
 
 log = logging.getLogger(__name__)
 

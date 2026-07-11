@@ -1,7 +1,8 @@
 """Bucket storage abstractions for cloud object stores."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 
 class BucketStorage(ABC):

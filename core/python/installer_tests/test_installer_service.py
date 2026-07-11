@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_service import InstallerService
 

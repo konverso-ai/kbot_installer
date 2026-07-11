@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class Writer(Protocol):
     """Writer protocol."""
 
-    def write(self, content: str, file_path: str | Path, **kwargs: Any) -> None:
+    def write(self, content: str, file_path: str | Path, **kwargs) -> None:
         """Write serialized content to a file.
 
         Args:

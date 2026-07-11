@@ -29,4 +29,4 @@ def add_updater(name: str, **kwargs: object) -> UpdaterBase:
         An instance of the specified updater class.
 
     """
-    return cast(UpdaterBase, factory_method(name, "installable.updater", **kwargs))
+    return cast("UpdaterBase", factory_method(name, "installable.updater", **kwargs))

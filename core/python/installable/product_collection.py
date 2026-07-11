@@ -146,7 +146,7 @@ class ProductCollection(BaseModel):
         return filtered
 
     @classmethod
-    def from_installer(cls, installer_path: str) -> "ProductCollection":
+    def from_installer(cls, installer_path: str) -> ProductCollection:
         """Create collection from installer directory.
 
         Args:
@@ -192,7 +192,7 @@ class ProductCollection(BaseModel):
         return cls(products)
 
     @classmethod
-    def from_installer_folder(cls, installer_path: str) -> "ProductCollection":
+    def from_installer_folder(cls, installer_path: str) -> ProductCollection:
         """Create collection from installer directory (alias for from_installer).
 
         Args:

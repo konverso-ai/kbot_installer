@@ -90,7 +90,7 @@ def extract_tar_gz_stream(
         download_error,
         max_buffer_size=max_buffer_size,
     )
-    with tarfile.open(fileobj=cast(IO[bytes], reader), mode="r|gz") as tar:
+    with tarfile.open(fileobj=cast("IO[bytes]", reader), mode="r|gz") as tar:
         for member in tar:
             tar.extract(member, path=target_dir, filter="data")
 

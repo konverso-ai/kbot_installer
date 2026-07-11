@@ -6,14 +6,14 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
-from auth.base import HttpAuthBase
-from storage.base import StorageBase
-from storage.factory import create_bucket_storage
 from typing_extensions import override
 
+from auth.base import HttpAuthBase
 from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
+from storage.base import StorageBase
+from storage.factory import create_bucket_storage
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ class StorageProvider(ProviderBase):
         )
         try:
             if "exists" in type(self._storage).__dict__:
-                return bool(cast(Any, self._storage).exists(key))
+                return bool(cast("Any", self._storage).exists(key))
             return self._storage.get(key) is not None
         except Exception:
             logger.exception(

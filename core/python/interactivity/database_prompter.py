@@ -270,7 +270,7 @@ class DatabasePrompter(InteractivePrompter):
             if not result["db_internal"]:
                 # Test connection to external database
                 if self._test_external_database_connection(
-                    cast(ExternalDbParams, result)
+                    cast("ExternalDbParams", result)
                 ):
                     break
                 print(

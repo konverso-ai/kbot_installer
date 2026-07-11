@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import boto3
 from botocore.config import Config
+
 from credentials.s3_credentials import S3Credentials
 
 if TYPE_CHECKING:

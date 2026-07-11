@@ -33,7 +33,7 @@ class AzureStorageCredentials(BaseSettings):
     def model_post_init(self, __context: Any) -> None:
         """Initialize nested client-secret credentials."""
         self._client_secret = cast(
-            ClientSecretCredentialsBase,
+            "ClientSecretCredentialsBase",
             add_credentials("azure_client_secret"),
         )
 
