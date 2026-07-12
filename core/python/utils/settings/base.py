@@ -10,19 +10,23 @@ Choices = list[Choice]
 
 
 class Value(BaseModel):
+    """A single simple value (string, number, or None)."""
+
     value: Simple
 
 
 class NamedValue(Value):
+    """A simple value associated with a name."""
+
     name: str
 
 
 class SingleChoice(BaseModel):
-    pass
+    """A setting restricted to one value among a fixed set of choices."""
 
 
 class MultipleChoice(BaseModel):
-    pass
+    """A setting restricted to several values among a fixed set of choices."""
 
 
 class Settings(Protocol):

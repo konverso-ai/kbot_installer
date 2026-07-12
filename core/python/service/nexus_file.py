@@ -69,6 +69,16 @@ class NexusFile(BaseModel):
 
     @classmethod
     def from_json(cls, data: dict[str, Any], *, service: NexusService) -> Self:
+        """Build a NexusFile from a Nexus API payload.
+
+        Args:
+            data: Raw asset mapping from the Nexus API.
+            service: Service instance used to perform later download calls.
+
+        Returns:
+            A NexusFile instance bound to service.
+
+        """
         payload = dict(data)
         payload["checksum"] = Checksum.from_json(data.get("checksum"))
         instance = cls.model_validate(payload)
@@ -86,6 +96,7 @@ class NexusFile(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def folder_name(self) -> str | None:
+        """Return the folder portion of the normalized asset path."""
         normalized = self._normalized_path()
         if not normalized:
             return None
@@ -94,6 +105,7 @@ class NexusFile(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def file_name(self) -> str | None:
+        """Return the file name portion of the normalized asset path."""
         normalized = self._normalized_path()
         if not normalized:
             return None

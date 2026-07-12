@@ -19,6 +19,13 @@ class NexusService:
     """Async service for Nexus repository operations."""
 
     def __init__(self, host: str, auth: HttpAuthBase | None = None) -> None:
+        """Initialize the service for a given Nexus host.
+
+        Args:
+            host: Hostname (without scheme) of the Nexus repository server.
+            auth: Optional HTTP authentication strategy used for requests.
+
+        """
         self._host = host
         self._auth = auth
         self._base_url = f"https://{host}"

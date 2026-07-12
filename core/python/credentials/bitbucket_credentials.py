@@ -24,6 +24,12 @@ class BitbucketCredentials(BaseSettings):
     password: BitbucketPassword
 
     def missing_env_vars(self) -> list[str]:
+        """Return canonical environment variable names that are absent.
+
+        Returns:
+            Names of the Bitbucket environment variables that are not set.
+
+        """
         missing: list[str] = []
         if not self.username:
             missing.append("BITBUCKET_USERNAME")
@@ -32,6 +38,13 @@ class BitbucketCredentials(BaseSettings):
         return missing
 
     def auth_kwargs(self) -> dict[str, str] | None:
+        """Return HTTP auth constructor kwargs when credentials are complete.
+
+        Returns:
+            A mapping with ``username`` and ``password``, or None if either is
+            missing.
+
+        """
         if self.missing_env_vars():
             return None
         return cast(

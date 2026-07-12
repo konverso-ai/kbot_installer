@@ -19,9 +19,23 @@ class GithubCredentials(BaseSettings):
     token: GithubToken
 
     def missing_env_vars(self) -> list[str]:
+        """Return canonical environment variable names that are absent.
+
+        Returns:
+            An empty list when ``GITHUB_TOKEN`` is set, otherwise a list
+            containing ``GITHUB_TOKEN``.
+
+        """
         return [] if self.token else ["GITHUB_TOKEN"]
 
     def auth_kwargs(self) -> dict[str, str] | None:
+        """Return HTTP auth constructor kwargs when credentials are complete.
+
+        Returns:
+            A mapping with ``username`` and ``password`` (the token), or None
+            if the token is missing.
+
+        """
         if not self.token:
             return None
         return {"username": "git", "password": self.token}

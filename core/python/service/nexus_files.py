@@ -26,6 +26,16 @@ class NexusFiles(BaseModel):
 
     @classmethod
     def from_json(cls, data: dict[str, Any], *, service: Any) -> Self:
+        """Build a NexusFiles collection from a Nexus API payload.
+
+        Args:
+            data: Raw search/list response from the Nexus API.
+            service: Service instance bound to the files for later downloads.
+
+        Returns:
+            A NexusFiles instance populated from data.
+
+        """
         instance = cls(
             files=[
                 NexusFile.from_json(item, service=service)
@@ -38,11 +48,26 @@ class NexusFiles(BaseModel):
 
     @classmethod
     def empty(cls, *, service: Any) -> Self:
+        """Create an empty NexusFiles collection bound to a service.
+
+        Args:
+            service: Service instance to bind to the empty collection.
+
+        Returns:
+            A NexusFiles instance with no files.
+
+        """
         instance = cls()
         instance._service = service
         return instance
 
     def extend_from_json(self, data: dict[str, Any]) -> None:
+        """Append files parsed from a Nexus API page to this collection.
+
+        Args:
+            data: Raw list/search response page from the Nexus API.
+
+        """
         self.files.extend(
             NexusFile.from_json(item, service=self._service)
             for item in data.get("items", [])
@@ -105,7 +130,9 @@ class NexusFiles(BaseModel):
 
     @override
     def __iter__(self):
+        """Iterate over the files in this collection."""
         return iter(self.files)
 
     def __len__(self) -> int:
+        """Return the number of files in this collection."""
         return len(self.files)

@@ -1,3 +1,5 @@
+"""Filesystem export helpers for GitRepo models."""
+
 from pathlib import Path
 
 from git.models import GitRepo

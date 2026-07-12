@@ -1,3 +1,5 @@
+"""Async HTTP API client with concurrency and streaming download helpers."""
+
 import asyncio
 import tempfile
 from collections.abc import Iterator
@@ -13,12 +15,22 @@ from storage.download_utils import extract_tar_gz_archive
 
 
 class AsyncAPIClient:
+    """Async context-managed HTTP client for a JSON REST API."""
+
     def __init__(
         self,
         base_url: str,
         prefix: str = "api",
         auth: HttpAuthBase | None = None,
     ) -> None:
+        """Configure the client without opening any connection yet.
+
+        Args:
+            base_url: Root URL of the API.
+            prefix: Path segment appended to `base_url` (e.g. `"api"`). Ignored if empty.
+            auth: Authentication strategy applied to every request.
+
+        """
         self.__base_url = (prefix and f"{base_url}/{prefix}") or base_url
         self.__auth = auth
         self.__client: httpx.AsyncClient | None = None
@@ -149,6 +161,17 @@ class AsyncAPIClient:
         requests: list[tuple[str, dict[str, object]]],
         max_concurrent: int = 50,
     ) -> list[object]:
+        """Send multiple POST requests in parallel, capped by a semaphore.
+
+        Args:
+            requests: List of tuples (endpoint, data) to POST.
+            max_concurrent: Maximum number of requests running at the same time.
+
+        Returns:
+            The result of each request, or the exception raised for it, in the
+            same order as `requests`.
+
+        """
         if not self.__client:
             msg = "Client not initialized"
             raise RuntimeError(msg)
@@ -171,6 +194,19 @@ class AsyncAPIClient:
         max_concurrent: int = 10,
         batch_size: int = 50,
     ) -> list[object]:
+        """Send multiple POST requests split into sequential batches.
+
+        Args:
+            requests: List of tuples (endpoint, data) to POST.
+            max_concurrent: Maximum number of requests running at the same time
+                within a batch.
+            batch_size: Number of requests grouped into each batch.
+
+        Returns:
+            The result of each request, or the exception raised for it, in the
+            same order as `requests`.
+
+        """
         if not self.__client:
             msg = "Client not initialized"
             raise RuntimeError(msg)
@@ -189,6 +225,17 @@ class AsyncAPIClient:
     async def upload_file(
         self, file_name: str, folder_uuid: str, override: bool = True
     ):
+        """Upload a local file to the `files/` endpoint.
+
+        Args:
+            file_name: Path of the local file to upload.
+            folder_uuid: UUID of the destination folder.
+            override: Whether an existing file with the same name should be replaced.
+
+        Returns:
+            The raw HTTP response of the upload request.
+
+        """
         if not self.__client:
             msg = "Client not initialized. Use 'async with'."
             raise RuntimeError(msg)
@@ -208,6 +255,16 @@ class AsyncAPIClient:
             return response
 
     async def download_file(self, file_name: str, endpoint: str) -> httpx.Response:
+        """Stream an endpoint's response body to a local file.
+
+        Args:
+            file_name: Local path where the downloaded content is written.
+            endpoint: API endpoint to fetch.
+
+        Returns:
+            The HTTP response whose body was streamed to disk.
+
+        """
         if not self.__client:
             msg = "Client not initialized. Use 'async with'."
             raise RuntimeError(msg)
@@ -222,6 +279,13 @@ class AsyncAPIClient:
     async def download_and_untar_file(
         self, target_dir: str | Path, endpoint: str
     ) -> None:
+        """Download a tar.gz archive from an endpoint and extract it.
+
+        Args:
+            target_dir: Directory where the archive is extracted, created if needed.
+            endpoint: API endpoint serving the tar.gz archive.
+
+        """
         if not self.__client:
             msg = "Client not initialized. Use 'async with'."
             raise RuntimeError(msg)

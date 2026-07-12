@@ -1,7 +1,10 @@
+"""Manual scratch script for exercising workarea install/update flows."""
+
 from installable.updater.factory import UpdaterName
 
 
 def main():
+    """Build a sample Workarea and run install/update against it."""
     from pathlib import Path
 
     from installable.workarea_installable import WorkareaInstallable

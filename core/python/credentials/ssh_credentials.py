@@ -23,6 +23,14 @@ class SshCredentials:
         ]
 
     def auth_kwargs(self) -> dict[str, str | bool] | None:
+        """Return SSH auth constructor kwargs when credentials are complete.
+
+        Returns:
+            A mapping with ``username`` and, when a forwarded agent must be
+            used in place of a local key, ``use_agent``. None if no SSH
+            authentication source is available.
+
+        """
         if self.missing_env_vars():
             return None
 

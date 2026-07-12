@@ -41,6 +41,12 @@ class BasicAuth(AuthMixin, BaseSettings):
 
     @model_validator(mode="after")
     def encode_secret(self) -> Self:
+        """Derive the base64-encoded Basic auth secret from username and password.
+
+        Returns:
+            The model instance with ``secret`` populated.
+
+        """
         credentials = f"{self.username}:{self.password.get_secret_value()}"
         encoded = base64.b64encode(credentials.encode()).decode("ascii")
         self.secret = SecretStr(encoded)

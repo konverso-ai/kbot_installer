@@ -22,6 +22,13 @@ class S3Backend:
     _client: S3Client | None
 
     def __init__(self, settings: S3Credentials) -> None:
+        """Build the boto3 S3 client from the given credentials.
+
+        Args:
+            settings: AWS credentials and connection settings used to configure
+                the underlying boto3 client.
+
+        """
         self.__settings = settings
         self.__client = boto3.client(
             "s3",

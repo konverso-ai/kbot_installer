@@ -29,6 +29,13 @@ class AzureClientSecretCredentials(BaseSettings):
     client_secret: AzureClientSecret
 
     def missing_env_vars(self) -> list[str]:
+        """Return canonical environment variable names that are absent.
+
+        Returns:
+            Names of the Azure service-principal environment variables that
+            are not set.
+
+        """
         missing: list[str] = []
         if not self.tenant_id:
             missing.append("AZURE_TENANT_ID")
@@ -39,6 +46,12 @@ class AzureClientSecretCredentials(BaseSettings):
         return missing
 
     def auth_kwargs(self) -> dict[str, str] | None:
+        """Return HTTP auth constructor kwargs.
+
+        Returns:
+            None, as service-principal credentials are not used for HTTP auth.
+
+        """
         return None
 
     def client_secret_kwargs(self) -> dict[str, str | None]:

@@ -1,3 +1,5 @@
+"""Factory function for Writer instances."""
+
 from typing import cast
 
 from utils.factory.factory import factory_object

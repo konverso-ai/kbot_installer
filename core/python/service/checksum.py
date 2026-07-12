@@ -21,6 +21,16 @@ class Checksum(BaseModel):
 
     @classmethod
     def from_json(cls, data: dict[str, Any] | None) -> Self:
+        """Build a Checksum from a Nexus API payload.
+
+        Args:
+            data: Raw checksum mapping from the Nexus API, or None.
+
+        Returns:
+            A Checksum instance populated from data, or an empty Checksum
+            when data is falsy.
+
+        """
         if not data:
             return cls()
         return cls.model_validate(data)

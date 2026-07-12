@@ -1,3 +1,5 @@
+"""Bootstrap a versioned git repository from a GitRepo model."""
+
 from pathlib import Path
 
 from git.io import write_repository

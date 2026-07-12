@@ -46,7 +46,7 @@ name_to_level = {
 
 
 def NormalizeLevel(level: int) -> int:
-    """Normalize level value"""
+    """Normalize level value."""
     if level < 0:
         level = 0
     elif level > 5:
@@ -63,9 +63,16 @@ _srcfile = os.path.normcase(NormalizeLevel.__code__.co_filename)
 
 
 class KbotLogger(logging.Logger):
-    """Logger for Kbot"""
+    """Logger for Kbot."""
 
     def __init__(self, name: str, level: int = logging.NOTSET):
+        """Initialize the logger with empty package filters and registries.
+
+        Args:
+            name: Logger name, forwarded to ``logging.Logger``.
+            level: Initial logging level, forwarded to ``logging.Logger``.
+
+        """
         super().__init__(name, level)
 
         # key: a package name
@@ -78,7 +85,7 @@ class KbotLogger(logging.Logger):
 
     @property
     def packages(self) -> KeysView[str]:
-        """Returns an iterator that contains all the registered package names"""
+        """Return an iterator over all the registered package names."""
         return self.__packages.keys()
 
     @override
@@ -86,11 +93,11 @@ class KbotLogger(logging.Logger):
         self.addPackage("all", level)
 
     def fine(self, msg, *args, **kwargs) -> None:
-        """FINE debug level"""
+        """FINE debug level."""
         self._log(FINE, msg, args, **kwargs)
 
     def finest(self, msg: str, *args, **kwargs) -> None:
-        """FINEST debug level"""
+        """FINEST debug level."""
         self._log(FINEST, msg, args, **kwargs)
 
     @override
@@ -185,17 +192,17 @@ class KbotLogger(logging.Logger):
         return "(unknown file)", 0, "(unknown function)", None
 
     def getPackageLogger(self, name: str) -> "KbotPackageLogger":
-        """Get package logger"""
+        """Get package logger."""
         if name not in self.__packages:
             self.__packages[name] = KbotPackageLogger(name, self)
         return self.__packages[name]
 
     def addPackage(self, name: str, level: int) -> None:
-        """Log this package"""
+        """Log this package."""
         self.__filters[name] = level
 
     def remPackage(self, name: str) -> None:
-        """Remove this package from logging"""
+        """Remove this package from logging."""
         if name == "all":
             return
         self.__filters.pop(name, None)
@@ -243,17 +250,35 @@ class KbotLogger(logging.Logger):
 
 
 class KbotLogEntry:
+    """Track a one-time log message and how many times it has recurred."""
+
     def __init__(self, message):
+        """Initialize the entry with a first occurrence at the current time.
+
+        Args:
+            message: The expanded log message being tracked.
+
+        """
         self.message = message
         self.ts = time.time()
         self.count = 1
 
     def Increase(self):
+        """Increment the number of times this message has recurred."""
         self.count += 1
 
 
 class KbotPackageLogger:
+    """Per-package logging façade delegating to the shared `KbotLogger`."""
+
     def __init__(self, name, klogger):
+        """Initialize the package logger.
+
+        Args:
+            name: Name of the package this logger reports on behalf of.
+            klogger: Shared `KbotLogger` instance to delegate log calls to.
+
+        """
         self.name = name
         self.logger = klogger
 
@@ -262,30 +287,39 @@ class KbotPackageLogger:
         self.ONE_TIME_MESSAGES = {}
 
     def fine(self, msg, *args, **kwargs):
+        """Log a message at the FINE debug level for this package."""
         return self._log("fine", msg, *args, **kwargs)
 
     def finest(self, msg, *args, **kwargs):
+        """Log a message at the FINEST debug level for this package."""
         return self._log("finest", msg, *args, **kwargs)
 
     def debug(self, msg, *args, **kwargs):
+        """Log a message at the DEBUG level for this package."""
         return self._log("debug", msg, *args, **kwargs)
 
     def info(self, msg, *args, **kwargs):
+        """Log a message at the INFO level for this package."""
         return self._log("info", msg, *args, **kwargs)
 
     def warning(self, msg, *args, **kwargs):
+        """Log a message at the WARNING level for this package."""
         return self._log("warning", msg, *args, **kwargs)
 
     def warn(self, msg, *args, **kwargs):
+        """Log a message at the WARNING level for this package (deprecated alias)."""
         return self._log("warn", msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
+        """Log a message at the ERROR level for this package."""
         return self._log("error", msg, *args, **kwargs)
 
     def exception(self, msg, *args, **kwargs):
+        """Log a message at the ERROR level for this package, including exception info."""
         return self._log("exception", msg, *args, **kwargs)
 
     def critical(self, msg, *args, **kwargs):
+        """Log a message at the CRITICAL level for this package."""
         return self._log("critical", msg, *args, **kwargs)
 
     def log(
@@ -297,6 +331,17 @@ class KbotPackageLogger:
         level=None,
         **kwargs,
     ):
+        """Log an `ErrorCode`, falling back to its own level and message.
+
+        Args:
+            error: Error code describing the event to log.
+            message: Message to log instead of ``error.message``, if provided.
+            *args: Positional arguments forwarded to the underlying log call.
+            exc_info: Exception info to attach to the log record.
+            level: Level to log at instead of ``error.level``, if provided.
+            **kwargs: Additional keyword arguments forwarded to the underlying log call.
+
+        """
         # Log messages are NOT DESIGNED TO BE EXCLUDED
         # Not checking for the isEnabledFor
 
@@ -313,6 +358,20 @@ class KbotPackageLogger:
         level=None,
         **kwargs,
     ):
+        """Log an `ErrorCode` then raise it.
+
+        Args:
+            error: Error code to log and subsequently raise.
+            message: Message to log instead of ``error.message``, if provided.
+            *args: Positional arguments forwarded to the underlying log call.
+            exc_info: Exception info to attach to the log record.
+            level: Level to log at instead of ``error.level``, if provided.
+            **kwargs: Additional keyword arguments forwarded to the underlying log call.
+
+        Raises:
+            ErrorCode: Always re-raises ``error`` after logging it.
+
+        """
         self.log(error, message, exc_info=exc_info, level=level, **kwargs)
         raise error
 
@@ -321,6 +380,16 @@ class KbotPackageLogger:
         return getattr(self.logger, func)(msg, *args, **kwargs)
 
     def oneTime(self, level, msg, *args, **kwargs):
+        """Log a message once per unique expanded content, then only count repeats.
+
+        Args:
+            level: Name of the level method to call (e.g. ``"warning"``) the
+                first time this message is seen.
+            msg: Message format string, expanded with ``args`` via ``%``.
+            *args: Values interpolated into ``msg`` via ``%``.
+            **kwargs: Additional keyword arguments forwarded to the level method.
+
+        """
         expanded_message = msg % args
         message_hash = hash(expanded_message)
 
@@ -348,6 +417,7 @@ class KbotFormatter(logging.Formatter):
     """Kbot formatter."""
 
     def __init__(self):
+        """Initialize the formatter with the Kbot log line layout."""
         super().__init__(
             "%(asctime)s - %(kmodule)s::%(funcName)s(%(lineno)s) - %(package)s - %(levelname)s - %(threadName)s - %(message)s"
         )
@@ -359,6 +429,8 @@ class KbotFormatter(logging.Formatter):
 
 
 class DataDogFormatter(JsonFormatter):
+    """JSON formatter producing DataDog-compatible log records."""
+
     @override
     def format(self, record):
         record.kmodule = _derive_kmodule(record)
@@ -396,7 +468,7 @@ mylogger = logger.getPackageLogger("utils")
 
 
 def UpdateLevel(newLevel: int):
-    """Update level for logging"""
+    """Update level for logging."""
     newValue = levels[NormalizeLevel(newLevel)]
     logger.setLevel(newValue)
     for h in log.handlers[:]:
@@ -444,6 +516,12 @@ def _apply_debug_command(mode: str, package: str, level: int) -> None:
 
 
 def UpdateSupportedPackages(cmd):
+    """Apply a runtime 'add <packages>[,...] <level>' or 'rem <packages>[,...]' command.
+
+    Args:
+        cmd: Raw debug command string to parse and apply.
+
+    """
     mylogger.debug("UpdateSupportedPackages: '%s'", cmd)
 
     parsed = _parse_debug_command(cmd)

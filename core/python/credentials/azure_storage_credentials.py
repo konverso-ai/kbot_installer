@@ -38,11 +38,24 @@ class AzureStorageCredentials(BaseSettings):
         )
 
     def missing_env_vars(self) -> list[str]:
+        """Return canonical environment variable names that are absent.
+
+        Returns:
+            An empty list when using default Azure credentials, otherwise the
+            missing client-secret environment variable names.
+
+        """
         if self.credential_type == "default_azure":
             return []
         return self._client_secret.missing_env_vars()
 
     def auth_kwargs(self) -> dict[str, str] | None:
+        """Return HTTP auth constructor kwargs.
+
+        Returns:
+            None, as Azure storage credentials are not used for HTTP auth.
+
+        """
         return None
 
     def client_secret_kwargs(self) -> dict[str, str | None]:

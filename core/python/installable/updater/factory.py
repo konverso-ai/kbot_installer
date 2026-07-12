@@ -8,6 +8,8 @@ from utils.factory.factory import factory_method
 
 
 class UpdaterName(str, Enum):
+    """Names of the available WorkareaInstallable updater strategies."""
+
     STRICT = "strict"
     SMOOTH = "smooth"
     REPAIR = "repair"

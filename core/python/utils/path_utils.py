@@ -1,3 +1,5 @@
+"""Helpers to resolve paths and ensure their parent directories exist."""
+
 from pathlib import Path
 
 

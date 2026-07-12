@@ -11,6 +11,12 @@ class UpdaterBase(ABC):
     """Base interface for updater strategies applied to a WorkareaInstallable."""
 
     def __init__(self, workarea: "WorkareaInstallable") -> None:
+        """Bind the updater to the workarea it will update.
+
+        Args:
+            workarea: The workarea installable this updater strategy operates on.
+
+        """
         self.workarea = workarea
 
     @abstractmethod

@@ -116,6 +116,7 @@ class Version:
         return (self.major, self.minor, self.patch)
 
     def __bool__(self) -> bool:
+        """Return whether this version is non-empty."""
         return not self._empty
 
     @override
@@ -125,6 +126,7 @@ class Version:
         return self._key() == other._key()
 
     def __lt__(self, other: "Version") -> bool:
+        """Compare versions by major, minor, and patch components."""
         if not isinstance(other, Version):
             return NotImplemented
         return self._key() < other._key()

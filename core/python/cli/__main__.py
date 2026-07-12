@@ -12,7 +12,7 @@ from cli.commands import cli
 
 
 def main() -> NoReturn:
-    """Main CLI entry point."""
+    """Run the CLI entry point."""
     try:
         cli()  # pylint: disable=no-value-for-parameter
     except KeyboardInterrupt:

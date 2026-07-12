@@ -52,6 +52,15 @@ class SshAuth(AuthMixin):
 
     @model_validator(mode="after")
     def validate_source(self) -> Self:
+        """Ensure ``private_key`` and ``use_agent`` are not both set.
+
+        Returns:
+            The model instance unchanged.
+
+        Raises:
+            ValueError: If both ``private_key`` and ``use_agent`` are set.
+
+        """
         if self.private_key is not None and self.use_agent:
             msg = "private_key and use_agent are mutually exclusive"
             raise ValueError(msg)
@@ -129,6 +138,12 @@ class SshAuth(AuthMixin):
         raise FileNotFoundError(msg)
 
     def __enter__(self) -> "SshAuth":
+        """Materialize the inline private key to a temporary file, if provided.
+
+        Returns:
+            This instance, for use as a context manager.
+
+        """
         if self.private_key is not None:
             self._resolve_key_path()
         return self
@@ -139,6 +154,7 @@ class SshAuth(AuthMixin):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Clean up the temporary directory holding the inline private key."""
         if self._tmpdir is not None:
             self._tmpdir.cleanup()
             self._tmpdir = None

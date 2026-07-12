@@ -41,7 +41,7 @@ class StorageBase(ABC):
 
     @abstractmethod
     def download(self, key: str, local_file_path: str):
-        """Download a storageobject to a local file
+        """Download a storageobject to a local file.
 
         Args:
             key: Destination object key.

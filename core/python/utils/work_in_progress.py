@@ -42,6 +42,18 @@ TYPE_MAP = {"str": str, "int": int, "float": float, "bool": bool}
 
 
 class Setting(BaseModel):
+    """A named, typed configuration setting with an optional set of choices.
+
+    Attributes:
+        name: Identifier of the setting.
+        type: Python type the value must conform to (str, int, float, or bool).
+        value: Current value of the setting.
+        default: Fallback value used when `value` is not set.
+        choices: Allowed values, or None if unrestricted.
+        multiple: Whether the setting accepts an iterable of values instead of one.
+
+    """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str
@@ -62,6 +74,18 @@ class Setting(BaseModel):
     @field_validator("type", mode="before")
     @classmethod
     def validate_type_field(cls, v: Any) -> type:
+        """Coerce the `type` field to an allowed Python type.
+
+        Args:
+            v: Raw value, either a type name (e.g. `"int"`) or an actual type.
+
+        Returns:
+            The resolved type.
+
+        Raises:
+            ValueError: If the resolved type is not one of str, int, float, bool.
+
+        """
         if isinstance(v, str):
             v = TYPE_MAP.get(v)
         if v not in ALLOWED_TYPES:
@@ -72,6 +96,7 @@ class Setting(BaseModel):
 
     @field_serializer("type")
     def serialize_type(self, v: type) -> str:
+        """Serialize the `type` field to its class name."""
         return v.__name__
 
     def _validate_field(self, val: Any, label: str) -> None:
@@ -105,6 +130,19 @@ class Setting(BaseModel):
 
     @model_validator(mode="after")
     def validate_setting(self) -> "Setting":
+        """Ensure a value is set and that value/default/choices are consistent.
+
+        Falls back `value` to `default` when only the latter is provided, and
+        checks that `default`, `value`, and `choices` all match the declared type.
+
+        Returns:
+            The validated setting.
+
+        Raises:
+            ValueError: If neither `value` nor `default` is set, or if any of them
+                is inconsistent with `type` or `choices`.
+
+        """
         if self.value is None and self.default is None:
             raise ValueError("Au moins `value` ou `default` doit être défini.")
 
@@ -138,28 +176,51 @@ class Setting(BaseModel):
 
 
 class Settings(RootModel[dict[str, Setting]]):
+    """A dict-like collection of `Setting` objects keyed by name."""
+
     root: dict[str, Setting] = {}
 
     @model_validator(mode="before")
     @classmethod
     def populate_from_list(cls, v: Any) -> Any:
+        """Convert a list of settings into a dict keyed by setting name.
+
+        Args:
+            v: Raw input value, either already a mapping or a list of `Setting`
+                instances/dicts.
+
+        Returns:
+            The value unchanged if it is not a list, otherwise a dict mapping
+            each setting's name to itself.
+
+        """
         if isinstance(v, list):
             return {s["name"] if isinstance(s, dict) else s.name: s for s in v}
         return v
 
     def add(self, setting: Setting) -> None:
+        """Add or replace a setting, keyed by its name.
+
+        Args:
+            setting: Setting to store.
+
+        """
         self.root[setting.name] = setting
 
     def __getitem__(self, key: str) -> Setting:
+        """Return the setting stored under `key`."""
         return self.root[key]
 
     def __setitem__(self, key: str, value: Setting) -> None:
+        """Store a setting under `key`."""
         self.root[key] = value
 
     def __delitem__(self, key: str) -> None:
+        """Delete the setting stored under `key`."""
         del self.root[key]
 
     def __contains__(self, key: str) -> bool:
+        """Return whether a setting named `key` is present."""
         return key in self.root
 
     @override
@@ -167,18 +228,32 @@ class Settings(RootModel[dict[str, Setting]]):
         return iter(self.root)
 
     def __len__(self) -> int:
+        """Return the number of settings."""
         return len(self.root)
 
     def get(self, key: str, default: Any = None) -> Setting | None:
+        """Return the setting named `key`, or `default` if absent.
+
+        Args:
+            key: Name of the setting to look up.
+            default: Value returned when the setting is not present.
+
+        Returns:
+            The matching setting, or `default`.
+
+        """
         return self.root.get(key, default)
 
     def keys(self):
+        """Return the names of all settings."""
         return self.root.keys()
 
     def values(self):
+        """Return all `Setting` values."""
         return self.root.values()
 
     def items(self):
+        """Return (name, setting) pairs for all settings."""
         return self.root.items()
 
     @override
@@ -191,11 +266,32 @@ class Settings(RootModel[dict[str, Setting]]):
 
 
 class JsonModel(BaseModel):
+    """Pydantic model mixin adding JSON (de)serialization helpers."""
+
     @classmethod
     def from_json(cls, data: str | bytes):
+        """Build a model instance from JSON data.
+
+        Args:
+            data: JSON document to parse.
+
+        Returns:
+            The validated model instance.
+
+        """
         return cls.model_validate_json(data)
 
     def to_json(self, indent: int | None) -> str:
+        """Serialize the model to a JSON string, omitting defaults and nulls.
+
+        Args:
+            indent: Number of spaces used for indentation, or None for compact
+                output.
+
+        Returns:
+            The JSON representation of the model.
+
+        """
         return self.model_dump_json(
             indent=indent,
             exclude_defaults=True,

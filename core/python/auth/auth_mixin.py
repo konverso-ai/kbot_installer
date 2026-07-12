@@ -15,6 +15,7 @@ class AuthMixin(HttpAuthBase):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def header_value(self) -> str:
+        """Return the value to use for the authentication header."""
         secret = self.secret.get_secret_value()
         if self.prefix:
             return f"{self.prefix} {secret}"

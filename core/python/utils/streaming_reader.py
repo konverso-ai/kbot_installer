@@ -21,6 +21,18 @@ class StreamingReader:
         download_error: list[BaseException | None],
         max_buffer_size: int = 4 * 1024 * 1024,
     ) -> None:
+        """Set up the reader over a shared queue of downloaded chunks.
+
+        Args:
+            data_queue: Queue producing downloaded byte chunks, terminated by `None`.
+            download_complete: Event set once the producer has finished (successfully
+                or not).
+            download_error: One-element list used to smuggle an exception raised by
+                the producer back to the reader.
+            max_buffer_size: Maximum number of bytes buffered before reads stop
+                waiting for more data.
+
+        """
         self._data_queue = data_queue
         self._download_complete = download_complete
         self._download_error = download_error
@@ -29,6 +41,23 @@ class StreamingReader:
         self._buffer_pos = 0
 
     def read(self, size: int = -1) -> bytes:
+        """Read bytes from the buffered queue, file-object style.
+
+        Blocks until enough data is available in the queue, the producer signals
+        completion, or the internal buffer reaches `max_buffer_size`.
+
+        Args:
+            size: Number of bytes to read. If negative, read everything currently
+                available.
+
+        Returns:
+            The bytes read, which may be shorter than `size` if the stream ended.
+
+        Raises:
+            BaseException: The exception raised by the producer, if the stream
+                ended in error and no data remains to return.
+
+        """
         if self._buffer_pos > 0:
             remaining = self._buffer.read()
             self._buffer.seek(0)

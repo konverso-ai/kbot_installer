@@ -1,3 +1,5 @@
+"""Pydantic models describing git repositories managed by the installer."""
+
 import json
 from enum import Enum
 from typing import Any

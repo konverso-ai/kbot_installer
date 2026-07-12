@@ -24,6 +24,15 @@ RegionName: TypeAlias = Annotated[
 
 
 def secret_value(secret: SecretStr | None) -> str | None:
+    """Unwrap a ``SecretStr`` to its plain string value.
+
+    Args:
+        secret: Secret to unwrap, or None.
+
+    Returns:
+        The underlying string value, or None if ``secret`` is None.
+
+    """
     match secret:
         case None:
             return None
@@ -47,6 +56,12 @@ class S3Credentials(BaseSettings):
     session_token: AwsAccessKeyId
 
     def missing_env_vars(self) -> list[str]:
+        """Return canonical environment variable names that are absent.
+
+        Returns:
+            Names of the AWS environment variables that are not set.
+
+        """
         missing: list[str] = []
         if not self.access_key_id:
             missing.append("AWS_ACCESS_KEY_ID")
@@ -57,6 +72,12 @@ class S3Credentials(BaseSettings):
         return missing
 
     def auth_kwargs(self) -> dict[str, str] | None:
+        """Return HTTP auth constructor kwargs.
+
+        Returns:
+            None, as AWS credentials are not used for HTTP auth.
+
+        """
         return None
 
     def storage_kwargs(self) -> dict[str, str | None]:
