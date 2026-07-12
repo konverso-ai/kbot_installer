@@ -1,9 +1,9 @@
 """Nexus asset checksum model."""
 
 from typing import Annotated, Any, TypeAlias
-from typing_extensions import Self
 
 from pydantic import BaseModel, Field
+from typing_extensions import Self
 
 Md5: TypeAlias = Annotated[str | None, Field(default=None)]
 Sha1: TypeAlias = Annotated[str | None, Field(default=None)]

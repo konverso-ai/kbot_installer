@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing_extensions import Self
+from typing import TYPE_CHECKING
 
 import tomlkit
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from tomlkit.items import Table
+from typing_extensions import Self
 
 from utils.path_utils import ensure_path
+
+if TYPE_CHECKING:
+    from tomlkit.items import Table
 
 
 class Project(BaseModel):
