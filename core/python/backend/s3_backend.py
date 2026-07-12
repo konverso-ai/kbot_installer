@@ -7,13 +7,14 @@ from typing import TYPE_CHECKING
 import boto3
 from botocore.config import Config
 
-from credentials.s3_credentials import S3Credentials
 from utils.Logger import logger
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
 
-log = logger.getPackageLogger("backend")
+    from credentials.s3_credentials import S3Credentials
+
+log = logger.get_package_logger("backend")
 
 
 class S3Backend:

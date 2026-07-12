@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import fnmatch
-from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
@@ -15,6 +14,8 @@ from installable.factory import create_installable
 from installer_support.installer_utils import version_to_branch
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from installable.product_installable import ProductInstallable
 
 
@@ -28,7 +29,7 @@ class ProductCollection(BaseModel):
     def __init__(
         self,
         products: list[ProductInstallable] | None = None,
-        **data: Any,
+        **data: object,
     ) -> None:
         """Initialize collection, accepting a legacy positional products list."""
         if products is not None:
@@ -146,6 +147,31 @@ class ProductCollection(BaseModel):
         return filtered
 
     @classmethod
+    def _load_product_or_error(
+        cls, resolved_path: Path, product_name: str
+    ) -> ProductInstallable | str:
+        """Load a single product folder, capturing failures instead of raising.
+
+        Args:
+            resolved_path: Resolved installer directory containing the product folder.
+            product_name: Name of the product folder to load.
+
+        Returns:
+            The loaded product, or an error message string if loading failed.
+
+        """
+        try:
+            product = cast(
+                "ProductInstallable",
+                create_installable("product", name=product_name),
+            )
+            product.load_from_installer_folder(resolved_path / product_name)
+        except (ValueError, FileNotFoundError) as e:
+            return f"{product_name}: {e}"
+        else:
+            return product
+
+    @classmethod
     def from_installer(cls, installer_path: str) -> ProductCollection:
         """Create collection from installer directory.
 
@@ -175,15 +201,11 @@ class ProductCollection(BaseModel):
         )
 
         for product_name in product_folders:
-            try:
-                product = cast(
-                    "ProductInstallable",
-                    create_installable("product", name=product_name),
-                )
-                product.load_from_installer_folder(resolved_path / product_name)
-                products.append(product)
-            except (ValueError, FileNotFoundError) as e:
-                failed_products.append(f"{product_name}: {e}")
+            result = cls._load_product_or_error(resolved_path, product_name)
+            if isinstance(result, str):
+                failed_products.append(result)
+            else:
+                products.append(result)
 
         if failed_products:
             msg = f"Failed to load products: {'; '.join(failed_products)}"
@@ -278,12 +300,30 @@ class ProductCollection(BaseModel):
             errors.append("No product folders found")
 
         for product_name in product_folders:
-            try:
-                self.load_product(str(installer_path), product_name)
-            except ValueError as e:
-                errors.append(f"Invalid product '{product_name}': {e}")
+            error = self._check_product_valid(str(installer_path), product_name)
+            if error is not None:
+                errors.append(error)
 
         return len(errors) == 0, errors
+
+    def _check_product_valid(
+        self, installer_path: str, product_name: str
+    ) -> str | None:
+        """Load a product and report an error message if loading fails.
+
+        Args:
+            installer_path: Path to installer directory.
+            product_name: Name of the product folder.
+
+        Returns:
+            An error message if the product is invalid, otherwise None.
+
+        """
+        try:
+            self.load_product(installer_path, product_name)
+        except ValueError as e:
+            return f"Invalid product '{product_name}': {e}"
+        return None
 
     def clone_with_dependencies(self, root_product_name: str, base_path: Path) -> None:
         """Clone a product and all its dependencies using BFS order.

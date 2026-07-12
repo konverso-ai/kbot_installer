@@ -3,16 +3,14 @@
 import shutil
 import subprocess
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from git.provider import (
     DEFAULT_PROVIDERS_CONFIG,
     create_provider,
 )
-from git.provider.base import ProviderBase
 from git.provider.config import ProvidersConfig
 from git.provider.credential_manager import CredentialManager
-from git.provider.storage_provider import StorageProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import create_installable
 from installable.product_collection import ProductCollection
@@ -23,7 +21,11 @@ from installer_support.installer_utils import ensure_directory, version_to_branc
 from storage.base import StorageBackend, StorageBase
 from utils.Logger import logger
 
-log = logger.getPackageLogger("installer_support")
+if TYPE_CHECKING:
+    from git.provider.base import ProviderBase
+    from git.provider.storage_provider import StorageProvider
+
+log = logger.get_package_logger("installer_support")
 
 
 def _providers_config_with_storage_backend(
@@ -348,7 +350,7 @@ class InstallerService:
                 auth=auth,
                 quiet=not self.verbose,
             )
-            self._storage = cast("StorageProvider", provider)._storage
+            self._storage = cast("StorageProvider", provider).storage
         return self._storage
 
     def _load_product_from_repository(self, product_name: str, version: str) -> None:
@@ -403,9 +405,7 @@ class InstallerService:
                 log.debug("Installing dependency: %s", dep_name)
                 try:
                     if self._is_product_installed(dep_name):
-                        log.info(
-                            "Product '%s' already installed, skipping", dep_name
-                        )
+                        log.info("Product '%s' already installed, skipping", dep_name)
                         # Detect the provider that was used for this cached product
                         cached_provider = self._detect_cached_provider(dep_name)
                         self.installation_table.complete_installation(
@@ -456,18 +456,14 @@ class InstallerService:
                 try:
                     products.append(self._get_product(dep_name))
                 except (ValueError, Exception) as e:
-                    log.warning(
-                        "Dependency '%s' not found or invalid: %s", dep_name, e
-                    )
+                    log.warning("Dependency '%s' not found or invalid: %s", dep_name, e)
                     continue
 
         return products
 
     def _load_products_from_installer_directory(self) -> ProductCollection | None:
         """Load products from the installer directory."""
-        log.debug(
-            "Loading products from installer directory: %s", self.installer_dir
-        )
+        log.debug("Loading products from installer directory: %s", self.installer_dir)
 
         try:
             product_collection = ProductCollection.from_installer(
@@ -475,9 +471,7 @@ class InstallerService:
             )
             if product_collection:
                 products = product_collection.get_all_products()
-                log.debug(
-                    "Loaded %d products from installer directory", len(products)
-                )
+                log.debug("Loaded %d products from installer directory", len(products))
             else:
                 return None
         except Exception as e:
@@ -563,9 +557,7 @@ class InstallerService:
             # Default fallback
 
         except Exception as e:
-            log.debug(
-                "Failed to detect provider for product %s: %s", product_name, e
-            )
+            log.debug("Failed to detect provider for product %s: %s", product_name, e)
             return "unknown"
 
         return "unknown"

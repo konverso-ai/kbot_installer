@@ -1,7 +1,7 @@
 """Semantic version with major, minor, and patch components."""
 
 from functools import total_ordering
-from typing import Any, Literal
+from typing import Literal
 
 from packaging.version import InvalidVersion, parse
 from packaging.version import Version as PackagingVersion
@@ -102,12 +102,12 @@ class Version:
         patch: int | None = None,
     ) -> "Version":
         new_version = Version.__new__(Version)
-        new_version._empty = False
+        new_version._empty = False  # noqa: SLF001 - same-class slot init, bypasses __init__
         new_version.major = major if major is not None else self.major
         new_version.minor = minor if minor is not None else self.minor
         new_version.patch = patch if patch is not None else self.patch
         new_version.env = self.env
-        new_version._source = ""
+        new_version._source = ""  # noqa: SLF001 - same-class slot init, bypasses __init__
         return new_version
 
     def _key(self) -> tuple[int, int, int]:

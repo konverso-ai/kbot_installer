@@ -70,7 +70,8 @@ class SshAuth(AuthMixin):
     def key_path(self) -> Path:
         """Resolved private key path, if any (not set in agent mode)."""
         if self.use_agent:
-            raise RuntimeError("No SSH private key path is available in agent mode")
+            msg = "No SSH private key path is available in agent mode"
+            raise RuntimeError(msg)
         if self._key_path is None:
             self._resolve_key_path()
         if self._key_path is None:
@@ -137,7 +138,7 @@ class SshAuth(AuthMixin):
         msg = f"No SSH private key found in {self.ssh_directory} (tried: {searched})"
         raise FileNotFoundError(msg)
 
-    def __enter__(self) -> "SshAuth":
+    def __enter__(self) -> Self:
         """Materialize the inline private key to a temporary file, if provided.
 
         Returns:

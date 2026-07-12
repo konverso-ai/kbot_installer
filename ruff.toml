@@ -19,7 +19,9 @@ exclude = [
     "core/python/utils/setup_workarea.py",
     "core/python/utils/bucket_storage",
     "core/python/utils/work_in_progress.py",
+    "core/python/tools/tries.py",
     "gitpassword.py",
+    "bundle.py",
     ".git",
     ".mypy_cache",
     ".ruff_cache",
@@ -29,7 +31,7 @@ exclude = [
     "**/__init__.py"
 ]
 
-output-format = "grouped"
+# output-format = "grouped"
 
 # Ruff configuration: stricte + complète
 

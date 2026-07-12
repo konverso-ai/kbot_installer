@@ -3,13 +3,13 @@
 from installable.updater.factory import UpdaterName
 
 
-def main():
+def main() -> None:
     """Build a sample Workarea and run install/update against it."""
-    from pathlib import Path
+    from pathlib import Path  # noqa: PLC0415
 
-    from installable.workarea_installable import WorkareaInstallable
-    from workarea.workarea import Workarea
-    from workarea.workarea_rule import WorkareaRules
+    from installable.workarea_installable import WorkareaInstallable  # noqa: PLC0415
+    from workarea.workarea import Workarea  # noqa: PLC0415
+    from workarea.workarea_rule import WorkareaRules  # noqa: PLC0415
 
     rules = WorkareaRules.from_json(Path("conf/rules.json").read_text())
     wa = WorkareaInstallable(

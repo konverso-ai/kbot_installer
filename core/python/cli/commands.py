@@ -3,17 +3,19 @@
 import shutil
 import subprocess
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, NoReturn, cast
 
 import click
 
 from git.models import GitProvider
 from installable.factory import create_installable
-from installable.product_installable import ProductInstallable
 from installer_support.installer_service import InstallerService
 from installer_support.logging_config import setup_logging
 from storage.base import StorageBackend
 from workarea.workarea import Workarea
+
+if TYPE_CHECKING:
+    from installable.product_installable import ProductInstallable
 
 # Setup logging from configuration file
 setup_logging()
@@ -71,7 +73,7 @@ def init(*, workarea: str) -> None:
         # Initialize UV workspace
         click.echo(f"Creating UV workspace in {workarea_path}")
 
-        def _abort_uv_not_found() -> None:
+        def _abort_uv_not_found() -> NoReturn:
             click.echo(
                 "Error: 'uv' command not found. Please install UV first.",
                 err=True,
@@ -88,7 +90,6 @@ def init(*, workarea: str) -> None:
         uv_executable = shutil.which("uv")
         if uv_executable is None:
             _abort_uv_not_found()
-        assert uv_executable is not None
 
         try:
             subprocess.run(  # noqa: S603
@@ -376,71 +377,36 @@ def download(
         kbot-installer download -b release-2025.03 -v 2025.03 -p kbot --storage s3 --no-rec
 
     """
-    try:
-        if bundle:
-            if not product:
-                raise click.UsageError(
-                    "Option '-p/--product' is required when installing from a bundle."
-                )
-        elif not product:
-            raise click.UsageError(
-                "Option '-p/--product' is required when installing a product."
-            )
+    if bundle:
+        if not product:
+            msg = "Option '-p/--product' is required when installing from a bundle."
+            raise click.UsageError(msg)
+    elif not product:
+        msg = "Option '-p/--product' is required when installing a product."
+        raise click.UsageError(msg)
 
+    try:
         storage_backend = StorageBackend(storage)
         include_dependencies = not no_rec
 
         if bundle:
-            service = InstallerService(
+            service = _download_bundle(
                 installer_dir,
-                providers=["storage"],
-                storage_backend=storage_backend,
-                verbose=verbose,
-            )
-            click.echo(
-                f"Installing bundle '{bundle}' version '{version}' "
-                f"from product '{product}' to '{installer_dir}'"
-            )
-            click.echo("Using storage provider only")
-            click.echo(f"Using storage backend: {storage_backend.value}")
-            if include_dependencies:
-                click.echo("Loading bundle and product dependencies...")
-            else:
-                click.echo("Loading bundle (skipping dependencies)...")
-
-            service.download_bundle(
-                bundle,
                 version,
                 product,
+                bundle,
+                storage_backend=storage_backend,
+                verbose=verbose,
                 include_dependencies=include_dependencies,
             )
         else:
-            selected_providers = list(provider) if provider else None
-            service = InstallerService(
+            service = _download_single_product(
                 installer_dir,
-                providers=selected_providers,
+                version,
+                product,
+                provider,
                 storage_backend=storage_backend,
                 verbose=verbose,
-            )
-
-            click.echo(
-                f"Installing product '{product}' version '{version}' to '{installer_dir}'"
-            )
-
-            if selected_providers:
-                click.echo(f"Using providers: {', '.join(selected_providers)}")
-            else:
-                click.echo("Using all available providers: storage, github, bitbucket")
-            click.echo(f"Using storage backend: {storage_backend.value}")
-
-            if include_dependencies:
-                click.echo("Loading product definitions and dependencies...")
-            else:
-                click.echo("Loading product definitions (skipping dependencies)...")
-
-            service.download(
-                product,
-                version,
                 include_dependencies=include_dependencies,
             )
 
@@ -452,6 +418,113 @@ def download(
     except Exception as e:
         click.echo(f"Error installing product: {e}", err=True)
         raise click.Abort from e
+
+
+def _download_bundle(
+    installer_dir: str,
+    version: str,
+    product: str,
+    bundle: str,
+    *,
+    storage_backend: StorageBackend,
+    verbose: bool,
+    include_dependencies: bool,
+) -> InstallerService:
+    """Download a bundle's pinned products from storage.
+
+    Args:
+        installer_dir: Directory that will contain downloaded products.
+        version: Bundle version to download.
+        product: Highest product level to install from the bundle.
+        bundle: Bundle descriptor name.
+        storage_backend: Storage backend used for the download.
+        verbose: Whether to show detailed provider output.
+        include_dependencies: Whether to also download product dependencies.
+
+    Returns:
+        The `InstallerService` used for the download.
+
+    """
+    service = InstallerService(
+        installer_dir,
+        providers=["storage"],
+        storage_backend=storage_backend,
+        verbose=verbose,
+    )
+    click.echo(
+        f"Installing bundle '{bundle}' version '{version}' "
+        f"from product '{product}' to '{installer_dir}'"
+    )
+    click.echo("Using storage provider only")
+    click.echo(f"Using storage backend: {storage_backend.value}")
+    if include_dependencies:
+        click.echo("Loading bundle and product dependencies...")
+    else:
+        click.echo("Loading bundle (skipping dependencies)...")
+
+    service.download_bundle(
+        bundle,
+        version,
+        product,
+        include_dependencies=include_dependencies,
+    )
+    return service
+
+
+def _download_single_product(
+    installer_dir: str,
+    version: str,
+    product: str,
+    provider: tuple[str, ...],
+    *,
+    storage_backend: StorageBackend,
+    verbose: bool,
+    include_dependencies: bool,
+) -> InstallerService:
+    """Download a single product and, optionally, its dependencies.
+
+    Args:
+        installer_dir: Directory that will contain downloaded products.
+        version: Product version to download.
+        product: Product name to download.
+        provider: Providers to try, in order; empty means try all.
+        storage_backend: Storage backend used if the storage provider is selected.
+        verbose: Whether to show detailed provider output.
+        include_dependencies: Whether to also download product dependencies.
+
+    Returns:
+        The `InstallerService` used for the download.
+
+    """
+    selected_providers = list(provider) if provider else None
+    service = InstallerService(
+        installer_dir,
+        providers=selected_providers,
+        storage_backend=storage_backend,
+        verbose=verbose,
+    )
+
+    click.echo(
+        f"Installing product '{product}' version '{version}' to '{installer_dir}'"
+    )
+
+    if selected_providers:
+        click.echo(f"Using providers: {', '.join(selected_providers)}")
+    else:
+        click.echo("Using all available providers: storage, github, bitbucket")
+    click.echo(f"Using storage backend: {storage_backend.value}")
+
+    if include_dependencies:
+        click.echo("Loading product definitions and dependencies...")
+    else:
+        click.echo("Loading product definitions (skipping dependencies)...")
+
+    service.download(
+        product,
+        version,
+        include_dependencies=include_dependencies,
+    )
+    return service
 
 
 @cli.command(name="list")

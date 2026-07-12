@@ -52,7 +52,7 @@ class GitRepo(BaseModel):
         }
 
 
-def _settings_json(settings: Settings | Any) -> str:
+def _settings_json(settings: Settings) -> str:
     """Serialize settings to a JSON string for file export."""
     content = settings.to_json()
     if isinstance(content, str):

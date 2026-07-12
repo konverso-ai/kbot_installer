@@ -3,10 +3,15 @@
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal, cast
 
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
-from azure.storage.blob import BlobPrefix
+from azure.storage.blob import (
+    BlobClient,
+    BlobPrefix,
+    BlobServiceClient,
+    ContainerClient,
+)
 from more_itertools import chunked
 from typing_extensions import override
 
@@ -16,7 +21,7 @@ from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
 from utils.Logger import logger
 
-log = logger.getPackageLogger("storage")
+log = logger.get_package_logger("storage")
 
 
 class AzureStorage(StorageBase):
@@ -79,9 +84,11 @@ class AzureStorage(StorageBase):
         """Return the backend used by this storage."""
         return self._backend
 
-    def _get_container_client(self) -> Any | None:
+    def _get_container_client(self) -> ContainerClient | None:
         """Return the container client for the configured container."""
-        blob_service_client = self._get_backend().get_client()
+        blob_service_client = cast(
+            "BlobServiceClient | None", self._get_backend().get_client()
+        )
         if blob_service_client is None:
             return None
         return blob_service_client.get_container_client(self.container_name)
@@ -97,7 +104,7 @@ class AzureStorage(StorageBase):
             self.container_name = container_name
 
     @override
-    def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8") -> None:
+    def set(self, key: str, value: str | bytes, encoding: str = "utf-8") -> None:
         """Upload an object to Azure Blob Storage."""
         container_client = self._get_container_client()
         if not container_client:
@@ -123,7 +130,9 @@ class AzureStorage(StorageBase):
         try:
             blob_client = container_client.get_blob_client(key)
             log.debug("CONTAINER = %s :: %s", key, self.container_name)
-            data = blob_client.download_blob().readall()
+            # download_blob() is called without `encoding`, so it always
+            # resolves to the bytes overload, not the str one.
+            data = cast("bytes", blob_client.download_blob().readall())
             log.debug(
                 "Successfully retrieved object from Azure Blob Storage: %s; encoding: %s",
                 key,
@@ -131,7 +140,7 @@ class AzureStorage(StorageBase):
             )
             return data.decode(encoding)
         except ResourceNotFoundError:
-            log.error("Path %s was not found in Bucket storage", key)
+            log.exception("Path %s was not found in Bucket storage", key)
         except Exception:
             log.exception(
                 "Retrieval failed for key='%s'; encoding=%s",
@@ -153,14 +162,14 @@ class AzureStorage(StorageBase):
         """Download a storage object to a local file."""
         container_client = self._get_container_client()
         if not container_client:
-            log.error(
+            log.exception(
                 "Container client unavailable. Retrieval aborted. '%s'",
                 self.container_name,
             )
             return
 
         blob_client = container_client.get_blob_client(key)
-        with open(local_file_path, "wb") as local_file:
+        with Path(local_file_path).open(mode="wb") as local_file:
             blob_data = blob_client.download_blob()
             blob_data.readinto(local_file)
 
@@ -169,7 +178,7 @@ class AzureStorage(StorageBase):
         """List blob names under the given prefix."""
         container_client = self._get_container_client()
         if not container_client:
-            log.error(
+            log.exception(
                 "Container client unavailable. Cannot list objects with prefix '%s'",
                 prefix,
             )
@@ -182,8 +191,8 @@ class AzureStorage(StorageBase):
             blob_list = container_client.list_blobs(name_starts_with=prefix)
             yield from [blob.name for blob in blob_list]
 
-        except Exception as e:
-            log.error("Failed to list objects with prefix '%s': %s", prefix, str(e))
+        except Exception:
+            log.exception("Failed to list objects with prefix '%s'.", prefix)
 
     @override
     def list_files_in_folder(self, folder_path: str = "") -> Iterator[str]:
@@ -195,7 +204,7 @@ class AzureStorage(StorageBase):
         """List folders directly inside the given path."""
         container_client = self._get_container_client()
         if not container_client:
-            log.error(
+            log.exception(
                 "Container client unavailable. Cannot list folders in path '%s'",
                 path,
             )
@@ -220,8 +229,8 @@ class AzureStorage(StorageBase):
 
             log.debug("Successfully listed %d folders in path '%s'", folder_count, path)
 
-        except Exception as e:
-            log.error("Failed to list folders in path '%s': %s", path, str(e))
+        except Exception:
+            log.exception("Failed to list folders in path '%s'", path)
 
     @override
     def delete(self, key: str) -> None:
@@ -278,6 +287,19 @@ class AzureStorage(StorageBase):
             log.debug("Failed to get blob client for '%s': %s", key, e, exc_info=True)
             return False
 
+        return self._undelete_blob(blob_client, key)
+
+    def _undelete_blob(self, blob_client: BlobClient, key: str) -> bool:
+        """Undelete `blob_client` if it is currently soft-deleted.
+
+        Args:
+            blob_client: Client for the blob to restore.
+            key: Blob key, used for logging.
+
+        Returns:
+            ``True`` if the blob is not (or is no longer) soft-deleted.
+
+        """
         try:
             blob_properties = blob_client.get_blob_properties()
             if not blob_properties.deleted:
@@ -290,7 +312,6 @@ class AzureStorage(StorageBase):
             blob_client.undelete_blob()
             blob_properties = blob_client.get_blob_properties()
             log.debug("Successfully restored soft-deleted blob: %s", key)
-            return not blob_properties.deleted
         except ResourceNotFoundError:
             log.debug(
                 "Blob '%s' not found (may have been permanently deleted or never existed).",
@@ -305,15 +326,17 @@ class AzureStorage(StorageBase):
                 exc_info=True,
             )
             return False
+        return not blob_properties.deleted
 
     def check_authorization(self) -> None:
         """Validate Azure credentials and container access permissions."""
         container_client = self._get_container_client()
         if container_client is None:
-            raise RuntimeError(
+            msg = (
                 "Authentication failed. Ensure the SAS token, Authorization "
                 "header and Container Information are correct."
             )
+            raise RuntimeError(msg)
 
         try:
             start_time = time.time()

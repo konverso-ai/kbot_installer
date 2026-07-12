@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from utils.bucket_storage.base import BucketStorage
 from utils.Logger import logger
 
-log = logger.getPackageLogger("bucket_storage")
+log = logger.get_package_logger("bucket_storage")
 
 
 def chunks(iterable, n: int) -> Iterator[list[Any]]:

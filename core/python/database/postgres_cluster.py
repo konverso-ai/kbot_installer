@@ -11,7 +11,7 @@ import subprocess
 from database.base import InternalDbSettings
 from utils.Logger import logger
 
-log = logger.getPackageLogger("database")
+log = logger.get_package_logger("database")
 
 
 class PostgresClusterError(RuntimeError):

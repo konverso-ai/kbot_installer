@@ -15,7 +15,7 @@ from typing import IO, Literal, cast
 from auth.base import HttpAuthBase
 from utils.Logger import logger
 
-log = logger.getPackageLogger("installer_support")
+log = logger.get_package_logger("installer_support")
 
 
 def _case_insensitive_path_exists(path: Path) -> bool:
@@ -384,7 +384,10 @@ def optimized_download_and_extract_ter(  # noqa: C901
                     result = self.buffer.read(size)
                     self.buffer_pos = self.buffer.tell()
 
-                if not result:
+                # Kept as nested ifs (not combined with `and`): pylint's
+                # narrowing loses track of `download_error`'s type across a
+                # combined condition and misreports E0702 raising-bad-type.
+                if not result:  # noqa: SIM102
                     if download_error is not None:
                         raise download_error
                 return result

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.provider")
+log = logger.get_package_logger("git.provider")
 
 
 @dataclass

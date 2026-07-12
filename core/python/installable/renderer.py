@@ -17,7 +17,7 @@ class DependencyTreeRenderer:
         self._visited = set()
 
     def render_uv_tree_style(
-        self, graph: DependencyGraph, verbose: bool = False
+        self, graph: DependencyGraph, *, verbose: bool = False
     ) -> str:
         """Render dependency tree in UV tree style.
 

@@ -1,7 +1,7 @@
-import logging
 from typing import Literal
 
 from typing_extensions import override
+
 
 class ErrorCode(BaseException):
 

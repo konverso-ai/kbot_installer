@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from credentials import add_credentials
-from credentials.base import (
-    ClientSecretCredentialsBase,
-    CredentialsBase,
-    StorageCredentialsBase,
-)
 
 if TYPE_CHECKING:
     from auth.base import HttpAuthBase
+    from credentials.base import (
+        ClientSecretCredentialsBase,
+        CredentialsBase,
+        StorageCredentialsBase,
+    )
 
 DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH = Path("conf") / "default_providers_config.json"
 INSTALLED_PROVIDERS_CONFIG_GLOB = "installer/*/conf/default_providers_config.json"
@@ -83,7 +83,7 @@ class S3StorageSettings(BaseModel):
         default_factory=lambda: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
     )
 
-    def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
         """Return kwargs for ``create_bucket_storage("s3", ...)``."""
         credentials = cast("StorageCredentialsBase", add_credentials("s3"))
         return {
@@ -110,7 +110,7 @@ class AzureStorageSettings(BaseModel):
         ]
     )
 
-    def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
         """Return kwargs for ``create_bucket_storage("azure", ...)``."""
         kwargs: dict[str, Any] = {
             "account_url": self.account_url,

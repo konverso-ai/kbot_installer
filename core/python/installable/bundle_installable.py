@@ -9,14 +9,18 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from typing_extensions import Self
 
 from installable.storage_pinned_product import StoragePinnedProductInstallable
-from installer_support.installation_table import InstallationTable
+
+# Kept as a runtime import (not TYPE_CHECKING): InstallationTable is a pydantic
+# model field type below, and pydantic needs the real class at runtime to
+# build the model schema (TYPE_CHECKING-only would raise PydanticUserError).
+from installer_support.installation_table import InstallationTable  # noqa: TC001
 from installer_support.installer_utils import ensure_directory
 from storage.base import StorageBase
 from utils.bundle import Bundle
 from utils.Logger import logger
 from utils.product import Product
 
-log = logger.getPackageLogger("installable")
+log = logger.get_package_logger("installable")
 
 
 class BundleInstallable(BaseModel):
@@ -78,6 +82,23 @@ class BundleInstallable(BaseModel):
             raise ValueError(msg)
         return self
 
+    @property
+    def _bundle_or_raise(self) -> Bundle:
+        """Return the bundle descriptor, guaranteed non-None after validation.
+
+        Returns:
+            The resolved bundle descriptor.
+
+        Raises:
+            ValueError: If the bundle descriptor is unexpectedly missing (should
+                not happen, since ``_ensure_bundle_loaded`` enforces it).
+
+        """
+        if self.bundle is None:
+            msg = "Bundle descriptor is required"
+            raise ValueError(msg)
+        return self.bundle
+
     @classmethod
     def from_storage(
         cls,
@@ -128,8 +149,7 @@ class BundleInstallable(BaseModel):
             dependencies: Whether to download parent dependencies.
 
         """
-        bundle = self.bundle
-        assert bundle is not None
+        bundle = self._bundle_or_raise
         log.info(
             "Installing bundle '%s' version '%s' from product '%s' (dependencies: %s)",
             self.bundle_name or bundle.name,
@@ -230,8 +250,7 @@ class BundleInstallable(BaseModel):
             return
         visited.add(product_name)
 
-        bundle = self.bundle
-        assert bundle is not None
+        bundle = self._bundle_or_raise
         bundle_product = self._find_bundle_product(bundle, product_name)
         if bundle_product is not None:
             installed_commit = self._get_installed_bundle_commit(product_name)

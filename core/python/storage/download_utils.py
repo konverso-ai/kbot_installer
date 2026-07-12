@@ -6,13 +6,16 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from installer_support.installer_utils import extract_tar_member
 from utils.Logger import logger
 
-log = logger.getPackageLogger("storage")
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+log = logger.get_package_logger("storage")
 
 
 def extract_tar_gz_archive(archive_path: Path, target_dir: Path) -> None:
@@ -20,7 +23,7 @@ def extract_tar_gz_archive(archive_path: Path, target_dir: Path) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     tar_bin = shutil.which("tar")
     if tar_bin is not None:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [tar_bin, "-xzf", str(archive_path), "-C", str(target_dir)],
             capture_output=True,
             text=True,

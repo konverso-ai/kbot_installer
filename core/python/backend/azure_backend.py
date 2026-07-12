@@ -1,7 +1,8 @@
 """Azure Blob Storage authentication and client management."""
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
+from azure.core.credentials import TokenCredential
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from pydantic import ConfigDict, Field, PrivateAttr
@@ -10,7 +11,7 @@ from typing_extensions import override
 from backend.base import BackendBase
 from utils.Logger import logger
 
-log = logger.getPackageLogger("backend")
+log = logger.get_package_logger("backend")
 
 
 class AzureBackend(BackendBase):
@@ -29,7 +30,7 @@ class AzureBackend(BackendBase):
 
     _client: BlobServiceClient | None = PrivateAttr(default=None)
 
-    def _get_credential(self) -> Any:
+    def _get_credential(self) -> TokenCredential:
         """Return the Azure credential."""
         if self.credential_type == "default_azure":
             return DefaultAzureCredential()
@@ -45,7 +46,7 @@ class AzureBackend(BackendBase):
         msg = f"Unsupported credential_type: {self.credential_type}"
         raise ValueError(msg)
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, _context: object, /) -> None:
         """Initialize the Azure backend."""
         self._client = BlobServiceClient(
             account_url=self.account_url,

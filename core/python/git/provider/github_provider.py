@@ -13,7 +13,7 @@ from auth.base import HttpAuthBase
 from git.provider.git_mixin import GitMixin
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.provider")
+log = logger.get_package_logger("git.provider")
 
 
 class GithubProvider(GitMixin):

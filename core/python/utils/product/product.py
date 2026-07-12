@@ -5,7 +5,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import tomlkit
 import xmltodict
@@ -70,26 +70,26 @@ class Product(BaseModel):
 
     @field_validator("version", mode="before")
     @classmethod
-    def _validate_version(cls, value: Any) -> Version:
-        return Version.parse(value)
+    def _validate_version(cls, value: object) -> Version:
+        return Version.parse(cast("str | Version | None", value))
 
     @field_validator("build", mode="before")
     @classmethod
-    def _validate_build(cls, value: Any) -> Any:
+    def _validate_build(cls, value: object) -> object:
         if isinstance(value, str):
             return Build(timestamp=value, branch="", commit="").model_dump()
         return value
 
     @field_validator("parents", mode="before")
     @classmethod
-    def _validate_parents(cls, value: Any) -> Any:
+    def _validate_parents(cls, value: object) -> object:
         if isinstance(value, list):
             return {"parent": [{"@name": name} for name in value]}
         return value
 
     @field_validator("categories", mode="before")
     @classmethod
-    def _validate_categories(cls, value: Any) -> Any:
+    def _validate_categories(cls, value: object) -> object:
         if isinstance(value, list):
             return {"category": [{"@name": name} for name in value]}
         return value
@@ -247,6 +247,7 @@ class Product(BaseModel):
 
         Raises:
             ValueError: If JSON is invalid or missing required fields.
+            TypeError: If the decoded JSON content is not an object.
 
         """
         try:
@@ -259,8 +260,8 @@ class Product(BaseModel):
             msg = f"Invalid JSON content: {exc}"
             raise ValueError(msg) from exc
         if not isinstance(data, dict):
-            msg = "Product name is required"
-            raise ValueError(msg)
+            msg = f"Expected a JSON object, got {type(data).__name__}"
+            raise TypeError(msg)
         return cls.from_dict(data)
 
     @classmethod

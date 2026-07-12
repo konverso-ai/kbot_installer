@@ -2,13 +2,15 @@
 
 import asyncio
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Coroutine, Iterator
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
 import aiofiles
 import httpx
+from more_itertools import batched
+from typing_extensions import Self
 
 from auth.base import HttpAuthBase
 from storage.download_utils import extract_tar_gz_archive
@@ -35,7 +37,7 @@ class AsyncAPIClient:
         self.__auth = auth
         self.__client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "AsyncAPIClient":
+    async def __aenter__(self) -> Self:
         """Build the httpx client with the provided auth."""
         self.__client = httpx.AsyncClient(
             base_url=self.__base_url,
@@ -120,7 +122,7 @@ class AsyncAPIClient:
 
         response = await self.__client.delete(endpoint, **kwargs)
         response.raise_for_status()
-        if response.status_code == 204:
+        if response.status_code == httpx.codes.NO_CONTENT:
             return {}
         return response.json()
 
@@ -158,13 +160,13 @@ class AsyncAPIClient:
 
     async def post_multiple_semaphore(
         self,
-        requests: list[tuple[str, dict[str, object]]],
+        requests: list[Coroutine[Any, Any, object]],
         max_concurrent: int = 50,
     ) -> list[object]:
-        """Send multiple POST requests in parallel, capped by a semaphore.
+        """Run multiple coroutines in parallel, capped by a semaphore.
 
         Args:
-            requests: List of tuples (endpoint, data) to POST.
+            requests: Coroutines to run concurrently (e.g. `self.post(...)` calls).
             max_concurrent: Maximum number of requests running at the same time.
 
         Returns:
@@ -178,26 +180,25 @@ class AsyncAPIClient:
 
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def fetch_with_semaphore(coro: Callable[[], object]) -> object:
+        async def fetch_with_semaphore(coro: Coroutine[Any, Any, object]) -> object:
             async with semaphore:
                 return await coro
 
-        results = await asyncio.gather(
+        return await asyncio.gather(
             *(fetch_with_semaphore(r) for r in requests), return_exceptions=True
         )
 
-        return results
-
     async def post_multiple_batches(
         self,
-        requests: list[tuple[str, dict[str, object]]],
+        requests: list[Coroutine[Any, Any, object]],
         max_concurrent: int = 10,
         batch_size: int = 50,
     ) -> list[object]:
-        """Send multiple POST requests split into sequential batches.
+        """Run multiple coroutines split into sequential batches.
 
         Args:
-            requests: List of tuples (endpoint, data) to POST.
+            requests: Coroutines to run (e.g. `self.post(...)` calls), split into
+                sequential batches of `batch_size`.
             max_concurrent: Maximum number of requests running at the same time
                 within a batch.
             batch_size: Number of requests grouped into each batch.
@@ -211,8 +212,6 @@ class AsyncAPIClient:
             msg = "Client not initialized"
             raise RuntimeError(msg)
 
-        from more_itertools import batched
-
         r = []
         for batch in batched(requests, batch_size):
             r.extend(
@@ -223,8 +222,8 @@ class AsyncAPIClient:
         return r
 
     async def upload_file(
-        self, file_name: str, folder_uuid: str, override: bool = True
-    ):
+        self, file_name: str, folder_uuid: str, *, override: bool = True
+    ) -> httpx.Response:
         """Upload a local file to the `files/` endpoint.
 
         Args:
@@ -240,19 +239,21 @@ class AsyncAPIClient:
             msg = "Client not initialized. Use 'async with'."
             raise RuntimeError(msg)
 
-        with open(file_name, "rb") as fd:
-            files_dict = {"ufile": fd}
-            data = {
-                "folder_uuid": folder_uuid,
-                "override": override,
-            }
-            response = await self.__client.post(
-                "files/",
-                data=data,
-                files=files_dict,
-            )
-            response.raise_for_status()
-            return response
+        async with aiofiles.open(file_name, "rb") as fd:
+            content = await fd.read()
+
+        files_dict = {"ufile": content}
+        data = {
+            "folder_uuid": folder_uuid,
+            "override": override,
+        }
+        response = await self.__client.post(
+            "files/",
+            data=data,
+            files=files_dict,
+        )
+        response.raise_for_status()
+        return response
 
     async def download_file(self, file_name: str, endpoint: str) -> httpx.Response:
         """Stream an endpoint's response body to a local file.
@@ -291,7 +292,7 @@ class AsyncAPIClient:
             raise RuntimeError(msg)
 
         destination = Path(target_dir)
-        destination.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(destination.mkdir, parents=True, exist_ok=True)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
             temp_path = temp_file.name
@@ -304,4 +305,4 @@ class AsyncAPIClient:
                 destination,
             )
         finally:
-            Path(temp_path).unlink(missing_ok=True)
+            await asyncio.to_thread(Path(temp_path).unlink, missing_ok=True)

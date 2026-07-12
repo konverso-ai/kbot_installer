@@ -25,7 +25,7 @@ from workarea.utils import (
 )
 from workarea.workarea import Workarea
 
-log = logger.getPackageLogger("installable")
+log = logger.get_package_logger("installable")
 
 
 class WorkareaInstallable(BaseModel, InstallableBase):

@@ -1,9 +1,11 @@
 """Normalize scalar or list values into lists."""
 
-from typing import Any
+from typing import TypeVar
+
+T = TypeVar("T")
 
 
-def as_list(value: Any) -> list[Any]:
+def as_list(value: T | list[T] | None) -> list[T]:
     """Normalize a scalar or list value into a list.
 
     Args:

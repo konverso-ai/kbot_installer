@@ -32,7 +32,7 @@ class HttpAuthBase(BaseModel, httpx.Auth):
         """Return keyword arguments for Dulwich remote operations."""
 
     def git_cli_environment(
-        self, base_env: Mapping[str, str] | None = None
+        self, _base_env: Mapping[str, str] | None = None
     ) -> dict[str, str] | None:
         """Return environment for git subprocess operations, if supported."""
         return None

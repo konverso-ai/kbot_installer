@@ -82,7 +82,9 @@ class NexusFile(BaseModel):
         payload = dict(data)
         payload["checksum"] = Checksum.from_json(data.get("checksum"))
         instance = cls.model_validate(payload)
-        instance._service = service
+        # Setting the class's own PrivateAttr on a freshly built instance from
+        # within its own factory classmethod; not an external encapsulation break.
+        instance._service = service  # noqa: SLF001
         return instance
 
     @override

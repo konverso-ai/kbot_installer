@@ -1,7 +1,7 @@
 """Filesystem helpers for laying out and maintaining a product workarea."""
 
 import shutil
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
 from importlib.resources import files
 from pathlib import Path
@@ -29,15 +29,14 @@ def should_keep(path: Path, root: Path, rule: "WorkAreaRule") -> bool:
     """
     relative = path.relative_to(root).as_posix()
 
-    if rule.includes:
-        if not any(fnmatch(relative, pattern) for pattern in rule.includes):
-            return False
+    if rule.includes and not any(
+        fnmatch(relative, pattern) for pattern in rule.includes
+    ):
+        return False
 
-    if rule.excludes:
-        if any(fnmatch(relative, pattern) for pattern in rule.excludes):
-            return False
-
-    return True
+    return not (
+        rule.excludes and any(fnmatch(relative, pattern) for pattern in rule.excludes)
+    )
 
 
 def render_variables(content: str, variables: dict[str, str]) -> str:
@@ -127,7 +126,7 @@ def copy_source(
     shutil.copy2(source, target)
 
 
-def iter_sources(root: Path, rule: "WorkAreaRule"):
+def iter_sources(root: Path, rule: "WorkAreaRule") -> Iterator[Path]:
     """Yield the paths under a root that a rule should keep.
 
     Args:

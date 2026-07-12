@@ -7,12 +7,11 @@ operations using Dulwich for any git repository.
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from dulwich import porcelain
 from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
-from dulwich.refs import Ref
 from dulwich.repo import Repo
 from typing_extensions import override
 
@@ -22,7 +21,10 @@ from git.versioner.base import VersionerError
 from git.versioner.str_repr_mixin import StrReprMixin
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.versioner")
+if TYPE_CHECKING:
+    from dulwich.refs import Ref
+
+log = logger.get_package_logger("git.versioner")
 
 DEFAULT_AUTHOR = Author(name="Git Versioner", email="versioner@example.com")
 _LOCAL_BRANCH_PREFIX = b"refs/heads/"
@@ -116,7 +118,9 @@ class DulwichVersioner(StrReprMixin):
         cmd.extend([repository_url, str(target_path)])
 
         try:
-            result = subprocess.run(
+            # git binary invoked directly (no shell=True); args are a static
+            # list, not a shell string, so there is no shell-injection risk.
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 check=False,
                 capture_output=True,
@@ -138,7 +142,9 @@ class DulwichVersioner(StrReprMixin):
         """List remote branches with ``git ls-remote``."""
         cmd = ["git", "ls-remote", "--heads", repository_url]
         try:
-            result = subprocess.run(
+            # git binary invoked directly (no shell=True); args are a static
+            # list, not a shell string, so there is no shell-injection risk.
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 check=False,
                 capture_output=True,
@@ -299,10 +305,7 @@ class DulwichVersioner(StrReprMixin):
                 error_msg = "No 'origin' remote found in repository"
                 raise VersionerError(error_msg) from e
 
-            refs = repo.get_refs()
-            if remote_branch_ref not in refs:
-                error_msg = f"Remote branch 'origin/{branch}' not found"
-                raise VersionerError(error_msg)
+            self._ensure_remote_branch_exists(repo, remote_branch_ref, branch)
 
             self._get_current_branch_name(repo)
             porcelain.merge(repo, f"origin/{branch}")
@@ -314,6 +317,26 @@ class DulwichVersioner(StrReprMixin):
         except Exception as e:
             error_msg = f"Failed to pull from remote repository: {e}"
             raise VersionerError(error_msg) from e
+
+    def _ensure_remote_branch_exists(
+        self, repo: Repo, remote_branch_ref: bytes, branch: str
+    ) -> None:
+        """Raise if a remote-tracking branch ref is missing from the repository.
+
+        Args:
+            repo: Repository whose refs should be checked.
+            remote_branch_ref: Fully-qualified remote-tracking ref
+                (e.g. ``b"refs/remotes/origin/main"``).
+            branch: Branch name, used for the error message.
+
+        Raises:
+            VersionerError: If the ref is not present among the repository's refs.
+
+        """
+        refs = repo.get_refs()
+        if remote_branch_ref not in refs:
+            error_msg = f"Remote branch 'origin/{branch}' not found"
+            raise VersionerError(error_msg)
 
     @override
     def commit(self, repository_path: str | Path, message: str) -> None:
@@ -401,6 +424,23 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to push branches to remote repository: {e}"
             raise VersionerError(error_msg) from e
 
+    def _ensure_clean_clone_target(self, target_path: Path) -> None:
+        """Remove an existing clone target directory and verify the cleanup.
+
+        Args:
+            target_path: Local path where the repository should be cloned.
+
+        Raises:
+            VersionerError: If the directory still exists after removal.
+
+        """
+        if target_path.exists():
+            shutil.rmtree(target_path)
+
+        if target_path.exists():
+            error_msg = f"Target directory still exists after cleanup: {target_path}"
+            raise VersionerError(error_msg)
+
     @override
     def clone(
         self,
@@ -426,14 +466,7 @@ class DulwichVersioner(StrReprMixin):
             target_path = Path(target_path)
             target_path.parent.mkdir(parents=True, exist_ok=True)
 
-            if target_path.exists():
-                shutil.rmtree(target_path)
-
-            if target_path.exists():
-                error_msg = (
-                    f"Target directory still exists after cleanup: {target_path}"
-                )
-                raise VersionerError(error_msg)
+            self._ensure_clean_clone_target(target_path)
 
             git_env = self._git_cli_environment()
             if git_env is not None:

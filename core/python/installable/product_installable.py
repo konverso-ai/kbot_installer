@@ -30,7 +30,7 @@ from utils.Logger import logger
 from utils.product import Product
 from utils.version import Version
 
-log = logger.getPackageLogger("installable")
+log = logger.get_package_logger("installable")
 
 # Type alias for product configuration (INI-style: section -> option -> value)
 ProductConfig = dict[str, dict[str, str]]
@@ -98,7 +98,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         return payload
 
     @override
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any, /) -> None:
         """Initialize the runtime git provider after model validation."""
         self._provider = create_provider(name="selector", providers=self.providers)
 
@@ -1073,23 +1073,17 @@ class ProductInstallable(BaseModel, InstallableBase):
         link_external_config = link_section.get("external", {})
 
         if init_config:
-            log.warning(
-                "Processing init section for product %s", product.product.name
-            )
+            log.warning("Processing init section for product %s", product.product.name)
             self._handle_work_init(workarea_root, init_config, processed)
 
         if copy_config and product.dirname is not None:
-            log.warning(
-                "Processing copy section for product %s", product.product.name
-            )
+            log.warning("Processing copy section for product %s", product.product.name)
             self._handle_work_copy(
                 workarea_root, product.dirname, copy_config, ignore_config, processed
             )
 
         if link_config and product.dirname is not None:
-            log.warning(
-                "Processing link section for product %s", product.product.name
-            )
+            log.warning("Processing link section for product %s", product.product.name)
             self._handle_work_link(
                 workarea_root, product.dirname, link_config, ignore_config, processed
             )

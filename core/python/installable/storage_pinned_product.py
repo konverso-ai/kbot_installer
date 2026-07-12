@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import json
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from installer_support.installation_table import InstallationTable
-from storage.base import StorageBase
 from utils.Logger import logger
-from utils.product import Product
 
-log = logger.getPackageLogger("installable")
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from installer_support.installation_table import InstallationTable
+    from storage.base import StorageBase
+    from utils.product import Product
+
+log = logger.get_package_logger("installable")
 
 
 class StoragePinnedProductInstallable:

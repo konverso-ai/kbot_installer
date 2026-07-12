@@ -22,10 +22,11 @@ from git.provider.git_mixin import GitMixin
 from installer_support.env_loader import format_missing_env_vars_message
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.provider")
+log = logger.get_package_logger("git.provider")
 
 # Constants
 MAX_CAUSE_LENGTH = 50
+MEANINGFUL_TAIL_LENGTH_THRESHOLD = 3
 
 
 class SelectorProvider(ProviderBase):
@@ -136,9 +137,8 @@ class SelectorProvider(ProviderBase):
                 provider_name,
                 e,
             )
-            raise ProviderError(
-                f"Failed to configure provider '{provider_name}': {e}"
-            ) from e
+            msg = f"Failed to configure provider '{provider_name}': {e}"
+            raise ProviderError(msg) from e
         except Exception as e:
             # Log error without exposing sensitive information from stack trace
             # Using log.error() instead of log.exception() to prevent
@@ -181,9 +181,11 @@ class SelectorProvider(ProviderBase):
 
         if repository_url:
             self._clone_by_url(repository_url, target_path, branch)
-        else:
-            assert repository_name is not None
+        elif repository_name is not None:
             self._clone_by_name(repository_name, target_path, branch)
+        else:
+            msg = "Must specify either repository_url or repository_name"
+            raise ValueError(msg)
 
     def _print_clone_results_table(self, results: list[tuple[str, str, str]]) -> None:
         """Print a formatted table showing clone results for each provider.
@@ -280,7 +282,7 @@ class SelectorProvider(ProviderBase):
         parts = error_message.split(":")
         if len(parts) > 1:
             tail = parts[-1].strip()
-            if len(tail) > 3:
+            if len(tail) > MEANINGFUL_TAIL_LENGTH_THRESHOLD:
                 return tail
         return error_message
 
@@ -570,26 +572,21 @@ class SelectorProvider(ProviderBase):
                 by_url=by_url,
             )
 
-        last_error = None
+        last_error: ProviderError | None = None
         for branch_to_try in branches_to_try:
-            try:
-                self._try_clone_with_branch(
-                    provider,
-                    repository_identifier,
-                    target_path,
-                    branch_to_try,
-                    by_url=by_url,
-                )
-                self._update_provider_name(provider)
-
-            except ProviderError as e:
-                last_error = e
-                if self._handle_clone_error(e, branch_to_try, branches_to_try):
-                    continue
-                raise
-            else:
-                msg = self._build_success_message(branch_to_try, requested_branch)
-                return branch_to_try, msg
+            result = self._attempt_clone_branch(
+                provider,
+                repository_identifier,
+                target_path,
+                branch_to_try,
+                branches_to_try,
+                requested_branch,
+                by_url=by_url,
+            )
+            if isinstance(result, ProviderError):
+                last_error = result
+                continue
+            return result
 
         # All branches failed
         if last_error:
@@ -599,6 +596,54 @@ class SelectorProvider(ProviderBase):
             f"{branches_to_try}"
         )
         raise ProviderError(error_msg)
+
+    def _attempt_clone_branch(
+        self,
+        provider: ProviderBase,
+        repository_identifier: str,
+        target_path: Path,
+        branch_to_try: str,
+        branches_to_try: list[str],
+        requested_branch: str | None,
+        *,
+        by_url: bool,
+    ) -> tuple[str, str] | ProviderError:
+        """Try cloning a single fallback branch.
+
+        Args:
+            provider: Provider instance to use.
+            repository_identifier: Repository URL or name.
+            target_path: Local path where repository should be cloned.
+            branch_to_try: Branch to attempt for this call.
+            branches_to_try: Full fallback branch list (for error handling context).
+            requested_branch: Originally requested branch, or None for default.
+            by_url: Whether ``repository_identifier`` is a repository URL.
+
+        Returns:
+            A (branch_used, success_message) tuple on success, or the
+            `ProviderError` encountered if the failure is retryable with the
+            next branch.
+
+        Raises:
+            ProviderError: If the failure is not retryable.
+
+        """
+        try:
+            self._try_clone_with_branch(
+                provider,
+                repository_identifier,
+                target_path,
+                branch_to_try,
+                by_url=by_url,
+            )
+            self._update_provider_name(provider)
+        except ProviderError as e:
+            if self._handle_clone_error(e, branch_to_try, branches_to_try):
+                return e
+            raise
+        else:
+            msg = self._build_success_message(branch_to_try, requested_branch)
+            return branch_to_try, msg
 
     def _handle_provider_failure(
         self, provider_name: str, error: Exception, results: list[tuple[str, str, str]]

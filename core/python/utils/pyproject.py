@@ -269,7 +269,7 @@ def _dependency_groups_to_table(groups: DependencyGroups) -> Table:
     for key, value in data.items():
         if key == "dev":
             dev_array = tomlkit.array()
-            dev_array.multiline(True)
+            dev_array.multiline(True)  # noqa: FBT003
             for item in value:
                 inline = tomlkit.inline_table()
                 inline.update(item)

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from typing_extensions import Self, override
 
 from service.nexus_file import NexusFile
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from service.nexus_service import NexusService
 
 NexusFileItems: TypeAlias = Annotated[list[NexusFile], Field(default_factory=list)]
 ContinuationToken: TypeAlias = Annotated[
@@ -22,10 +27,10 @@ class NexusFiles(BaseModel):
 
     files: NexusFileItems
     continuation_token: ContinuationToken = None
-    _service: Any = PrivateAttr(default=None)
+    _service: NexusService | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_json(cls, data: dict[str, Any], *, service: Any) -> Self:
+    def from_json(cls, data: dict[str, Any], *, service: NexusService) -> Self:
         """Build a NexusFiles collection from a Nexus API payload.
 
         Args:
@@ -47,7 +52,7 @@ class NexusFiles(BaseModel):
         return instance
 
     @classmethod
-    def empty(cls, *, service: Any) -> Self:
+    def empty(cls, *, service: NexusService) -> Self:
         """Create an empty NexusFiles collection bound to a service.
 
         Args:
@@ -67,7 +72,14 @@ class NexusFiles(BaseModel):
         Args:
             data: Raw list/search response page from the Nexus API.
 
+        Raises:
+            RuntimeError: If this collection is not bound to a service.
+
         """
+        if self._service is None:
+            _msg = "Cannot extend a NexusFiles collection with no bound service"
+            raise RuntimeError(_msg)
+
         self.files.extend(
             NexusFile.from_json(item, service=self._service)
             for item in data.get("items", [])
@@ -129,7 +141,7 @@ class NexusFiles(BaseModel):
         )[0]
 
     @override
-    def __iter__(self):
+    def __iter__(self) -> Iterator[NexusFile]:
         """Iterate over the files in this collection."""
         return iter(self.files)
 

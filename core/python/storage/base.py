@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from enum import Enum
-from typing import Any
 
 
 class StorageBackend(Enum):
@@ -40,7 +39,7 @@ class StorageBase(ABC):
         """
 
     @abstractmethod
-    def download(self, key: str, local_file_path: str):
+    def download(self, key: str, local_file_path: str) -> None:
         """Download a storageobject to a local file.
 
         Args:
@@ -118,7 +117,7 @@ class StorageBase(ABC):
         """
 
     @abstractmethod
-    def set(self, key: str, value: Any, encoding: str = "utf-8") -> None:
+    def set(self, key: str, value: str | bytes, encoding: str = "utf-8") -> None:
         """Upload an object to the storage.
 
         Args:

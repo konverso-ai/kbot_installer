@@ -1,7 +1,6 @@
 """Tests for utils module."""
 
 import io
-import os
 import tarfile
 import tempfile
 from pathlib import Path
@@ -584,4 +583,4 @@ class TestExtractTarMember:
 
             link_path = target_dir / "3rdparty/bzip2-1.0.6/bin/bzegrep"
             assert link_path.is_symlink()
-            assert os.readlink(link_path) == "bzgrep"
+            assert str(link_path.readlink()) == "bzgrep"

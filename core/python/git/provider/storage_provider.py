@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from typing_extensions import override
 
@@ -11,11 +11,15 @@ from auth.base import HttpAuthBase
 from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
-from storage.base import StorageBase
 from storage.factory import create_bucket_storage
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.provider")
+if TYPE_CHECKING:
+    from auth.base import HttpAuthBase
+    from git.provider.config import ProvidersConfig
+    from storage.base import StorageBase
+
+log = logger.get_package_logger("git.provider")
 
 
 class StorageProvider(ProviderBase):
@@ -61,6 +65,11 @@ class StorageProvider(ProviderBase):
             self._backend,
             **self._config.storage.get_backend_kwargs(self._auth),
         )
+
+    @property
+    def storage(self) -> StorageBase:
+        """Return the underlying object storage backend."""
+        return self._storage
 
     @staticmethod
     def _build_object_key(repository_name: str, branch: str | None) -> str:
@@ -109,7 +118,7 @@ class StorageProvider(ProviderBase):
         target_path: str | Path,
         branch: str | None = None,
         *,
-        repository_url: str | None = None,
+        _repository_url: str | None = None,
         repository_name: str | None = None,
     ) -> None:
         """Clone a repository from the configured storage backend.

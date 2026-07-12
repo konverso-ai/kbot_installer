@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from collections.abc import Coroutine, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from typing_extensions import override
 
@@ -13,7 +13,9 @@ from service.nexus_service import NexusService
 from storage.base import StorageBase
 from utils.Logger import logger
 
-log = logger.getPackageLogger("storage")
+log = logger.get_package_logger("storage")
+
+_T = TypeVar("_T")
 
 
 class NexusStorage(StorageBase):
@@ -57,7 +59,7 @@ class NexusStorage(StorageBase):
         return self._repository
 
     @staticmethod
-    def _run_async(coro: Coroutine[Any, Any, Any]):
+    def _run_async(coro: Coroutine[Any, Any, _T]) -> _T:
         """Run an async coroutine from synchronous storage methods."""
         return asyncio.run(coro)
 

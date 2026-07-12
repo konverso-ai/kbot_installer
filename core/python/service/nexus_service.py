@@ -123,7 +123,7 @@ class NexusService:
             repository_path = f"/{repository_path}"
 
         target = Path(target_dir)
-        target.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(target.mkdir, parents=True, exist_ok=True)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
             temp_path = temp_file.name
@@ -136,4 +136,4 @@ class NexusService:
                 target,
             )
         finally:
-            Path(temp_path).unlink(missing_ok=True)
+            await asyncio.to_thread(Path(temp_path).unlink, missing_ok=True)

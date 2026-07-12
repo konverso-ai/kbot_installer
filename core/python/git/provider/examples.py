@@ -128,11 +128,17 @@ async def example_github_bitbucket_only() -> None:
     print("\n2. Clonage depuis Bitbucket...")
     try:
         # Configuration de l'authentification Bitbucket (clé SSH)
+        private_key_path = await asyncio.to_thread(
+            lambda: str(Path("~/.ssh/id_rsa").expanduser())
+        )
+        public_key_path = await asyncio.to_thread(
+            lambda: str(Path("~/.ssh/id_rsa.pub").expanduser())
+        )
         bitbucket_auth = create_auth(
             "ssh",
             username="git",
-            private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
-            public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
+            private_key_path=private_key_path,
+            public_key_path=public_key_path,
             passphrase="",
         )
 
@@ -190,11 +196,17 @@ async def example_bitbucket_only() -> None:
     # 2. Bitbucket Provider (authentification par clé SSH)
     print("\n2. Clonage depuis Bitbucket (clé SSH)...")
     try:
+        private_key_path = await asyncio.to_thread(
+            lambda: str(Path("~/.ssh/id_rsa").expanduser())
+        )
+        public_key_path = await asyncio.to_thread(
+            lambda: str(Path("~/.ssh/id_rsa.pub").expanduser())
+        )
         bitbucket_auth_ssh = create_auth(
             "ssh",
             username="git",
-            private_key_path=str(Path("~/.ssh/id_rsa").expanduser()),
-            public_key_path=str(Path("~/.ssh/id_rsa.pub").expanduser()),
+            private_key_path=private_key_path,
+            public_key_path=public_key_path,
             passphrase="",
         )
 

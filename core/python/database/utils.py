@@ -3,13 +3,16 @@
 from pathlib import Path
 
 import psycopg2
+import psycopg2.extensions
 
 from database.base import DbSettings
 
 SCHEMA_VERSION_TABLE = "__schema_version"
 
 
-def connect(settings: DbSettings, *, database: str | None = None):
+def connect(
+    settings: DbSettings, *, database: str | None = None
+) -> psycopg2.extensions.connection:
     """Open a psycopg2 connection using the given settings.
 
     Args:
@@ -74,7 +77,8 @@ def get_applied_version(settings: DbSettings) -> set[str]:
     ensure_version_table(settings)
 
     with connect(settings) as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT version from {SCHEMA_VERSION_TABLE}")
+        # SCHEMA_VERSION_TABLE is a hardcoded module constant, not user input.
+        cur.execute(f"SELECT version from {SCHEMA_VERSION_TABLE}")  # noqa: S608
         return {row[0] for row in cur.fetchall()}
 
 
@@ -87,14 +91,13 @@ def mark_version_applied(settings: DbSettings, version: str) -> None:
 
     """
     with connect(settings) as conn, conn.cursor() as cur:
-        cur.execute(
-            f"""
+        # SCHEMA_VERSION_TABLE is a hardcoded module constant, not user input.
+        insert_sql = f"""
                     INSERT INTO {SCHEMA_VERSION_TABLE} (version)
                     VALUES (%s)
                     ON CONFLICT DO NOTHING
-                """,
-            (version,),
-        )
+                """  # noqa: S608
+        cur.execute(insert_sql, (version,))
 
 
 def is_database_empty(settings: DbSettings) -> bool:

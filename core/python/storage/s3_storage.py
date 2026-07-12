@@ -1,21 +1,29 @@
 """Amazon S3 implementation of bucket storage."""
 
+from __future__ import annotations
+
 import time
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from botocore.exceptions import ClientError, NoCredentialsError
 from more_itertools import chunked
 from typing_extensions import override
 
-from backend.base import BackendBase
 from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
 from utils.Logger import logger
 
-log = logger.getPackageLogger("storage")
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from mypy_boto3_s3 import S3Client
+    from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
+
+    from backend.base import BackendBase
+
+log = logger.get_package_logger("storage")
 
 
 class S3Storage(StorageBase):
@@ -59,6 +67,10 @@ class S3Storage(StorageBase):
         """Return the backend used by this storage."""
         return self._backend
 
+    def _get_s3_client(self) -> S3Client | None:
+        """Return the boto3 S3 client from the configured backend."""
+        return cast("S3Client | None", self._get_backend().get_client())
+
     def get_bucket_name(self) -> str | None:
         """Return the currently configured bucket name."""
         return self.bucket_name
@@ -91,7 +103,7 @@ class S3Storage(StorageBase):
     def set(self, key: str, value: str | bytes | Any, encoding: str = "utf-8") -> None:
         """Upload an object to AWS S3."""
         key = self._prefixed_key(key)
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.error("S3 client unavailable. Upload aborted.")
             return
@@ -110,7 +122,7 @@ class S3Storage(StorageBase):
     def get(self, key: str, encoding: str = "utf-8") -> str | None:
         """Retrieve and decode an object from AWS S3."""
         key = self._prefixed_key(key)
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.error(
                 "S3 client unavailable. Retrieval aborted. '%s'",
@@ -157,7 +169,7 @@ class S3Storage(StorageBase):
     def _download_file(self, key: str, local_file_path: str) -> None:
         """Download a storage object to a local file."""
         key = self._prefixed_key(key)
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.error(
                 "S3 client unavailable. Retrieval aborted. '%s'",
@@ -165,27 +177,27 @@ class S3Storage(StorageBase):
             )
             return
 
-        with open(local_file_path, "wb") as local_file:
+        with Path(local_file_path).open(mode="wb") as local_file:
             s3_client.download_fileobj(self.bucket_name, key, local_file)
 
     @override
     def delete(self, key: str) -> None:
         """Delete a single object from AWS S3."""
         key = self._prefixed_key(key)
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.error("S3 client unavailable. Deletion aborted.")
             return
         try:
             s3_client.delete_object(Bucket=self.bucket_name, Key=key)
             log.debug("Successfully deleted object from AWS S3: %s", key)
-        except Exception as e:
-            log.exception("Deletion failed for key='%s': %s", key, e)
+        except Exception:
+            log.exception("Deletion failed for key='%s'", key)
 
     @override
     def delete_folder(self, key: str) -> None:
         """Delete all objects under a folder prefix."""
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.error("S3 client unavailable. Deletion aborted.")
             return
@@ -203,7 +215,9 @@ class S3Storage(StorageBase):
                 if "Contents" not in page:
                     continue
 
-                objects_to_delete = [{"Key": obj["Key"]} for obj in page["Contents"]]
+                objects_to_delete: list[ObjectIdentifierTypeDef] = [
+                    {"Key": obj["Key"]} for obj in page["Contents"]
+                ]
                 if objects_to_delete:
                     for chunk in chunked(objects_to_delete, 1000):
                         s3_client.delete_objects(
@@ -226,7 +240,7 @@ class S3Storage(StorageBase):
     @override
     def list(self, prefix: str = "") -> Iterator[str]:
         """List object keys under a logical prefix."""
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if not s3_client:
             log.exception(
                 "S3 client unavailable. Cannot list objects with prefix '%s'",
@@ -274,7 +288,7 @@ class S3Storage(StorageBase):
 
     def check_authorization(self) -> None:
         """Validate AWS credentials and bucket access permissions."""
-        s3_client = self._get_backend().get_client()
+        s3_client = self._get_s3_client()
         if s3_client is None:
             msg = (
                 "Authentication failed. Ensure the AWS credentials and "
@@ -299,8 +313,7 @@ class S3Storage(StorageBase):
             )
         except NoCredentialsError as e:
             log.exception(
-                "Authentication failed. Check the AWS credentials. Error: %s",
-                e,
+                "Authentication failed. Check the AWS credentials.",
             )
             msg = "Authentication failed. Ensure the AWS credentials are correct."
             raise RuntimeError(msg) from e
@@ -308,22 +321,17 @@ class S3Storage(StorageBase):
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code in {"403", "AccessDenied"}:
                 log.exception(
-                    "Authentication failed. Check the AWS credentials and permissions. Error: %s",
-                    e,
+                    "Authentication failed. Check the AWS credentials and permissions.",
                 )
                 msg_0 = (
                     "Authentication failed. Ensure the AWS credentials and "
                     "permissions are correct."
                 )
                 raise RuntimeError(msg_0) from e
-            log.exception(
-                "Unexpected error during authorization check."
-            )
+            log.exception("Unexpected error during authorization check.")
             msg_1 = "Unexpected error during authorization check"
             raise RuntimeError(msg_1) from e
         except Exception as e:
-            log.exception(
-                "Unexpected error during authorization check."
-            )
+            log.exception("Unexpected error during authorization check.")
             msg_2 = "Unexpected error during authorization check"
             raise RuntimeError(msg_2) from e

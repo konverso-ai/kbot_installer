@@ -15,7 +15,7 @@ from git.provider.config import (
 )
 from utils.Logger import logger
 
-log = logger.getPackageLogger("git.provider")
+log = logger.get_package_logger("git.provider")
 
 
 class CredentialManager:

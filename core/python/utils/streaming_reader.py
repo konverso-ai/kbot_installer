@@ -160,7 +160,7 @@ async def download_and_extract_tar_gz(
     max_queue_size: int = 8,
 ) -> None:
     """Download a gzipped tar archive and extract it with streaming."""
-    target_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(target_dir.mkdir, parents=True, exist_ok=True)
 
     data_queue: Queue[bytes | None] = Queue(maxsize=max_queue_size)
     download_error: list[BaseException | None] = [None]

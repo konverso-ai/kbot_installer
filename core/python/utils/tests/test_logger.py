@@ -13,9 +13,9 @@ from utils.Logger import (
     DataDogFormatter,
     KbotFormatter,
     KbotLogger,
-    NormalizeLevel,
-    UpdateLevel,
-    UpdateSupportedPackages,
+    normalize_level,
+    update_level,
+    update_supported_packages,
     levels,
     logger,
     mylogger,
@@ -50,15 +50,15 @@ def _records(instance: KbotLogger) -> list[logging.LogRecord]:
 
 
 class TestNormalizeLevel:
-    """Test cases for NormalizeLevel."""
+    """Test cases for normalize_level."""
 
     @pytest.mark.parametrize(
         "raw, expected",
         [(-5, 0), (0, 0), (3, 3), (5, 5), (10, 5)],
     )
     def test_normalizelevel_valid_clamps_to_range(self, raw: int, expected: int) -> None:
-        """Test NormalizeLevel clamps values to the [0, 5] range."""
-        assert compare("eq", NormalizeLevel(raw), expected)
+        """Test normalize_level clamps values to the [0, 5] range."""
+        assert compare("eq", normalize_level(raw), expected)
 
 
 class TestLevelTables:
@@ -95,7 +95,7 @@ class TestKbotLoggerFiltering:
     def test_isenabledfor_valid_per_package_override(self, kbot_logger: KbotLogger) -> None:
         """Test isEnabledFor honors an exact-match per-package override."""
         kbot_logger.setLevel(logging.WARNING)
-        kbot_logger.addPackage("storage", logging.DEBUG)
+        kbot_logger.add_package("storage", logging.DEBUG)
 
         assert compare("eq", kbot_logger.isEnabledFor(logging.DEBUG, "storage"), True)
         assert compare("eq", kbot_logger.isEnabledFor(logging.DEBUG, "other"), False)
@@ -109,33 +109,33 @@ class TestKbotLoggerFiltering:
         assert compare("eq", kbot_logger.isEnabledFor(logging.WARNING, "unregistered"), False)
 
     def test_addpackage_valid_overwrites_existing_level(self, kbot_logger: KbotLogger) -> None:
-        """Test addPackage replaces a previously registered level."""
-        kbot_logger.addPackage("storage", logging.DEBUG)
-        kbot_logger.addPackage("storage", logging.ERROR)
+        """Test add_package replaces a previously registered level."""
+        kbot_logger.add_package("storage", logging.DEBUG)
+        kbot_logger.add_package("storage", logging.ERROR)
 
         assert compare("eq", kbot_logger.isEnabledFor(logging.CRITICAL, "storage"), True)
         assert compare("eq", kbot_logger.isEnabledFor(logging.WARNING, "storage"), False)
 
     def test_rempackage_valid_removes_override(self, kbot_logger: KbotLogger) -> None:
-        """Test remPackage drops a per-package override."""
+        """Test rem_package drops a per-package override."""
         kbot_logger.setLevel(logging.ERROR)
-        kbot_logger.addPackage("storage", logging.DEBUG)
+        kbot_logger.add_package("storage", logging.DEBUG)
 
-        kbot_logger.remPackage("storage")
+        kbot_logger.rem_package("storage")
 
         assert compare("eq", kbot_logger.isEnabledFor(logging.DEBUG, "storage"), False)
 
     def test_rempackage_invalid_protects_all_bucket(self, kbot_logger: KbotLogger) -> None:
-        """Test remPackage is a no-op for the 'all' bucket."""
+        """Test rem_package is a no-op for the 'all' bucket."""
         kbot_logger.setLevel(logging.DEBUG)
 
-        kbot_logger.remPackage("all")
+        kbot_logger.rem_package("all")
 
         assert compare("eq", kbot_logger.isEnabledFor(logging.DEBUG), True)
 
     def test_rempackage_valid_noop_for_unregistered_package(self, kbot_logger: KbotLogger) -> None:
-        """Test remPackage silently ignores an unregistered package name."""
-        kbot_logger.remPackage("never-added")  # should not raise
+        """Test rem_package silently ignores an unregistered package name."""
+        kbot_logger.rem_package("never-added")  # should not raise
 
 
 class TestKbotLoggerLevelMethods:
@@ -162,7 +162,7 @@ class TestKbotLoggerLevelMethods:
     def test_debug_valid_records_package_kwarg(self, kbot_logger: KbotLogger) -> None:
         """Test the package kwarg is honored even for a direct (non-wrapped) call."""
         kbot_logger.setLevel(logging.ERROR)
-        kbot_logger.addPackage("storage", logging.DEBUG)
+        kbot_logger.add_package("storage", logging.DEBUG)
 
         kbot_logger.debug("scoped", package="storage")
 
@@ -172,7 +172,7 @@ class TestKbotLoggerLevelMethods:
     def test_debug_invalid_suppressed_for_other_package(self, kbot_logger: KbotLogger) -> None:
         """Test a package override does not leak to a different package name."""
         kbot_logger.setLevel(logging.ERROR)
-        kbot_logger.addPackage("storage", logging.DEBUG)
+        kbot_logger.add_package("storage", logging.DEBUG)
 
         kbot_logger.debug("scoped", package="other")
 
@@ -258,7 +258,7 @@ class TestKbotLoggerFindCaller:
         self, kbot_logger: KbotLogger
     ) -> None:
         """Test a call routed through KbotPackageLogger still reports the real caller."""
-        package_logger = kbot_logger.getPackageLogger("probe")
+        package_logger = kbot_logger.get_package_logger("probe")
 
         package_logger.debug("via wrapper")
 
@@ -306,31 +306,31 @@ class TestKbotLoggerPackages:
     """Test cases for KbotLogger's package-logger registry."""
 
     def test_getpackagelogger_valid_returns_cached_instance(self, kbot_logger: KbotLogger) -> None:
-        """Test getPackageLogger returns the same instance for the same name."""
-        first = kbot_logger.getPackageLogger("storage")
-        second = kbot_logger.getPackageLogger("storage")
+        """Test get_package_logger returns the same instance for the same name."""
+        first = kbot_logger.get_package_logger("storage")
+        second = kbot_logger.get_package_logger("storage")
 
         assert compare("eq", first, second)
 
     def test_getpackagelogger_valid_returns_distinct_instances_per_name(
         self, kbot_logger: KbotLogger
     ) -> None:
-        """Test getPackageLogger returns distinct instances for distinct names."""
-        storage_logger = kbot_logger.getPackageLogger("storage")
-        git_logger = kbot_logger.getPackageLogger("git")
+        """Test get_package_logger returns distinct instances for distinct names."""
+        storage_logger = kbot_logger.get_package_logger("storage")
+        git_logger = kbot_logger.get_package_logger("git")
 
         assert compare("ne", storage_logger, git_logger)
 
     def test_packages_valid_lists_registered_names(self, kbot_logger: KbotLogger) -> None:
-        """Test packages exposes every name registered via getPackageLogger."""
-        kbot_logger.getPackageLogger("storage")
-        kbot_logger.getPackageLogger("git")
+        """Test packages exposes every name registered via get_package_logger."""
+        kbot_logger.get_package_logger("storage")
+        kbot_logger.get_package_logger("git")
 
         assert compare("eq", set(kbot_logger.packages), {"storage", "git"})
 
 
 class TestKbotLoggerBuildHandler:
-    """Test cases for KbotLogger.buildHandler."""
+    """Test cases for KbotLogger.build_handler."""
 
     def test_buildhandler_valid_getproduct_uses_nullhandler(
         self, monkeypatch: pytest.MonkeyPatch
@@ -339,7 +339,7 @@ class TestKbotLoggerBuildHandler:
         monkeypatch.setattr(sys, "argv", ["GetProduct.py"])
         instance = KbotLogger("test.buildhandler.getproduct")
 
-        instance.buildHandler(logging.WARNING)
+        instance.build_handler(logging.WARNING)
 
         assert compare("eq", len(instance.handlers), 1)
         assert compare("eq", type(instance.handlers[0]), logging.NullHandler)
@@ -351,7 +351,7 @@ class TestKbotLoggerBuildHandler:
         monkeypatch.setattr(sys, "argv", ["some_script.py"])
         instance = KbotLogger("test.buildhandler.default")
 
-        instance.buildHandler(logging.WARNING)
+        instance.build_handler(logging.WARNING)
 
         assert compare("eq", len(instance.handlers), 1)
         handler = instance.handlers[0]
@@ -368,7 +368,7 @@ class TestKbotLoggerBuildHandler:
         monkeypatch.setenv("KBOT_HOME", str(tmp_path))
         instance = KbotLogger("test.buildhandler.runbot")
 
-        instance.buildHandler(logging.ERROR)
+        instance.build_handler(logging.ERROR)
 
         assert compare("eq", len(instance.handlers), 2)
         for handler in instance.handlers:
@@ -385,7 +385,7 @@ class TestKbotPackageLogger:
     @pytest.fixture
     def package_logger(self, kbot_logger: KbotLogger):
         kbot_logger.setLevel(FINEST)
-        return kbot_logger.getPackageLogger("storage")
+        return kbot_logger.get_package_logger("storage")
 
     def test_debug_valid_tags_record_with_package_name(
         self, kbot_logger: KbotLogger, package_logger
@@ -473,10 +473,10 @@ class TestKbotPackageLogger:
     def test_onetime_valid_logs_first_occurrence_only(
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
-        """Test oneTime logs a given message only once, counting repeats."""
-        package_logger.oneTime("warning", "Deprecated call %s", "foo")
-        package_logger.oneTime("warning", "Deprecated call %s", "foo")
-        package_logger.oneTime("warning", "Deprecated call %s", "foo")
+        """Test one_time logs a given message only once, counting repeats."""
+        package_logger.one_time("warning", "Deprecated call %s", "foo")
+        package_logger.one_time("warning", "Deprecated call %s", "foo")
+        package_logger.one_time("warning", "Deprecated call %s", "foo")
 
         assert compare("eq", len(_records(kbot_logger)), 1)
         message_hash = hash("Deprecated call foo")
@@ -485,9 +485,9 @@ class TestKbotPackageLogger:
     def test_onetime_valid_distinct_messages_each_log_once(
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
-        """Test oneTime treats distinct expanded messages independently."""
-        package_logger.oneTime("warning", "message one")
-        package_logger.oneTime("warning", "message two")
+        """Test one_time treats distinct expanded messages independently."""
+        package_logger.one_time("warning", "message one")
+        package_logger.one_time("warning", "message two")
 
         assert compare("eq", len(_records(kbot_logger)), 2)
 
@@ -587,11 +587,11 @@ class TestModuleLevelSingleton:
         assert compare("eq", mylogger.logger, logger)
 
     def test_updatelevel_valid_updates_logger_and_handlers(self, restore_kbot_singleton) -> None:
-        """Test UpdateLevel updates both the logger and every attached handler."""
+        """Test update_level updates both the logger and every attached handler."""
         handler = _RecordingHandler()
         logger.addHandler(handler)
 
-        UpdateLevel(3)  # DEBUG
+        update_level(3)  # DEBUG
 
         assert compare("eq", handler.level, logging.DEBUG)
         assert compare("eq", logger.isEnabledFor(logging.DEBUG), True)
@@ -600,7 +600,7 @@ class TestModuleLevelSingleton:
         self, restore_kbot_singleton
     ) -> None:
         """Test 'add' registers a per-package level override."""
-        UpdateSupportedPackages("add probe_pkg 5")
+        update_supported_packages("add probe_pkg 5")
 
         assert compare("eq", logger.isEnabledFor(FINEST, "probe_pkg"), True)
 
@@ -608,9 +608,9 @@ class TestModuleLevelSingleton:
         self, restore_kbot_singleton
     ) -> None:
         """Test 'rem' removes a previously registered package override."""
-        UpdateSupportedPackages("add probe_pkg 5")
+        update_supported_packages("add probe_pkg 5")
 
-        UpdateSupportedPackages("rem probe_pkg")
+        update_supported_packages("rem probe_pkg")
 
         assert compare("eq", logger.isEnabledFor(FINEST, "probe_pkg"), False)
 
@@ -620,7 +620,7 @@ class TestModuleLevelSingleton:
         """Test 'add' without a level argument does not register anything."""
         before = dict(logger._KbotLogger__filters)  # noqa: SLF001
 
-        UpdateSupportedPackages("add probe_pkg_only_name")
+        update_supported_packages("add probe_pkg_only_name")
 
         assert compare("eq", dict(logger._KbotLogger__filters), before)  # noqa: SLF001
 
@@ -630,7 +630,7 @@ class TestModuleLevelSingleton:
         """Test 'add' with a non-numeric level does not register anything."""
         before = dict(logger._KbotLogger__filters)  # noqa: SLF001
 
-        UpdateSupportedPackages("add probe_pkg notanumber")
+        update_supported_packages("add probe_pkg notanumber")
 
         assert compare("eq", dict(logger._KbotLogger__filters), before)  # noqa: SLF001
 
@@ -638,14 +638,14 @@ class TestModuleLevelSingleton:
         self, restore_kbot_singleton
     ) -> None:
         """Test an unrecognized command is handled without raising."""
-        assert compare("eq", UpdateSupportedPackages("unknown command"), None)
+        assert compare("eq", update_supported_packages("unknown command"), None)
 
     def test_updatesupportedpackages_invalid_swallows_addpackage_errors(
         self, restore_kbot_singleton, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Test a failure in addPackage/remPackage is caught and does not propagate."""
+        """Test a failure in add_package/rem_package is caught and does not propagate."""
         monkeypatch.setattr(
-            logger, "addPackage", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom"))
+            logger, "add_package", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom"))
         )
 
-        assert compare("eq", UpdateSupportedPackages("add probe_pkg 3"), None)
+        assert compare("eq", update_supported_packages("add probe_pkg 3"), None)
