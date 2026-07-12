@@ -1,7 +1,6 @@
 """WorkareaInstallable class for managing workarea installations."""
 
 import getpass
-import logging
 import os
 import shutil
 from collections.abc import Iterable
@@ -14,6 +13,7 @@ from typing_extensions import override
 from installable.base import InstallableBase
 from installable.product_collection import ProductCollection
 from installable.updater.factory import UpdaterName, add_updater
+from utils.Logger import logger
 from workarea.utils import (
     apply_rules,
     cleanup_unused_tests_dir,
@@ -25,7 +25,7 @@ from workarea.utils import (
 )
 from workarea.workarea import Workarea
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installable")
 
 
 class WorkareaInstallable(BaseModel, InstallableBase):

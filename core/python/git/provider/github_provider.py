@@ -5,15 +5,15 @@ operations specific to GitHub repositories. It supports cloning repositories
 from GitHub using dulwich.
 """
 
-import logging
 from pathlib import Path
 
 from typing_extensions import override
 
 from auth.base import HttpAuthBase
 from git.provider.git_mixin import GitMixin
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("git.provider")
 
 
 class GithubProvider(GitMixin):
@@ -46,7 +46,7 @@ class GithubProvider(GitMixin):
                 If None, operations will use public access only.
 
         """
-        logger.debug("Initializing GitHub provider with account name: %s", account_name)
+        log.debug("Initializing GitHub provider with account name: %s", account_name)
         super().__init__()
         self.account_name = account_name
         self._auth = auth

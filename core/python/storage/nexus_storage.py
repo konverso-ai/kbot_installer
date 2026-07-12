@@ -1,7 +1,6 @@
 """Nexus storage backend for repository file operations."""
 
 import asyncio
-import logging
 import tempfile
 from collections.abc import Coroutine, Iterator
 from pathlib import Path
@@ -12,8 +11,9 @@ from typing_extensions import override
 from auth.base import HttpAuthBase
 from service.nexus_service import NexusService
 from storage.base import StorageBase
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("storage")
 
 
 class NexusStorage(StorageBase):
@@ -100,7 +100,7 @@ class NexusStorage(StorageBase):
             )
             return Path(tmp_path).read_text(encoding=encoding)
         except Exception:
-            logger.exception("Failed to retrieve object '%s' from Nexus", key)
+            log.exception("Failed to retrieve object '%s' from Nexus", key)
             return None
         finally:
             Path(tmp_path).unlink(missing_ok=True)

@@ -1,4 +1,4 @@
-"""Manual scratch script for exercising workarea install/update flows."""
+"""Manual scratch script for exercising workarea install/update flows."""  # noqa: INP001
 
 from installable.updater.factory import UpdaterName
 

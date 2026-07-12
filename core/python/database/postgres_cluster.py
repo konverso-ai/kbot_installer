@@ -6,12 +6,12 @@ It is kept separate from `database.internal_db`, which only ever talks SQL
 over a live connection via psycopg2.
 """
 
-import logging
 import subprocess
 
 from database.base import InternalDbSettings
+from utils.Logger import logger
 
-log = logging.getLogger(__name__)
+log = logger.getPackageLogger("database")
 
 
 class PostgresClusterError(RuntimeError):

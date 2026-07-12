@@ -1227,7 +1227,7 @@ def test_safe_pull_valid_logs_when_stash_restore_fails(
             "_apply_stash",
             side_effect=VersionerError("restore failed"),
         ),
-        patch("git.versioner.dulwich_versioner.logger.warning") as mock_warning,
+        patch("git.versioner.dulwich_versioner.log.warning") as mock_warning,
     ):
         with pytest.raises(VersionerError, match="pull failed"):
             bare_versioner.safe_pull("/test/path", "main")

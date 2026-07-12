@@ -1,7 +1,6 @@
 """Utility functions for kbot-installer."""
 
 import copy
-import logging
 import os
 import tarfile
 import tempfile
@@ -14,8 +13,9 @@ from threading import Event, Thread
 from typing import IO, Literal, cast
 
 from auth.base import HttpAuthBase
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installer_support")
 
 
 def _case_insensitive_path_exists(path: Path) -> bool:
@@ -47,7 +47,7 @@ def _rewrite_absolute_symlink(member: tarfile.TarInfo) -> tarfile.TarInfo:
     if new_linkname == member.linkname:
         return member
 
-    logger.debug(
+    log.debug(
         "Rewriting absolute symlink for %s: %s -> %s",
         member.name,
         member.linkname,
@@ -64,7 +64,7 @@ def extract_tar_member(
     """Extract one tar member, skipping case-insensitive duplicates."""
     destination = target_dir / member.name
     if _case_insensitive_path_exists(destination):
-        logger.debug(
+        log.debug(
             "Skipping tar member because destination already exists: %s",
             member.name,
         )
@@ -76,7 +76,7 @@ def extract_tar_member(
         tar.extract(member_to_extract, path=target_dir, filter="data")
     except FileExistsError:
         if _case_insensitive_path_exists(destination):
-            logger.debug(
+            log.debug(
                 "Skipping tar member after FileExistsError (case conflict): %s",
                 member.name,
             )
@@ -192,7 +192,7 @@ def optimized_download_and_extract(
             # Clean up temp file
             Path(temp_file.name).unlink()
 
-    logger.info(
+    log.info(
         "Successfully downloaded and extracted from %s to %s",
         url,
         target_dir,
@@ -249,7 +249,7 @@ def optimized_download_and_extract_bis(
     download_thread.join()
     buffer.close()
 
-    logger.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
+    log.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
 
 
 def calculate_relative_path(src: Path, dst: Path) -> Path:
@@ -401,7 +401,7 @@ def optimized_download_and_extract_ter(  # noqa: C901
         # Wait for download to complete
         download_thread.join(timeout=10.0)
         if download_thread.is_alive():
-            logger.warning("Download thread did not finish within timeout")
+            log.warning("Download thread did not finish within timeout")
 
         if download_error:
             raise download_error
@@ -412,7 +412,7 @@ def optimized_download_and_extract_ter(  # noqa: C901
             with suppress(Exception):
                 data_queue.get_nowait()
 
-    logger.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
+    log.info("Successfully downloaded and extracted from %s to %s", url, target_dir)
 
 
 def needs_update(dest_path: Path, source_path: Path) -> bool:
@@ -487,12 +487,12 @@ def _cleanup_orphaned_symlinks(dest: Path) -> None:
             # Remove if target doesn't exist
             if not target.exists():
                 symlink.unlink()
-                logger.debug("Removed orphaned symlink: %s", symlink)
+                log.debug("Removed orphaned symlink: %s", symlink)
         except (OSError, ValueError):
             # Broken symlink or error reading it - remove it
             try:
                 symlink.unlink()
-                logger.debug("Removed broken symlink: %s", symlink)
+                log.debug("Removed broken symlink: %s", symlink)
             except OSError:
                 pass
 

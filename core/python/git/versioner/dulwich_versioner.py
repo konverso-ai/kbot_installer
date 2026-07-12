@@ -4,7 +4,6 @@ This module implements the DulwichVersioner class that handles full git
 operations using Dulwich for any git repository.
 """
 
-import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -21,8 +20,9 @@ from auth.base import HttpAuthBase, RemoteKwargs
 from git.versioner.author import Author
 from git.versioner.base import VersionerError
 from git.versioner.str_repr_mixin import StrReprMixin
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("git.versioner")
 
 DEFAULT_AUTHOR = Author(name="Git Versioner", email="versioner@example.com")
 _LOCAL_BRANCH_PREFIX = b"refs/heads/"
@@ -699,7 +699,7 @@ class DulwichVersioner(StrReprMixin):
                     try:
                         self._apply_stash(repo)
                     except Exception as restore_error:
-                        logger.warning(
+                        log.warning(
                             "Failed to restore stash after pull failure: %s",
                             restore_error,
                         )
@@ -748,7 +748,7 @@ class DulwichVersioner(StrReprMixin):
                 remote_kwargs = self._dulwich_remote_kwargs()
                 porcelain.ls_remote(repository_url, **remote_kwargs)
         except Exception:
-            logger.debug("Repository does not exist or is not accessible")
+            log.debug("Repository does not exist or is not accessible")
             return False
         else:
             return True

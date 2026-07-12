@@ -18,6 +18,7 @@ exclude = [
     "core/python/utils/deps.py",
     "core/python/utils/setup_workarea.py",
     "core/python/utils/bucket_storage",
+    "core/python/utils/work_in_progress.py",
     "gitpassword.py",
     ".git",
     ".mypy_cache",

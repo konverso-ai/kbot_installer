@@ -7,7 +7,6 @@ import configparser
 import contextlib
 import fnmatch
 import json
-import logging
 import os
 import shutil
 import site
@@ -27,10 +26,11 @@ from installable.base import InstallableBase
 from installable.factory import create_installable
 from installable.product_collection import ProductCollection
 from installer_support.installer_utils import ensure_directory, version_to_branch
+from utils.Logger import logger
 from utils.product import Product
 from utils.version import Version
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installable")
 
 # Type alias for product configuration (INI-style: section -> option -> value)
 ProductConfig = dict[str, dict[str, str]]
@@ -290,7 +290,7 @@ class ProductInstallable(BaseModel, InstallableBase):
         branch = self.branch
 
         if not dependencies:
-            logger.warning(
+            log.warning(
                 "Downloading %s (branch: %s) to %s",
                 self.product.name,
                 branch,
@@ -387,7 +387,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             product.branch_used = product.provider.get_branch()
         except Exception:
             # Clone failed - selector_provider already tried all fallback branches from config
-            logger.exception("Failed to download %s", product.product.name)
+            log.exception("Failed to download %s", product.product.name)
             # Mark as processed even if clone failed to avoid infinite loop
             processed.add(product.product.name)
             # Continue with other dependencies even if one fails
@@ -1048,14 +1048,14 @@ class ProductInstallable(BaseModel, InstallableBase):
         try:
             pyproject_file = product.pyproject_path
         except FileNotFoundError:
-            logger.warning("Product %s has no pyproject.toml", product.product.name)
+            log.warning("Product %s has no pyproject.toml", product.product.name)
             return
 
         try:
             with pyproject_file.open(encoding="utf-8") as f:
                 pyproject_data = tomlkit.load(f)
         except (OSError, TOMLKitError):
-            logger.warning(
+            log.warning(
                 "Failed to load pyproject.toml for product %s", product.product.name
             )
             return
@@ -1073,13 +1073,13 @@ class ProductInstallable(BaseModel, InstallableBase):
         link_external_config = link_section.get("external", {})
 
         if init_config:
-            logger.warning(
+            log.warning(
                 "Processing init section for product %s", product.product.name
             )
             self._handle_work_init(workarea_root, init_config, processed)
 
         if copy_config and product.dirname is not None:
-            logger.warning(
+            log.warning(
                 "Processing copy section for product %s", product.product.name
             )
             self._handle_work_copy(
@@ -1087,7 +1087,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             )
 
         if link_config and product.dirname is not None:
-            logger.warning(
+            log.warning(
                 "Processing link section for product %s", product.product.name
             )
             self._handle_work_link(
@@ -1095,7 +1095,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             )
 
         if link_external_config:
-            logger.warning(
+            log.warning(
                 "Processing link.external section for product %s",
                 product.product.name,
             )
@@ -1124,7 +1124,7 @@ class ProductInstallable(BaseModel, InstallableBase):
             installer_path: Path where products are cloned. Required.
 
         """
-        logger.debug("Installing product %s to %s", self.product.name, path)
+        log.debug("Installing product %s to %s", self.product.name, path)
         ensure_directory(path)
 
         effective_installer_path = self._resolve_installer_path(path, installer_path)
@@ -1132,10 +1132,10 @@ class ProductInstallable(BaseModel, InstallableBase):
             effective_installer_path, dependencies=dependencies
         )
 
-        logger.debug("Loaded %d products from installer directory", len(products))
+        log.debug("Loaded %d products from installer directory", len(products))
 
         if not products:
-            logger.debug(
+            log.debug(
                 "Installer incomplete at %s, downloading products",
                 effective_installer_path,
             )
@@ -1150,15 +1150,15 @@ class ProductInstallable(BaseModel, InstallableBase):
             )
             raise FileNotFoundError(msg)
 
-        logger.warning(
+        log.warning(
             "Products to process: %s", [product.dirname for product in products]
         )
         processed: set[Path] = set()
 
         for product in products:
-            logger.warning("Processing product %s", product.product.name)
+            log.warning("Processing product %s", product.product.name)
             if not product.dirname:
-                logger.warning("Product %s has no dirname", product.product.name)
+                log.warning("Product %s has no dirname", product.product.name)
                 continue
 
             self._process_product_work_config(product, path, processed)

@@ -1,6 +1,5 @@
 """InstallerService for managing product installation."""
 
-import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,8 +21,9 @@ from installable.renderer import DependencyTreeRenderer
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory, version_to_branch
 from storage.base import StorageBackend, StorageBase
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installer_support")
 
 
 def _providers_config_with_storage_backend(
@@ -113,7 +113,7 @@ class InstallerService:
             ValueError: If installation fails.
 
         """
-        logger.info(
+        log.info(
             "Installing product '%s' version '%s' (dependencies: %s)",
             product_name,
             version,
@@ -124,15 +124,15 @@ class InstallerService:
         ensure_directory(self.installer_dir)
 
         # Load product definitions from repository (this will download the main product)
-        logger.info("Loading product definitions...")
+        log.info("Loading product definitions...")
         self._load_product_from_repository(product_name, version)
 
         # Install dependencies if requested
         if include_dependencies:
-            logger.info("Installing dependencies...")
+            log.info("Installing dependencies...")
             self._install_dependencies_recursively(product_name, version)
 
-        logger.info("Installation completed for product '%s'", product_name)
+        log.info("Installation completed for product '%s'", product_name)
 
     def download_bundle(
         self,
@@ -185,7 +185,7 @@ class InstallerService:
             Formatted string listing products.
 
         """
-        logger.info("Listing installed products (tree: %s)", as_tree)
+        log.info("Listing installed products (tree: %s)", as_tree)
 
         # Load products from installer directory
         product_collection = self._load_products_from_installer_directory()
@@ -237,7 +237,7 @@ class InstallerService:
             ValueError: If repair fails.
 
         """
-        logger.info("Repairing product '%s' (version: %s)", product_name, version)
+        log.info("Repairing product '%s' (version: %s)", product_name, version)
 
         # Load existing products to understand current state
         existing_products = self._load_products_from_installer_directory()
@@ -258,7 +258,7 @@ class InstallerService:
         # Remove extra products that shouldn't be there
         self._remove_extra_products(existing_products, target_product_names)
 
-        logger.info("Repair completed. Repaired products: %s", repaired_products)
+        log.info("Repair completed. Repaired products: %s", repaired_products)
         return repaired_products
 
     def _repair_products(
@@ -274,7 +274,7 @@ class InstallerService:
             )
 
             if needs_repair:
-                logger.info(
+                log.info(
                     "Repairing product '%s' (%s)", product.product.name, repair_reason
                 )
                 self._repair_single_product(product_dir, product, version or "master")
@@ -321,7 +321,7 @@ class InstallerService:
 
         for extra_product in extra_products:
             if extra_product != "kbot_installer":  # Don't remove installer itself
-                logger.info("Removing extra product: %s", extra_product)
+                log.info("Removing extra product: %s", extra_product)
                 extra_dir = self.installer_dir / extra_product
                 if extra_dir.exists():
                     shutil.rmtree(extra_dir)
@@ -353,7 +353,7 @@ class InstallerService:
 
     def _load_product_from_repository(self, product_name: str, version: str) -> None:
         """Load a single product from repository."""
-        logger.debug(
+        log.debug(
             "Loading product '%s' from repository (version: %s)", product_name, version
         )
 
@@ -365,7 +365,7 @@ class InstallerService:
         branch = version_to_branch(version)
 
         # Clone repository
-        logger.debug(
+        log.debug(
             "Cloning repository for product: %s (branch: %s)", product_name, branch
         )
         self.installation_table.begin_installation(product_name)
@@ -385,7 +385,7 @@ class InstallerService:
         self, product_name: str, version: str
     ) -> None:
         """Install all dependencies for a product recursively."""
-        logger.debug(
+        log.debug(
             "Installing dependencies for product '%s' (version: %s)",
             product_name,
             version,
@@ -394,16 +394,16 @@ class InstallerService:
         # Load the main product to get its dependencies
         main_product = self._get_product(product_name)
         if not main_product or not main_product.product.parent_names:
-            logger.debug("No dependencies to install for product '%s'", product_name)
+            log.debug("No dependencies to install for product '%s'", product_name)
             return
 
         # Install each dependency
         for dep_name in main_product.product.parent_names:
             if dep_name != "kbot_installer":  # Skip self-installation
-                logger.debug("Installing dependency: %s", dep_name)
+                log.debug("Installing dependency: %s", dep_name)
                 try:
                     if self._is_product_installed(dep_name):
-                        logger.info(
+                        log.info(
                             "Product '%s' already installed, skipping", dep_name
                         )
                         # Detect the provider that was used for this cached product
@@ -414,13 +414,13 @@ class InstallerService:
                             status="skipped",
                         )
                     else:
-                        logger.info("Installing product: %s", dep_name)
+                        log.info("Installing product: %s", dep_name)
                         self._load_product_from_repository(dep_name, version)
 
                     # Recursively install dependencies of this dependency
                     self._install_dependencies_recursively(dep_name, version)
                 except Exception as e:
-                    logger.warning("Failed to install dependency '%s': %s", dep_name, e)
+                    log.warning("Failed to install dependency '%s': %s", dep_name, e)
                     # Continue with other dependencies
                     continue
 
@@ -456,7 +456,7 @@ class InstallerService:
                 try:
                     products.append(self._get_product(dep_name))
                 except (ValueError, Exception) as e:
-                    logger.warning(
+                    log.warning(
                         "Dependency '%s' not found or invalid: %s", dep_name, e
                     )
                     continue
@@ -465,7 +465,7 @@ class InstallerService:
 
     def _load_products_from_installer_directory(self) -> ProductCollection | None:
         """Load products from the installer directory."""
-        logger.debug(
+        log.debug(
             "Loading products from installer directory: %s", self.installer_dir
         )
 
@@ -475,13 +475,13 @@ class InstallerService:
             )
             if product_collection:
                 products = product_collection.get_all_products()
-                logger.debug(
+                log.debug(
                     "Loaded %d products from installer directory", len(products)
                 )
             else:
                 return None
         except Exception as e:
-            logger.debug("Failed to load products from installer directory: %s", e)
+            log.debug("Failed to load products from installer directory: %s", e)
             return None
         return product_collection
 
@@ -512,7 +512,7 @@ class InstallerService:
             # and comes from trusted installer directory structure. No command injection risk.
             git_path = shutil.which("git")
             if not git_path:
-                logger.debug("git command not found in PATH")
+                log.debug("git command not found in PATH")
                 return False
 
             result = subprocess.run(  # noqa: S603 - git_path resolved via shutil.which(), args hardcoded, cwd validated
@@ -529,7 +529,7 @@ class InstallerService:
                 return current_branch == expected_branch
         except Exception as e:
             error_msg = f"Failed to check version for product {product_name}: {e}"
-            logger.debug(error_msg)
+            log.debug(error_msg)
 
         return False
 
@@ -563,7 +563,7 @@ class InstallerService:
             # Default fallback
 
         except Exception as e:
-            logger.debug(
+            log.debug(
                 "Failed to detect provider for product %s: %s", product_name, e
             )
             return "unknown"
@@ -625,7 +625,7 @@ class InstallerService:
         self, product: ProductInstallable, version: str
     ) -> None:
         """Install a single product."""
-        logger.debug(
+        log.debug(
             "Installing single product: %s (version: %s)",
             product.product.name,
             version,
@@ -633,7 +633,7 @@ class InstallerService:
 
         # Skip self-installation
         if product.product.name == "kbot_installer":
-            logger.info("Skipping self-installation of kbot_installer")
+            log.info("Skipping self-installation of kbot_installer")
             self.installation_table.complete_installation(
                 product_name=product.product.name,
                 provider_name="self",
@@ -650,7 +650,7 @@ class InstallerService:
         # Remove existing directory to ensure fresh installation
         if product_dir.exists():
             shutil.rmtree(product_dir)
-            logger.debug(
+            log.debug(
                 "Removed existing directory for product: %s", product.product.name
             )
 
@@ -658,7 +658,7 @@ class InstallerService:
         ensure_directory(product_dir)
 
         # Clone repository
-        logger.debug(
+        log.debug(
             "Cloning %s (branch: %s) to %s",
             product.product.name,
             branch,
@@ -676,4 +676,4 @@ class InstallerService:
             status="success",
         )
 
-        logger.info("Successfully installed product: %s", product.product.name)
+        log.info("Successfully installed product: %s", product.product.name)

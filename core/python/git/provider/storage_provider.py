@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,8 +13,9 @@ from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
 from storage.base import StorageBase
 from storage.factory import create_bucket_storage
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("git.provider")
 
 
 class StorageProvider(ProviderBase):
@@ -144,7 +144,7 @@ class StorageProvider(ProviderBase):
                 return bool(cast("Any", self._storage).exists(key))
             return self._storage.get(key) is not None
         except Exception:
-            logger.exception(
+            log.exception(
                 "Error checking if repository exists on %s storage", self._backend
             )
             return False
@@ -162,6 +162,6 @@ class StorageProvider(ProviderBase):
     def _log(self, message: str, *args: object) -> None:
         """Log an informational message, respecting quiet mode."""
         if self._quiet:
-            logger.debug(message, *args)
+            log.debug(message, *args)
         else:
-            logger.info(message, *args)
+            log.info(message, *args)

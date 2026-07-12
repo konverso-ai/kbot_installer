@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 import shutil
 from pathlib import Path
 
 from installer_support.installation_table import InstallationTable
 from storage.base import StorageBase
+from utils.Logger import logger
 from utils.product import Product
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installable")
 
 
 class StoragePinnedProductInstallable:
@@ -74,7 +74,7 @@ class StoragePinnedProductInstallable:
             if product_dir.exists():
                 shutil.rmtree(product_dir)
 
-            logger.info(
+            log.info(
                 "Downloading product '%s' from storage (key: %s)",
                 self.product.name,
                 key,

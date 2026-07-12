@@ -359,19 +359,19 @@ class TestCredentialManager:
         result = manager.get_missing_credentials_info("unknown")
         assert result == ["Unknown provider: unknown"]
 
-    @patch("git.provider.credential_manager.logger")
-    def test_get_auth_for_provider_unknown_provider_warning(self, mock_logger) -> None:
+    @patch("git.provider.credential_manager.log")
+    def test_get_auth_for_provider_unknown_provider_warning(self, mock_log) -> None:
         """Test get_auth_for_provider logs warning for unknown provider."""
         manager = CredentialManager()
 
         result = manager.get_auth_for_provider("unknown")
 
         assert result is None
-        mock_logger.warning.assert_called_with("Unknown provider: %s", "unknown")
+        mock_log.warning.assert_called_with("Unknown provider: %s", "unknown")
 
-    @patch("git.provider.credential_manager.logger")
+    @patch("git.provider.credential_manager.log")
     def test_get_auth_for_provider_unknown_provider_warning_second_call(
-        self, mock_logger
+        self, mock_log
     ) -> None:
         """Test get_auth_for_provider logs warning for unknown provider in _create_auth_object."""
         manager = CredentialManager()
@@ -385,7 +385,7 @@ class TestCredentialManager:
                 result = manager.get_auth_for_provider("unknown")
 
         assert result is None
-        mock_logger.warning.assert_called_with("Unknown provider: %s", "unknown")
+        mock_log.warning.assert_called_with("Unknown provider: %s", "unknown")
 
     def test_docstring_contains_expected_content(self) -> None:
         """Test that the class docstring contains expected content."""

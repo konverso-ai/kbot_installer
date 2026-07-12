@@ -2,7 +2,7 @@
 
 import asyncio
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -178,7 +178,7 @@ class AsyncAPIClient:
 
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def fetch_with_semaphore(coro):
+        async def fetch_with_semaphore(coro: Callable[[], object]) -> object:
             async with semaphore:
                 return await coro
 

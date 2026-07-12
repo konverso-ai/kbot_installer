@@ -3,10 +3,11 @@
 This module provides utilities for downloading and extracting tar.gz files.
 """
 
-import logging
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from utils.Logger import logger
+
+log = logger.getPackageLogger("git.provider")
 
 
 @dataclass

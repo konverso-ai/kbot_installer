@@ -1,6 +1,5 @@
 """Azure Blob Storage implementation of bucket storage."""
 
-import logging
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -15,8 +14,9 @@ from backend.base import BackendBase
 from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
+from utils.Logger import logger
 
-log = logging.getLogger(__name__)
+log = logger.getPackageLogger("storage")
 
 
 class AzureStorage(StorageBase):
@@ -107,8 +107,8 @@ class AzureStorage(StorageBase):
             content = value.encode(encoding) if isinstance(value, str) else value
             container_client.upload_blob(name=key, data=content, overwrite=True)
             log.debug("Object '%s' uploaded successfully to Azure Blob Storage.", key)
-        except Exception as e:
-            log.error("Upload failed for '%s': %s", key, e, exc_info=True)
+        except Exception:
+            log.exception("Upload failed for '%s'", key)
 
     @override
     def get(self, key: str, encoding: str = "utf-8") -> str | None:
@@ -132,13 +132,11 @@ class AzureStorage(StorageBase):
             return data.decode(encoding)
         except ResourceNotFoundError:
             log.error("Path %s was not found in Bucket storage", key)
-        except Exception as e:
-            log.error(
-                "Retrieval failed for key='%s'; encoding=%s: %s",
+        except Exception:
+            log.exception(
+                "Retrieval failed for key='%s'; encoding=%s",
                 key,
                 encoding,
-                e,
-                exc_info=True,
             )
         return None
 
@@ -331,19 +329,15 @@ class AzureStorage(StorageBase):
                 time.time() - start_time,
             )
         except ClientAuthenticationError as e:
-            log.error(
-                "Authentication failed. Check the SAS token and Authorization header. Error: %s",
-                e,
-                exc_info=True,
+            log.exception(
+                "Authentication failed. Check the SAS token and Authorization header."
             )
-            raise RuntimeError(
+            msg = (
                 "Authentication failed. Ensure the SAS token and Authorization "
                 "header are correct."
-            ) from e
-        except Exception as e:
-            log.error(
-                "Unexpected error during authorization check. Error: %s",
-                e,
-                exc_info=True,
             )
-            raise RuntimeError("Unexpected error during authorization check") from e
+            raise RuntimeError(msg) from e
+        except Exception as e:
+            msg_0 = "Unexpected error during authorization check"
+            log.exception(msg_0)
+            raise RuntimeError(msg_0) from e

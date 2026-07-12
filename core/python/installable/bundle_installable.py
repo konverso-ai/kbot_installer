@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing_extensions import Self
 
 from installable.storage_pinned_product import StoragePinnedProductInstallable
+from installer_support.installation_table import InstallationTable
 from installer_support.installer_utils import ensure_directory
 from storage.base import StorageBase
 from utils.bundle import Bundle
+from utils.Logger import logger
 from utils.product import Product
 
-if TYPE_CHECKING:
-    from installer_support.installation_table import InstallationTable
-
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("installable")
 
 
 class BundleInstallable(BaseModel):
@@ -133,7 +130,7 @@ class BundleInstallable(BaseModel):
         """
         bundle = self.bundle
         assert bundle is not None
-        logger.info(
+        log.info(
             "Installing bundle '%s' version '%s' from product '%s' (dependencies: %s)",
             self.bundle_name or bundle.name,
             self.bundle_version or bundle.version.to_str(),
@@ -147,7 +144,7 @@ class BundleInstallable(BaseModel):
             include_dependencies=dependencies,
         )
 
-        logger.info(
+        log.info(
             "Bundle installation completed for product '%s'",
             self.top_product,
         )
@@ -171,7 +168,7 @@ class BundleInstallable(BaseModel):
         for key in candidate_keys:
             content = storage.get(key)
             if content:
-                logger.info("Loaded bundle descriptor from storage key '%s'", key)
+                log.info("Loaded bundle descriptor from storage key '%s'", key)
                 return Bundle.from_json(content)
 
         msg = (

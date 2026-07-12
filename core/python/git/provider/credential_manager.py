@@ -6,8 +6,6 @@ a clean interface to check credential availability and create authentication
 objects without hardcoding credentials in the code.
 """
 
-import logging
-
 from auth.base import HttpAuthBase
 from auth.factory import create_auth
 from git.provider.config import (
@@ -15,8 +13,9 @@ from git.provider.config import (
     ProviderConfig,
     ProvidersConfig,
 )
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("git.provider")
 
 
 class CredentialManager:
@@ -52,19 +51,19 @@ class CredentialManager:
         """
         credentials = self.config.get_credentials(provider_name)
         if credentials is None:
-            logger.warning("Unknown provider: %s", provider_name)
+            log.warning("Unknown provider: %s", provider_name)
             return False
 
         missing_vars = credentials.missing_env_vars()
         if missing_vars:
-            logger.debug(
+            log.debug(
                 "Missing environment variables for %s: %s",
                 provider_name,
                 missing_vars,
             )
             return False
 
-        logger.debug("All is good for %s", provider_name)
+        log.debug("All is good for %s", provider_name)
         return True
 
     def _create_auth_object(
@@ -94,14 +93,14 @@ class CredentialManager:
             return create_auth(provider_config.auth_type, **auth_kwargs)
 
         except ImportError as e:
-            logger.error(  # noqa: TRY400
+            log.error(  # noqa: TRY400
                 "Failed to import authentication module for auth_type '%s': %s",
                 provider_config.auth_type,
                 type(e).__name__,
             )
             return None
         except Exception as e:
-            logger.error(  # noqa: TRY400
+            log.error(  # noqa: TRY400
                 "Failed to create authentication object for auth_type '%s': %s",
                 provider_config.auth_type,
                 type(e).__name__,
@@ -123,7 +122,7 @@ class CredentialManager:
 
         provider_config = self.config.get_provider_config(provider_name)
         if not provider_config:
-            logger.warning("Unknown provider: %s", provider_name)
+            log.warning("Unknown provider: %s", provider_name)
             return None
 
         return self._create_auth_object(provider_config, provider_name)

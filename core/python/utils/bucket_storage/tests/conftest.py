@@ -75,7 +75,7 @@ def _install_import_stubs():
 
     _install_module(
         "azure.storage.blob",
-        {"BlobServiceClient": MagicMock(), "BlobPrefix": _BlobPrefix},
+        {"BlobServiceClient": MagicMock(), "BlobPrefix": _BlobPrefix, "ContainerClient": MagicMock()},
     )
 
 

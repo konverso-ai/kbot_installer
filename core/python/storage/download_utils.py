@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import shutil
 import subprocess
 import tarfile
@@ -11,8 +10,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from installer_support.installer_utils import extract_tar_member
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("storage")
 
 
 def extract_tar_gz_archive(archive_path: Path, target_dir: Path) -> None:
@@ -30,7 +30,7 @@ def extract_tar_gz_archive(archive_path: Path, target_dir: Path) -> None:
             return
 
         details = (result.stderr or result.stdout or "").strip()
-        logger.warning(
+        log.warning(
             "System tar extraction failed (exit %s), falling back to Python: %s",
             result.returncode,
             details,

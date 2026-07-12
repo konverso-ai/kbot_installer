@@ -5,7 +5,6 @@ the appropriate provider based on repository availability. It tries multiple
 providers in sequence until it finds one that has the repository.
 """
 
-import logging
 import re
 from pathlib import Path
 
@@ -21,8 +20,9 @@ from git.provider.errors import ProviderError
 from git.provider.factory import create_provider
 from git.provider.git_mixin import GitMixin
 from installer_support.env_loader import format_missing_env_vars_message
+from utils.Logger import logger
 
-logger = logging.getLogger(__name__)
+log = logger.getPackageLogger("git.provider")
 
 # Constants
 MAX_CAUSE_LENGTH = 50
@@ -80,16 +80,16 @@ class SelectorProvider(ProviderBase):
             ProviderBase | None: The created provider instance with credentials, or None if credentials are missing.
 
         """
-        logger.debug("Creating provider '%s' with credentials", provider_name)
+        log.debug("Creating provider '%s' with credentials", provider_name)
 
         # Get provider configuration
-        logger.debug("Getting provider configuration for '%s'", provider_name)
+        log.debug("Getting provider configuration for '%s'", provider_name)
         provider_config = self.config.get_provider_config(provider_name)
         if not provider_config:
-            logger.warning("No configuration found for provider: %s", provider_name)
+            log.warning("No configuration found for provider: %s", provider_name)
             return None
 
-        logger.debug(
+        log.debug(
             "Provider configuration found for '%s': %s", provider_name, provider_config
         )
 
@@ -99,7 +99,7 @@ class SelectorProvider(ProviderBase):
             "github",
             "bitbucket",
         ] and not self.credential_manager.has_credentials(provider_name):
-            logger.debug(
+            log.debug(
                 "Credentials required for provider '%s' but not available",
                 provider_name,
             )
@@ -113,25 +113,25 @@ class SelectorProvider(ProviderBase):
 
         # Add authentication if available
         auth = self.credential_manager.get_auth_for_provider(provider_name)
-        logger.debug("Authentication found for '%s': %s", provider_name, auth)
+        log.debug("Authentication found for '%s': %s", provider_name, auth)
         if auth:
             params["auth"] = auth
-            logger.debug(
+            log.debug(
                 "Authentication added to parameters for '%s': %s", provider_name, params
             )
 
         try:
-            logger.debug(
+            log.debug(
                 "Creating provider '%s' with parameters: %s", provider_name, params
             )
             return create_provider(name=provider_name, **params)
         except ProviderError as e:
-            logger.exception(
+            log.exception(
                 "Failed to create provider '%s': %s", provider_name, type(e).__name__
             )
             return None
         except ValueError as e:
-            logger.error(  # noqa: TRY400
+            log.error(  # noqa: TRY400
                 "Failed to create provider '%s': %s",
                 provider_name,
                 e,
@@ -141,9 +141,9 @@ class SelectorProvider(ProviderBase):
             ) from e
         except Exception as e:
             # Log error without exposing sensitive information from stack trace
-            # Using logger.error() instead of logger.exception() to prevent
+            # Using log.error() instead of log.exception() to prevent
             # credential exposure in stack traces (security best practice)
-            logger.error(  # noqa: TRY400
+            log.error(  # noqa: TRY400
                 "Failed to create provider '%s': %s",
                 provider_name,
                 type(e).__name__,
@@ -401,7 +401,7 @@ class SelectorProvider(ProviderBase):
                 self.name = provider.get_name()
         except Exception as e:
             # Log but ignore errors when getting provider name
-            logger.debug("Failed to get provider name: %s", type(e).__name__)
+            log.debug("Failed to get provider name: %s", type(e).__name__)
 
     def _build_success_message(
         self, branch_to_try: str, requested_branch: str | None
@@ -443,7 +443,7 @@ class SelectorProvider(ProviderBase):
             self._is_branch_not_found_error(error)
             and branch_to_try != branches_to_try[-1]
         ):
-            logger.debug("Branch '%s' not found, trying fallback branch", branch_to_try)
+            log.debug("Branch '%s' not found, trying fallback branch", branch_to_try)
             return True
         return False
 
@@ -613,14 +613,14 @@ class SelectorProvider(ProviderBase):
         """
         if isinstance(error, ProviderError):
             cause = self._extract_clean_error_cause(str(error))
-            logger.debug(
+            log.debug(
                 "Provider '%s' failed with ProviderError: %s",
                 provider_name,
                 type(error).__name__,
             )
         else:
             cause = f"Unexpected error: {type(error).__name__}"
-            logger.debug(
+            log.debug(
                 "Provider '%s' failed with unexpected error: %s",
                 provider_name,
                 type(error).__name__,
@@ -653,7 +653,7 @@ class SelectorProvider(ProviderBase):
 
         results = []
         for provider_name in self.providers:
-            logger.debug(
+            log.debug(
                 "Attempting to clone repository '%s' with provider: %s",
                 repository_identifier,
                 provider_name,
@@ -673,7 +673,7 @@ class SelectorProvider(ProviderBase):
                         else "Provider not available"
                     )
                     results.append((provider_name, "❌ FAILED", cause))
-                    logger.debug(
+                    log.debug(
                         "Provider '%s' not available (missing credentials or provider doesn't exist)",
                         provider_name,
                     )
@@ -690,8 +690,8 @@ class SelectorProvider(ProviderBase):
                 # Store the branch that was successfully used
                 self.branch_used = branch_used
                 results.append((provider_name, "✅ SUCCESS", success_msg))
-                log = logger.debug if self.quiet else logger.info
-                log(
+                log_fn = log.debug if self.quiet else log.info
+                log_fn(
                     "✅ Successfully cloned repository '%s' using provider: %s (branch: %s)",
                     repository_identifier,
                     provider_name,
@@ -769,7 +769,7 @@ class SelectorProvider(ProviderBase):
         """
         for provider_name in self.providers:
             try:
-                logger.debug(
+                log.debug(
                     "Checking repository existence with provider: %s", provider_name
                 )
                 provider = self._create_provider_with_credentials(provider_name)
@@ -778,23 +778,23 @@ class SelectorProvider(ProviderBase):
 
                 exists = provider.check_remote_repository_exists(repository_url)
 
-                logger.debug(
+                log.debug(
                     "Repository exists with provider: %s: %s", provider_name, exists
                 )
 
                 if exists:
-                    logger.debug("Repository found with provider: %s", provider_name)
+                    log.debug("Repository found with provider: %s", provider_name)
                     return True
 
             except Exception as e:
                 # Log only exception type to avoid exposing sensitive information
-                logger.exception(
+                log.exception(
                     "Provider %s failed to check repository existence: %s",
                     provider_name,
                     type(e).__name__,
                 )
 
-        logger.debug("Repository not found with any provider")
+        log.debug("Repository not found with any provider")
         return False
 
     @override

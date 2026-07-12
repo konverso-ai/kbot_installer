@@ -1,6 +1,5 @@
 """Azure Blob Storage authentication and client management."""
 
-import logging
 from typing import Annotated, Any, Literal
 
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
@@ -9,8 +8,9 @@ from pydantic import ConfigDict, Field, PrivateAttr
 from typing_extensions import override
 
 from backend.base import BackendBase
+from utils.Logger import logger
 
-log = logging.getLogger(__name__)
+log = logger.getPackageLogger("backend")
 
 
 class AzureBackend(BackendBase):
