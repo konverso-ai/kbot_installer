@@ -16,7 +16,6 @@ def settings(tmp_path: Path) -> ExternalDbSettings:
         user="user",
         password="password",
         schema_path=tmp_path / "schema.sql",
-        pg_dir=tmp_path / "pg",
     )
 
 
