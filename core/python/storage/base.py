@@ -3,14 +3,16 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from enum import Enum
+from pathlib import Path
 
 
-class StorageBackend(Enum):
+class StorageBackendEnum(Enum):
     """Object storage backend."""
 
     NEXUS = "nexus"
     S3 = "s3"
     AZURE = "azure"
+    OCI = "oci"
 
 
 class StorageBase(ABC):
@@ -39,7 +41,7 @@ class StorageBase(ABC):
         """
 
     @abstractmethod
-    def download(self, key: str, local_file_path: str) -> None:
+    def download(self, key: str, local_file_path: Path | str) -> None:
         """Download a storageobject to a local file.
 
         Args:

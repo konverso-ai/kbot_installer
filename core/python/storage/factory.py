@@ -6,7 +6,7 @@ from storage.base import StorageBase
 from utils.factory.factory import factory_method
 
 
-def create_bucket_storage(name: str, **kwargs: object) -> StorageBase:
+def add_storage(name: str, **kwargs: object) -> StorageBase:
     """Create a bucket storage instance by name.
 
     Args:
