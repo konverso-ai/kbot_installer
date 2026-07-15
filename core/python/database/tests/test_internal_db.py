@@ -31,7 +31,7 @@ def db(settings: InternalDbSettings) -> InternalDb:
 
 @pytest.fixture
 def mock_conn() -> MagicMock:
-    with patch("database.internal_db.psycopg2.connect") as mock_connect:
+    with patch("database.internal_db.psycopg.connect") as mock_connect:
         conn = MagicMock()
         cur = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cur
@@ -123,7 +123,7 @@ class TestAdminConnect:
     def test_adminconnect_valid_connects_to_admin_database_by_default(
         self, db: InternalDb, settings: InternalDbSettings
     ) -> None:
-        with patch("database.internal_db.psycopg2.connect") as mock_connect:
+        with patch("database.internal_db.psycopg.connect") as mock_connect:
             db._admin_connect()
 
             mock_connect.assert_called_once_with(
@@ -138,7 +138,7 @@ class TestAdminConnect:
     def test_adminconnect_valid_connects_to_given_database_when_specified(
         self, db: InternalDb
     ) -> None:
-        with patch("database.internal_db.psycopg2.connect") as mock_connect:
+        with patch("database.internal_db.psycopg.connect") as mock_connect:
             db._admin_connect(database="other")
 
             assert compare("eq", mock_connect.call_args.kwargs["dbname"], "other")
@@ -177,7 +177,7 @@ class TestCreateDatabaseIfMissing:
     def test_createdatabaseifmissing_valid_connects_with_admin_credentials(
         self, db: InternalDb, settings: InternalDbSettings
     ) -> None:
-        with patch("database.internal_db.psycopg2.connect") as mock_connect:
+        with patch("database.internal_db.psycopg.connect") as mock_connect:
             conn = MagicMock()
             cur = MagicMock()
             cur.fetchone.return_value = (1,)

@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-import psycopg2
-import psycopg2.extensions
+import psycopg
 
 from database.base import DbSettings
 
@@ -12,18 +11,18 @@ SCHEMA_VERSION_TABLE = "__schema_version"
 
 def connect(
     settings: DbSettings, *, database: str | None = None
-) -> psycopg2.extensions.connection:
-    """Open a psycopg2 connection using the given settings.
+) -> psycopg.Connection:
+    """Open a psycopg connection using the given settings.
 
     Args:
         settings: Connection settings (host, port, credentials).
         database: Database name to connect to. If None, uses ``settings.database``.
 
     Returns:
-        An open psycopg2 connection.
+        An open psycopg connection.
 
     """
-    return psycopg2.connect(
+    return psycopg.connect(
         host=settings.host,
         port=settings.port,
         dbname=database or settings.database,
@@ -43,7 +42,9 @@ def execute_sql_file(settings: DbSettings, path: Path) -> None:
     sql = path.read_text(encoding="utf-8")
 
     with connect(settings) as conn, conn.cursor() as cur:
-        cur.execute(sql)
+        # SQL comes from a trusted schema file; pass it as bytes since the
+        # execute overloads only accept LiteralString, not a runtime str.
+        cur.execute(sql.encode("utf-8"))
 
 
 def ensure_version_table(settings: DbSettings) -> None:
@@ -118,7 +119,8 @@ def is_database_empty(settings: DbSettings) -> bool:
                     WHERE table_schema = 'public'
                 """
         )
-        return cur.fetchone()[0] == 0
+        row = cur.fetchone()
+        return row is not None and row[0] == 0
 
 
 def apply_schema(settings: DbSettings) -> None:

@@ -26,7 +26,7 @@ dependencies = [
     "tqdm",
     "xmltodict>=1.0.4",
     "tomlkit>=0.15.0",
-    "psycopg2>=2.9.12",
+    "psycopg[binary]",
     "drf-yasg>=1.21.15",
 ]
 
@@ -84,7 +84,6 @@ dev = [
     { include-group = "lint" },
     { include-group = "typecheck" },
     { include-group = "test" },
-    "psycopg2-binary",
 ]
 
 [tool.deptry]

@@ -1,8 +1,7 @@
 """Internal PostgreSQL database backend, bootstrapping its own cluster."""
 
-import psycopg2
-from psycopg2 import sql
-from psycopg2.extensions import connection
+import psycopg
+from psycopg import Connection, sql
 
 from database import postgres_cluster
 from database.base import InternalDbSettings
@@ -51,7 +50,7 @@ class InternalDb:
         if not is_database_empty(self.__settings):
             apply_missing_upgrades(self.__settings)
 
-    def _admin_connect(self, *, database: str | None = None) -> connection:
+    def _admin_connect(self, *, database: str | None = None) -> Connection:
         """Connect using admin credentials.
 
         Args:
@@ -59,12 +58,12 @@ class InternalDb:
                 admin database.
 
         Returns:
-            An autocommit-enabled psycopg2 connection.
+            An autocommit-enabled psycopg connection.
 
         """
         settings = self.__settings
 
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host=settings.host,
             port=settings.port,
             dbname=database or settings.admin_database,

@@ -35,7 +35,7 @@ def settings(tmp_path: Path) -> DbSettings:
 
 @pytest.fixture
 def mock_connect() -> MagicMock:
-    with patch("database.utils.psycopg2.connect") as mock:
+    with patch("database.utils.psycopg.connect") as mock:
         yield mock
 
 
@@ -93,7 +93,7 @@ class TestExecuteSqlFile:
         execute_sql_file(settings, sql_path)
 
         cur = mock_conn.cursor.return_value.__enter__.return_value
-        cur.execute.assert_called_once_with("SELECT 1;")
+        cur.execute.assert_called_once_with(b"SELECT 1;")
 
 
 class TestEnsureVersionTable:
@@ -184,7 +184,7 @@ class TestApplySchema:
 
         cur = mock_conn.cursor.return_value.__enter__.return_value
         executed_sql = [call.args[0] for call in cur.execute.call_args_list]
-        assert compare("in", "CREATE TABLE foo();", executed_sql)
+        assert compare("in", b"CREATE TABLE foo();", executed_sql)
         assert compare(
             "in",
             ("1.0.0",),

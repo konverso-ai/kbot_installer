@@ -3,7 +3,7 @@
 This module owns the OS-process side of running a local, internal PostgreSQL
 server: creating the data directory and starting/stopping the server binary.
 It is kept separate from `database.internal_db`, which only ever talks SQL
-over a live connection via psycopg2.
+over a live connection via psycopg.
 """
 
 import subprocess
