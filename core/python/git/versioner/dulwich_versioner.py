@@ -131,7 +131,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = "git executable not found; required for SSH repository clones"
             raise VersionerError(error_msg) from e
 
-        if result.returncode != 0:
+        if result.returncode:
             details = (result.stderr or result.stdout or "").strip()
             error_msg = f"Failed to clone repository from {repository_url}: {details}"
             raise VersionerError(error_msg)
@@ -157,7 +157,7 @@ class DulwichVersioner(StrReprMixin):
             )
             raise VersionerError(error_msg) from e
 
-        if result.returncode != 0:
+        if result.returncode:
             details = (result.stderr or result.stdout or "").strip()
             error_msg = (
                 f"Failed to list remote branches for {repository_url}: {details}"
@@ -252,12 +252,11 @@ class DulwichVersioner(StrReprMixin):
             raise VersionerError(error_msg) from e
 
     @override
-    def fetch(self, repository_path: str | Path, branch: str) -> None:
+    def fetch(self, repository_path: str | Path) -> None:
         """Fetch latest changes from the remote repository using Dulwich.
 
         Args:
             repository_path: Path to the local repository.
-            branch: Branch to fetch from.
 
         Raises:
             VersionerError: If the fetch operation fails.
@@ -783,5 +782,4 @@ class DulwichVersioner(StrReprMixin):
         except Exception:
             log.debug("Repository does not exist or is not accessible")
             return False
-        else:
-            return True
+        return True

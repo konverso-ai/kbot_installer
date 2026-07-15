@@ -23,19 +23,15 @@ class Comparable(Protocol):
 
     def __lt__(self, other: object) -> bool:
         """Return whether self is less than other."""
-        ...
 
     def __le__(self, other: object) -> bool:
         """Return whether self is less than or equal to other."""
-        ...
 
     def __gt__(self, other: object) -> bool:
         """Return whether self is greater than other."""
-        ...
 
     def __ge__(self, other: object) -> bool:
         """Return whether self is greater than or equal to other."""
-        ...
 
 
 C = TypeVar("C", bound=Comparable)

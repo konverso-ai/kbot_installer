@@ -32,19 +32,15 @@ class DatabaseBackend(Protocol):
 
     def prepare(self) -> None:
         """Prepare the backend for use, verifying it is reachable."""
-        ...
 
     def initialize(self) -> None:
         """Create the schema on a fresh, empty database."""
-        ...
 
     def upgrade(self) -> None:
         """Apply any pending schema upgrades to an existing database."""
-        ...
 
     def check_connection(self) -> None:
         """Verify that a connection to the database can be established."""
-        ...
 
 
 class InternalDbSettings(DbSettings):

@@ -59,7 +59,7 @@ def initdb(settings: InternalDbSettings) -> None:
         capture_output=True,
     )
 
-    if result.returncode != 0:
+    if result.returncode:
         msg = f"initdb failed: {result.stderr.decode(errors='replace')}"
         raise PostgresClusterError(msg)
 
@@ -85,7 +85,7 @@ def is_running(settings: InternalDbSettings) -> bool:
         check=False,
         capture_output=True,
     )
-    return result.returncode == 0
+    return not result.returncode
 
 
 def start(settings: InternalDbSettings) -> None:

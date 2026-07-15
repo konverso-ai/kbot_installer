@@ -59,6 +59,69 @@ and a handful of legacy scripts (`kbot.py`, `nexus.py`, `setup_workarea.py`, `gi
 
 ## Architecture
 
+### General overviw
+
+#### Storage implementations
+```mermaid
+classDiagram
+   Storage <|.. AzureBlobStorage
+   Storage <|.. NexusStorage
+   Storage <|.. OCIStorage
+   Storage <|.. S3Storage
+```
+
+#### Code Provider implementations
+```mermaid
+classDiagram
+   Provider <|.. GitHubProvider
+   Provider <|.. BitbucketProvider
+   Provider <|.. StorageProvider
+```
+
+#### Provider/Storage relationships
+```mermaid
+classDiagram
+   Provider --> Storage : uses
+   Provider --> Versioner : uses
+```
+
+#### Versioner implementations
+```mermaid
+classDiagram
+   Versioner <|.. DulwichVersioner
+   Versioner <|.. Pygit2Versioner
+```
+
+#### Database implementations
+```mermaid
+classDiagram
+   Database <|.. InternalDatabase
+   Database <|.. ExternalDatabase
+```
+
+#### Installable implementations
+```mermaid
+classDiagram
+   Installable <|.. Workarea
+   Installable <|.. Database
+```
+
+#### Downloadable implementations
+```mermaid
+classDiagram
+   Downloadable <|.. Product
+   Downloadable <|.. Bundle
+```
+
+```mermaid
+classDiagram
+   cli --> Downloadable
+   cli --> Installable
+   cli --> Updatable
+   cli --> Upgrable
+```
+
+
 ### Factory + naming-convention pattern (used pervasively)
 
 Nearly every extensible subsystem (`auth`, `backend`, `credentials`, `database`, `git/provider`,
@@ -159,6 +222,7 @@ def clone_and_checkout(
 
     Raises:
         ProviderError: If the clone operation fails.
+
     """
 ```
 
@@ -170,6 +234,7 @@ class Version:
         major: Major version number.
         minor: Minor version number.
         patch: Patch version number.
+
     """
 ```
 
@@ -179,3 +244,4 @@ class Version:
 - Blank line between summary and sections.
 - Section order: `Args` → `Returns` → `Raises` → `Yields` (when applicable).
 - Type hints live in the signature; docstrings describe meaning, not types (unless clarifying).
+- Blank line after last section.

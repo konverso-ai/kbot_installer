@@ -120,7 +120,7 @@ def is_database_empty(settings: DbSettings) -> bool:
                 """
         )
         row = cur.fetchone()
-        return row is not None and row[0] == 0
+        return row is not None and not row[0]
 
 
 def apply_schema(settings: DbSettings) -> None:

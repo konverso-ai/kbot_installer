@@ -654,9 +654,8 @@ class SelectorProvider(ProviderBase):
             if self._handle_clone_error(e, branch_to_try, branches_to_try):
                 return e
             raise
-        else:
-            msg = self._build_success_message(branch_to_try, requested_branch)
-            return branch_to_try, msg
+        msg = self._build_success_message(branch_to_try, requested_branch)
+        return branch_to_try, msg
 
     def _handle_provider_failure(
         self, provider_name: str, error: Exception, results: list[tuple[str, str, str]]

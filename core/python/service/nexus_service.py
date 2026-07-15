@@ -110,8 +110,7 @@ class NexusService:
                 await client.head(f"repository{repository_path}")
         except httpx.HTTPStatusError:
             return False
-        else:
-            return True
+        return True
 
     async def download_and_extract(
         self,

@@ -151,11 +151,11 @@ class DependencyGraph:
             rec_stack.remove(node)
             return False
 
-        for product in self.products:
-            if product.name not in visited and has_cycle(product.name):
-                return True
-
-        return False
+        return any(
+            product.name not in visited
+            and has_cycle(product.name)
+            for product in self.products
+        )
 
     def get_circular_dependencies(self) -> list[list[str]]:
         """Get all circular dependency chains.

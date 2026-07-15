@@ -11,6 +11,8 @@ ignore=
     examples.py,
     simple_examples.py,
     nexus.py
+ignore-paths =
+    .*/core/python/tools/tries\.py
 jobs=1
 load-plugins=
 unsafe-load-any-extension=no
@@ -44,7 +46,7 @@ ignored-classes=
 
 [FORMAT]
 # Déjà géré par Ruff
-max-line-length=88
+max-line-length=120
 
 [REPORTS]
 output-format=colorized

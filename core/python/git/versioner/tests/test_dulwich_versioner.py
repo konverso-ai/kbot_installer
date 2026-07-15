@@ -686,7 +686,7 @@ def test_fetch_valid_fetches_origin(bare_versioner: DulwichVersioner) -> None:
         patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
         patch("git.versioner.dulwich_versioner.porcelain.fetch") as mock_fetch,
     ):
-        bare_versioner.fetch("/test/path", "main")
+        bare_versioner.fetch("/test/path")
     mock_fetch.assert_called_once_with(mock_repo, b"origin")
 
 
@@ -712,7 +712,7 @@ def test_fetch_invalid_raises(
         ),
         pytest.raises(expected),
     ):
-        bare_versioner.fetch("/test/path", "main")
+        bare_versioner.fetch("/test/path")
 
 
 def test_pull_valid_merges_remote_branch(bare_versioner: DulwichVersioner) -> None:

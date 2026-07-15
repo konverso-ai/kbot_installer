@@ -44,6 +44,7 @@ install-dev:
 # Run ruff linter (check only, no fixes)
 lint:
 	uv run ruff check .
+	uv run pylint core/python
 
 # Run ruff linter with automatic fixes
 lint-fix:

@@ -142,6 +142,7 @@ exclude = [
     "core/python/git/provider/simple_examples.py",
     "core/python/utils/setup_workarea.py",
     "core/python/utils/kbot.py",
+    "core/python/interactivity/**",
 ]
 
 [tool.ty.rules]

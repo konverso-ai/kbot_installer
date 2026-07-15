@@ -6,7 +6,7 @@
 target-version = "py310"
 
 # Line length (used by both linter and formatter)
-line-length = 88
+line-length = 120
 
 # Cache configuration - use temporary directory
 cache-dir = "/tmp/ruff_cache"
@@ -20,6 +20,7 @@ exclude = [
     "core/python/utils/bucket_storage",
     "core/python/utils/work_in_progress.py",
     "core/python/tools/tries.py",
+    "core/python/interactivity",
     "core/python/tools/oci_bucket_diag.py",
     "gitpassword.py",
     "bundle.py",

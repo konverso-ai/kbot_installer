@@ -482,10 +482,7 @@ def _cleanup_orphaned_symlinks(dest: Path) -> None:
         try:
             target = symlink.readlink()
             # Resolve relative paths relative to symlink's parent
-            if not target.is_absolute():
-                target = (symlink.parent / target).resolve()
-            else:
-                target = target.resolve()
+            target = target.resolve() if target.is_absolute() else (symlink.parent / target).resolve()
 
             # Remove if target doesn't exist
             if not target.exists():
