@@ -20,6 +20,7 @@ exclude = [
     "core/python/utils/bucket_storage",
     "core/python/utils/work_in_progress.py",
     "core/python/tools/tries.py",
+    "core/python/tools/oci_bucket_diag.py",
     "gitpassword.py",
     "bundle.py",
     ".git",
