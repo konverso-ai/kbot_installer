@@ -18,7 +18,7 @@ WORK_DIR = os.path.join(DEV_DIR, "work")
 BIN_DIR = os.path.join(WORK_DIR, "bin")
 PYTHON_PATH = os.path.join(BIN_DIR, "python.sh")
 
-log = logger.getPackageLogger("report")
+log = logger.get_package_logger("bundle")
 
 LOG_FILE = "automatic_kbot_actions.log"
 LOG_FILENAME = os.path.join(DEV_DIR, LOG_FILE)

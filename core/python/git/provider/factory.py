@@ -6,7 +6,7 @@ from git.provider.base import ProviderBase
 from utils.factory.factory import factory_method
 
 
-def create_provider(name: str, **kwargs: object) -> ProviderBase:
+def add_provider(name: str, **kwargs: object) -> ProviderBase:
     """Create a provider instance by name.
 
     Args:

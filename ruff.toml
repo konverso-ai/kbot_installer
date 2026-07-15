@@ -120,6 +120,7 @@ known-first-party = [
     "config",
     "credentials",
     "database",
+    "downloadable",
     "errors",
     "git",
     "installable",

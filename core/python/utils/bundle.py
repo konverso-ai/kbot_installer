@@ -8,7 +8,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     field_serializer,
-    field_validator,
+    field_validator, computed_field,
 )
 
 from utils.product import Product
@@ -23,10 +23,10 @@ class Bundle(BaseModel):
 
     name: str
     version: Version
-    created_by: str
-    created_on: str
-    created_from: str
-    timestamp: str
+    created_by: str = ""
+    created_on: str = ""
+    created_from: str = ""
+    timestamp: str = ""
     versions: list[Product]
 
     @field_validator("version", mode="before")
@@ -43,6 +43,18 @@ class Bundle(BaseModel):
         return version.to_str()
 
     @classmethod
+    def file_name(cls, name: str, version: Version | None = None) -> Path:
+        """Return the file name for this bundle."""
+        if version is None:
+            return Path(f"{name}.json")
+        return Path(f"{name}-{version}.json")
+
+    @classmethod
+    def from_name(cls, name: str) -> "Bundle":
+        name, version = name.rsplit("-", 1)
+        return cls(name=name, version=Version.parse(version))
+
+    @classmethod
     def from_json(cls, json_content: str | dict[str, Any]) -> "Bundle":
         """Create Bundle from JSON content.
 
@@ -54,7 +66,9 @@ class Bundle(BaseModel):
 
         """
         data = (
-            json.loads(json_content) if isinstance(json_content, str) else json_content
+            json.loads(json_content)
+            if isinstance(json_content, str)
+            else json_content
         )
         return cls.model_validate(data)
 
@@ -75,12 +89,12 @@ class Bundle(BaseModel):
             "versions": [product.to_json() for product in self.versions],
         }
 
-    def export(self, mode: Literal["json"], path: str | Path) -> None:
+    def export(self, mode: Literal["json"], path: str | Path | None = None) -> None:
         """Export the bundle to a file in the given format.
 
         Args:
             mode: Serialization format (``json``).
-            path: Destination file path.
+            path: Destination file path. If ``None``, uses the default file name.
 
         Raises:
             AttributeError: If no ``to_{mode}`` method exists on the bundle.
@@ -89,4 +103,6 @@ class Bundle(BaseModel):
         content = getattr(self, f"to_{mode}")()
         if not isinstance(content, str):
             content = json.dumps(content, indent=4)
+        if path is None:
+            path = self.file_name(self.name, self.version)
         add_writer("text").write(content, path)

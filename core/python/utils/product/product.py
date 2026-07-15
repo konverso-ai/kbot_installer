@@ -126,6 +126,16 @@ class Product(BaseModel):
             return self.build.timestamp
         return None
 
+    @property
+    def file_path(self) -> Path:
+        """Return the file path for this product."""
+        if not self.build:
+            msg = "Build information is required to determine file path."
+            raise ValueError(msg)
+        return Path(
+            f"{self.build.branch}/{self.name}/{self.name}_{self.build.commit}.json"
+        )
+
     @classmethod
     def from_xml(cls, xml_content: str) -> "Product":
         """Create Product from XML content.

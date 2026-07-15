@@ -40,6 +40,17 @@
       "container_name": "",
       "credential_type": "default_azure",
       "env_vars": ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
+    },
+    "oci": {
+      "bucket_name": "",
+      "namespace_name": "",
+      "region": "eu-frankfurt-1",
+      "env_vars": [
+        "OCI_USER_OCID",
+        "OCI_TENANCY_OCID",
+        "OCI_FINGERPRINT",
+        "OCI_PRIVATE_KEY_PATH"
+      ]
     }
   }
 }

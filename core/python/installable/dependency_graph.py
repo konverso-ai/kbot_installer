@@ -10,7 +10,7 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from installable.product_installable import ProductInstallable
+    from utils.product.product import Product
 
 
 class DependencyGraph:
@@ -23,7 +23,7 @@ class DependencyGraph:
 
     """
 
-    def __init__(self, products: list[ProductInstallable]) -> None:
+    def __init__(self, products: list[Product]) -> None:
         """Initialize dependency graph with products.
 
         Args:
@@ -40,11 +40,11 @@ class DependencyGraph:
         # Build dependency relationships
 
         for product in self.products:
-            for parent_name in product.product.parent_names:
+            for parent_name in product.parent_names:
                 # Add dependency
-                self.dependencies[product.product.name].append(parent_name)
+                self.dependencies[product.name].append(parent_name)
                 # Add dependent relationship
-                self.dependents[parent_name].append(product.product.name)
+                self.dependents[parent_name].append(product.name)
 
     def get_dependencies(self, product_name: str) -> list[str]:
         """Get direct dependencies of a product.
@@ -152,7 +152,7 @@ class DependencyGraph:
             return False
 
         for product in self.products:
-            if product.product.name not in visited and has_cycle(product.product.name):
+            if product.name not in visited and has_cycle(product.name):
                 return True
 
         return False
@@ -190,8 +190,8 @@ class DependencyGraph:
             rec_stack.remove(node)
 
         for product in self.products:
-            if product.product.name not in visited:
-                find_cycles(product.product.name)
+            if product.name not in visited:
+                find_cycles(product.name)
 
         return cycles
 
@@ -212,9 +212,7 @@ class DependencyGraph:
         # Kahn's algorithm
         in_degree = defaultdict(int)
         for product in self.products:
-            in_degree[product.product.name] = len(
-                self.dependencies[product.product.name]
-            )
+            in_degree[product.name] = len(self.dependencies[product.name])
 
         queue = deque([name for name, degree in in_degree.items() if degree == 0])
         result = []
@@ -238,7 +236,7 @@ class DependencyGraph:
 
         """
         # Get all product names
-        all_products = {product.product.name for product in self.products}
+        all_products = {product.name for product in self.products}
         # Find products that have no dependencies
         return [name for name in all_products if not self.dependencies.get(name, [])]
 
@@ -259,7 +257,7 @@ class DependencyGraph:
 
         """
         levels = []
-        remaining = {p.product.name for p in self.products}
+        remaining = {p.name for p in self.products}
         processed = set()
 
         while remaining:
@@ -311,9 +309,7 @@ class DependencyGraph:
 
         return result
 
-    def get_bfs_ordered_products(
-        self, root_product_name: str
-    ) -> list[ProductInstallable]:
+    def get_bfs_ordered_products(self, root_product_name: str) -> list[Product]:
         """Get Product instances in BFS order.
 
         Args:
@@ -323,7 +319,7 @@ class DependencyGraph:
             List of Product instances in BFS order.
 
         """
-        product_map = {p.product.name: p for p in self.products}
+        product_map = {p.name: p for p in self.products}
         bfs_names = self.get_bfs_order(root_product_name)
         return [product_map[name] for name in bfs_names if name in product_map]
 
@@ -363,12 +359,12 @@ class DependencyGraph:
 
         """
         return [
-            product.product.name
+            product.name
             for product in self.products
-            if self.get_product_depth(product.product.name) == depth
+            if self.get_product_depth(product.name) == depth
         ]
 
-    def __iter__(self) -> Iterator[ProductInstallable]:
+    def __iter__(self) -> Iterator[Product]:
         """Iterate over products in the graph.
 
         Yields:
@@ -394,4 +390,4 @@ class DependencyGraph:
     @override
     def __repr__(self) -> str:
         """Detailed string representation of DependencyGraph."""
-        return f"DependencyGraph(products={[p.product.name for p in self.products]})"
+        return f"DependencyGraph(products={[p.name for p in self.products]})"

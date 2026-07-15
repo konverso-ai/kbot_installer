@@ -27,6 +27,7 @@ class ProviderBase(ABC):
         *,
         repository_url: str | None = None,
         repository_name: str | None = None,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository to the specified path and optionally checkout a branch.
 
@@ -35,6 +36,8 @@ class ProviderBase(ABC):
             branch: Specific branch to checkout after cloning. If None, no checkout is performed.
             repository_url: URL of the repository to clone.
             repository_name: Name of the repository to clone.
+            commit: Specific commit to pin the checkout to. Providers that cannot
+                honor commit pinning (e.g. plain git branch checkouts) ignore it.
 
         Raises:
             ProviderError: If the clone operation fails.

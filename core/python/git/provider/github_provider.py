@@ -69,6 +69,7 @@ class GithubProvider(GitMixin):
         *,
         repository_url: str | None = None,
         repository_name: str | None = None,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository from GitHub and optionally checkout a branch.
 
@@ -77,6 +78,7 @@ class GithubProvider(GitMixin):
             branch: Specific branch to checkout after cloning. If None, no checkout is performed.
             repository_url: Unused by the GitHub provider.
             repository_name: Name of the repository to clone.
+            commit: Unused by the GitHub provider; commit pinning is not supported.
 
         Raises:
             ProviderError: If the clone operation fails.

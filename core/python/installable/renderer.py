@@ -36,7 +36,7 @@ class DependencyTreeRenderer:
         root_products = graph.get_root_products()
         if not root_products:
             # If no clear roots, use all products
-            all_products = {product.product.name for product in graph.products}
+            all_products = {product.name for product in graph.products}
             root_products = sorted(all_products)
 
         for root in sorted(root_products):
@@ -84,7 +84,7 @@ class DependencyTreeRenderer:
         self._visited.clear()
 
         if root:
-            if root not in [p.product.name for p in graph.products]:
+            if root not in [p.name for p in graph.products]:
                 return f"Product '{root}' not found in graph"
             self._render_uv_node(graph, root, "", "", lines, verbose=False)
         else:
@@ -285,7 +285,7 @@ class DependencyTreeRenderer:
         # Find the product
         product = None
         for p in graph.products:
-            if p.product.name == product_name:
+            if p.name == product_name:
                 product = p
                 break
 
@@ -293,10 +293,10 @@ class DependencyTreeRenderer:
             return f"Product '{product_name}' not found."
 
         lines = [
-            f"Product: {product.product.name}",
-            f"Version: {product.product.version.to_str()}",
-            f"Type: {product.product.type}",
-            f"Categories: {', '.join(product.product.category_names) if product.product.category_names else 'None'}",
+            f"Product: {product.name}",
+            f"Version: {product.version.to_str()}",
+            f"Type: {product.type}",
+            f"Categories: {', '.join(product.category_names) if product.category_names else 'None'}",
             f"Direct dependencies: {len(graph.get_dependencies(product_name))}",
             f"Direct dependents: {len(graph.get_dependents(product_name))}",
             f"Transitive dependencies: {len(graph.get_transitive_dependencies(product_name))}",

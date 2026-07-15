@@ -1,21 +1,20 @@
 """Commandes CLI pour kbot-installer."""
 
-import shutil
-import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn, cast
 
 import click
 
+from downloadable.bundle_downloadable import BundleDownloadable
+from downloadable.product_downloadable import ProductDownloadable
 from git.models import GitProvider
-from installable.factory import create_installable
+from git.provider.factory import add_provider
+from installer_support.installation_table import InstallationTable
 from installer_support.installer_service import InstallerService
+from installer_support.installer_utils import version_to_branch
 from installer_support.logging_config import setup_logging
-from storage.base import StorageBackend
-from workarea.workarea import Workarea
-
-if TYPE_CHECKING:
-    from installable.product_installable import ProductInstallable
+from storage.base import StorageBackendEnum
+from utils.product.build import Build
+from utils.product.product import Product
 
 # Setup logging from configuration file
 setup_logging()
@@ -25,7 +24,7 @@ _PROVIDER_CHOICES = click.Choice(
     case_sensitive=False,
 )
 _STORAGE_CHOICES = click.Choice(
-    [backend.value for backend in StorageBackend],
+    [backend.value for backend in StorageBackendEnum],
     case_sensitive=False,
 )
 
@@ -36,251 +35,12 @@ _STORAGE_CHOICES = click.Choice(
 def cli(ctx: click.Context) -> None:
     """Kbot Installer - A tool for installing and managing kbot products.
 
-    This CLI provides commands to install, list, and explore kbot products
+    This CLI provides commands to download and list kbot products
     and their dependencies.
     """
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         ctx.exit()
-
-
-@cli.command()
-@click.option(
-    "-w",
-    "--workarea",
-    type=click.Path(),
-    default=lambda: str(Path.cwd()),
-    help="Workarea directory path (default: current directory)",
-)
-def init(*, workarea: str) -> None:
-    """Initialize a UV workspace and lay out the workarea directory structure.
-
-    This command creates a UV workspace in the specified directory and sets up
-    the workarea structure (conf, logs, var, products, ...). Products should be
-    installed separately using the 'download' command.
-
-    \b
-    Examples:
-        kbot-installer init
-        kbot-installer init -w /path/to/workarea
-    """  # noqa: D301
-    try:
-        workarea_path = Path(workarea).resolve()
-
-        # Create workarea directory if it doesn't exist
-        workarea_path.mkdir(parents=True, exist_ok=True)
-
-        # Initialize UV workspace
-        click.echo(f"Creating UV workspace in {workarea_path}")
-
-        def _abort_uv_not_found() -> NoReturn:
-            click.echo(
-                "Error: 'uv' command not found. Please install UV first.",
-                err=True,
-            )
-            raise click.Abort from None  # noqa: TRY301
-
-        def _handle_uv_init_error(e: subprocess.CalledProcessError) -> None:
-            click.echo(
-                f"Error initializing UV workspace: {e.stderr or e.stdout}",
-                err=True,
-            )
-            raise click.Abort from e  # noqa: TRY301
-
-        uv_executable = shutil.which("uv")
-        if uv_executable is None:
-            _abort_uv_not_found()
-
-        try:
-            subprocess.run(  # noqa: S603
-                [uv_executable, "init"],
-                cwd=str(workarea_path),
-                check=True,
-            )
-            click.echo("✅ UV workspace initialized successfully")
-        except subprocess.CalledProcessError as e:
-            _handle_uv_init_error(e)
-
-        # Lay out the workarea structure (no products yet, install adds them later)
-        workarea_installable = create_installable(
-            "workarea",
-            workarea=Workarea(
-                installer_root=workarea_path,
-                work_root=workarea_path,
-                products=[],
-            ),
-        )
-        workarea_installable.install()
-
-        click.echo(f"✅ Workarea initialized successfully at {workarea_path}")
-
-    except Exception as e:
-        click.echo(f"Error initializing workarea: {e}", err=True)
-        raise click.Abort from e
-
-
-@cli.command()
-@click.option(
-    "-n",
-    "--name",
-    required=True,
-    type=str,
-    help="Name of the product to add",
-)
-@click.option(
-    "-v",
-    "--version",
-    type=str,
-    default="",
-    help="Version of the product (e.g., '2025.03', 'dev', 'master'). If not specified, version is empty.",
-)
-@click.option(
-    "-b",
-    "--branch",
-    type=str,
-    default=None,
-    help="Specific branch to use (overrides version). If specified, env is forced to 'dev'.",
-)
-@click.option(
-    "-e",
-    "--env",
-    type=click.Choice(["dev", "prod"], case_sensitive=False),
-    default="dev",
-    help="Environment type (dev or prod)",
-)
-@click.option(
-    "--installer-dir",
-    type=click.Path(),
-    default=lambda: str(Path("dev") / "installer"),
-    help="Installer directory where products are cloned (default: dev/installer)",
-)
-@click.option(
-    "--workarea-dir",
-    type=click.Path(),
-    default=lambda: str(Path("dev") / "work"),
-    help="Workarea directory where products are installed (default: dev/work)",
-)
-@click.option(
-    "-r",
-    "--no-rec",
-    is_flag=True,
-    default=False,
-    help="Skip installing product dependencies (default: False)",
-)
-def add(
-    name: str,
-    version: str = "",
-    branch: str | None = None,
-    env: str = "dev",
-    installer_dir: str = "",
-    workarea_dir: str = "",
-    *,
-    no_rec: bool = False,
-) -> None:
-    """Add a product to the installer and install it in the workarea.
-
-    This command creates an installable product, clones it to the installer directory,
-    and installs it in the workarea directory.
-
-    Providers are selected based on environment:
-    - dev: ['bitbucket', 'github']
-    - prod: ['nexus', 'bitbucket']
-
-    \b
-    Examples:
-        kbot-installer add -n jira -v 2025.03
-        kbot-installer add -n kbot -b master --env dev
-        kbot-installer add -n jira -v dev --env prod --installer-dir /custom/installer
-        kbot-installer add -n ithd -v 2025.03 --no-rec
-
-    """  # noqa: D301
-    try:
-        installer_path = Path(installer_dir).resolve()
-        workarea_path = Path(workarea_dir).resolve()
-
-        # Check if product already exists in installer directory
-        product_dir = installer_path / name
-        description_file = product_dir / "description.xml"
-        if product_dir.exists() and description_file.exists():
-            click.echo(
-                f"Product '{name}' already exists in {installer_path}. Skipping.",
-            )
-            return
-
-        # Determine providers based on environment
-        providers = ["bitbucket", "github"] if env == "dev" else ["nexus", "bitbucket"]
-
-        click.echo(f"Adding product '{name}' with providers: {', '.join(providers)}")
-
-        # Create installable product
-        installable = cast(
-            "ProductInstallable",
-            create_installable(
-                "product",
-                name=name,
-                version=version,
-                branch=branch,
-                env=env,
-                providers=providers,
-            ),
-        )
-
-        # Ensure installer directory exists
-        installer_path.mkdir(parents=True, exist_ok=True)
-
-        # Clone product to installer directory
-        click.echo(f"Downloading product '{name}' to {installer_path}")
-        installable.download(installer_path, dependencies=not no_rec)
-
-        # Ensure installable has dirname set after clone
-        if not installable.dirname:
-            product_dir = installer_path / name
-            if product_dir.exists() and (product_dir / "description.xml").exists():
-                installable.dirname = product_dir.resolve()
-                click.echo(f"Set dirname to {installable.dirname}")
-            else:
-                click.echo(
-                    f"Warning: Product directory not found at {product_dir}",
-                    err=True,
-                )
-
-        # Ensure workarea directory exists
-        workarea_path.mkdir(parents=True, exist_ok=True)
-
-        # Install product to workarea
-        click.echo(f"Installing product '{name}' to {workarea_path}")
-
-        installable.install(
-            workarea_path,
-            dependencies=not no_rec,
-            installer_path=installer_path,
-        )
-
-        # Verify installation worked
-        # Check if any files were created in workarea (besides standard dirs)
-        workarea_contents = list(workarea_path.iterdir())
-        # Filter out common directories that might be created by other processes
-        significant_contents = [
-            item
-            for item in workarea_contents
-            if item.name not in ["__pycache__", ".git", "logs", "var"]
-        ]
-
-        if significant_contents:
-            click.echo(
-                f"✅ Product '{name}' added and installed successfully to {workarea_path}"
-            )
-        else:
-            click.echo(
-                f"⚠️  Product '{name}' cloned, but no files were installed in workarea.",
-            )
-            click.echo(
-                "This may be normal if the product has no [work] section in pyproject.toml",
-            )
-
-    except Exception as e:
-        click.echo(f"Error adding product: {e}", err=True)
-        raise click.Abort from e
 
 
 @cli.command(name="download")
@@ -337,7 +97,7 @@ def add(
 @click.option(
     "--storage",
     type=_STORAGE_CHOICES,
-    default=StorageBackend.NEXUS.value,
+    default=StorageBackendEnum.NEXUS.value,
     show_default=True,
     help="Storage backend to use when the storage provider is selected.",
 )
@@ -356,7 +116,7 @@ def download(
     *,
     no_rec: bool = False,
     provider: tuple[str, ...] = (),
-    storage: str = StorageBackend.NEXUS.value,
+    storage: str = StorageBackendEnum.NEXUS.value,
     verbose: bool = False,
 ) -> None:
     """Download kbot products from a product version or a bundle descriptor.
@@ -373,158 +133,57 @@ def download(
         kbot-installer download -i /custom/path -v master -p ithd
         kbot-installer download -v 2025.03 -p jira --provider github --provider bitbucket
         kbot-installer download -v dev -p kbot-latest-dev --provider storage --storage s3
-        kbot-installer download -b release-2025.03 -v 2025.03 -p kbot -i ~/dev/installer
-        kbot-installer download -b release-2025.03 -v 2025.03 -p kbot --storage s3 --no-rec
+        kbot-installer download -b ev-basic-2025.03.0016 -v 2025.03 -p kbot -i ~/dev/installer
+        kbot-installer download -b ev-basic-2025.03.0016 -v 2025.03 -p kbot --storage s3
 
     """
-    if bundle:
-        if not product:
-            msg = "Option '-p/--product' is required when installing from a bundle."
-            raise click.UsageError(msg)
-    elif not product:
-        msg = "Option '-p/--product' is required when installing a product."
+    if not product:
+        msg = (
+            "Option '-p/--product' is required when installing from a bundle."
+            if bundle
+            else "Option '-p/--product' is required when installing a product."
+        )
         raise click.UsageError(msg)
 
     try:
-        storage_backend = StorageBackend(storage)
-        include_dependencies = not no_rec
+        storage_backend = StorageBackendEnum(storage)
+        installer_path = Path(installer_dir)
 
         if bundle:
-            service = _download_bundle(
-                installer_dir,
-                version,
-                product,
-                bundle,
-                storage_backend=storage_backend,
+            downloadable = BundleDownloadable(
+                storage_name=storage_backend,
+                name=bundle,
+                installer_dir=installer_path,
                 verbose=verbose,
-                include_dependencies=include_dependencies,
             )
         else:
-            service = _download_single_product(
-                installer_dir,
-                version,
-                product,
-                provider,
-                storage_backend=storage_backend,
-                verbose=verbose,
-                include_dependencies=include_dependencies,
+            product_obj = Product(
+                name=product, build=Build(branch=version_to_branch(version))
+            )
+            selected_providers = (
+                list(provider)
+                if provider
+                else [
+                    "storage",
+                    "github",
+                    "bitbucket",
+                ]
+            )
+            selector = add_provider(name="selector", providers=selected_providers)
+            downloadable = ProductDownloadable(
+                product=product_obj,
+                provider=selector,
+                table=InstallationTable(verbose=verbose),
+                include_dependencies=not no_rec,
             )
 
-        installation_table = service.get_installation_table()
-        click.echo(f"\n{installation_table.get_summary()}")
+        downloadable.download(installer_path)
 
     except click.UsageError:
         raise
     except Exception as e:
         click.echo(f"Error installing product: {e}", err=True)
         raise click.Abort from e
-
-
-def _download_bundle(
-    installer_dir: str,
-    version: str,
-    product: str,
-    bundle: str,
-    *,
-    storage_backend: StorageBackend,
-    verbose: bool,
-    include_dependencies: bool,
-) -> InstallerService:
-    """Download a bundle's pinned products from storage.
-
-    Args:
-        installer_dir: Directory that will contain downloaded products.
-        version: Bundle version to download.
-        product: Highest product level to install from the bundle.
-        bundle: Bundle descriptor name.
-        storage_backend: Storage backend used for the download.
-        verbose: Whether to show detailed provider output.
-        include_dependencies: Whether to also download product dependencies.
-
-    Returns:
-        The `InstallerService` used for the download.
-
-    """
-    service = InstallerService(
-        installer_dir,
-        providers=["storage"],
-        storage_backend=storage_backend,
-        verbose=verbose,
-    )
-    click.echo(
-        f"Installing bundle '{bundle}' version '{version}' "
-        f"from product '{product}' to '{installer_dir}'"
-    )
-    click.echo("Using storage provider only")
-    click.echo(f"Using storage backend: {storage_backend.value}")
-    if include_dependencies:
-        click.echo("Loading bundle and product dependencies...")
-    else:
-        click.echo("Loading bundle (skipping dependencies)...")
-
-    service.download_bundle(
-        bundle,
-        version,
-        product,
-        include_dependencies=include_dependencies,
-    )
-    return service
-
-
-def _download_single_product(
-    installer_dir: str,
-    version: str,
-    product: str,
-    provider: tuple[str, ...],
-    *,
-    storage_backend: StorageBackend,
-    verbose: bool,
-    include_dependencies: bool,
-) -> InstallerService:
-    """Download a single product and, optionally, its dependencies.
-
-    Args:
-        installer_dir: Directory that will contain downloaded products.
-        version: Product version to download.
-        product: Product name to download.
-        provider: Providers to try, in order; empty means try all.
-        storage_backend: Storage backend used if the storage provider is selected.
-        verbose: Whether to show detailed provider output.
-        include_dependencies: Whether to also download product dependencies.
-
-    Returns:
-        The `InstallerService` used for the download.
-
-    """
-    selected_providers = list(provider) if provider else None
-    service = InstallerService(
-        installer_dir,
-        providers=selected_providers,
-        storage_backend=storage_backend,
-        verbose=verbose,
-    )
-
-    click.echo(
-        f"Installing product '{product}' version '{version}' to '{installer_dir}'"
-    )
-
-    if selected_providers:
-        click.echo(f"Using providers: {', '.join(selected_providers)}")
-    else:
-        click.echo("Using all available providers: storage, github, bitbucket")
-    click.echo(f"Using storage backend: {storage_backend.value}")
-
-    if include_dependencies:
-        click.echo("Loading product definitions and dependencies...")
-    else:
-        click.echo("Loading product definitions (skipping dependencies)...")
-
-    service.download(
-        product,
-        version,
-        include_dependencies=include_dependencies,
-    )
-    return service
 
 
 @cli.command(name="list")
@@ -569,59 +228,4 @@ def list_products(
 
     except Exception as e:
         click.echo(f"Error listing products: {e}", err=True)
-        raise click.Abort from e
-
-
-@cli.command()
-@click.option(
-    "-i",
-    "--installer-dir",
-    type=click.Path(),
-    default=lambda: str(Path.home() / "dev" / "installer"),
-    help="Installation directory (default: $HOME/dev/installer)",
-)
-@click.option(
-    "-v",
-    "--version",
-    type=str,
-    help="Version of the product to repair (e.g., '2025.03', 'dev', 'master'). If not specified, will try to detect from existing installation.",
-)
-@click.option(
-    "-p", "--product", required=True, type=str, help="Name of the product to repair"
-)
-def repair(installer_dir: str, version: str | None = None, product: str = "") -> None:
-    """Repair a kbot product by reinstalling missing dependencies.
-
-    This command detects missing products in the installer directory and
-    reinstalls them. It's useful when some products or dependencies
-    have been accidentally deleted or corrupted.
-
-    Examples:
-        kbot-installer repair -p kbot-latest-dev
-        kbot-installer repair -p kbot -v 2025.03
-        kbot-installer repair -p kbot -i /custom/path
-
-    """
-    try:
-        service = InstallerService(installer_dir)
-
-        # Check if installer directory exists
-        if not Path(installer_dir).exists():
-            click.echo("Installer directory does not exist. Nothing to repair.")
-            return
-
-        click.echo(f"Repairing product '{product}' in '{installer_dir}'")
-
-        # Repair the product
-        repaired_products = service.repair(product, version=version)
-
-        if repaired_products:
-            click.echo(f"✅ Successfully repaired {len(repaired_products)} products:")
-            for repaired_product in repaired_products:
-                click.echo(f"  - {repaired_product}")
-        else:
-            click.echo("✅ No missing products detected. Everything is up to date.")
-
-    except Exception as e:
-        click.echo(f"Error repairing product: {e}", err=True)
         raise click.Abort from e

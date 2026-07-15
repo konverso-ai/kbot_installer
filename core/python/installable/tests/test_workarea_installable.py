@@ -280,35 +280,11 @@ class TestRuntimeEnvironment:
 
 
 class TestUnimplementedInstallableBaseMethods:
-    def test_load_from_installer_folder_raises(self, tmp_path: Path) -> None:
-        wa = _build(tmp_path)
-
-        with pytest.raises(NotImplementedError):
-            wa.load_from_installer_folder(tmp_path)
-
-    def test_to_xml_raises(self, tmp_path: Path) -> None:
-        wa = _build(tmp_path)
-
-        with pytest.raises(NotImplementedError):
-            wa.to_xml()
-
-    def test_to_json_raises(self, tmp_path: Path) -> None:
-        wa = _build(tmp_path)
-
-        with pytest.raises(NotImplementedError):
-            wa.to_json()
-
     def test_download_raises(self, tmp_path: Path) -> None:
         wa = _build(tmp_path)
 
         with pytest.raises(NotImplementedError):
             wa.download(tmp_path)
-
-    def test_get_dependencies_raises(self, tmp_path: Path) -> None:
-        wa = _build(tmp_path)
-
-        with pytest.raises(NotImplementedError):
-            wa.get_dependencies()
 
 
 def test_default_update_mode_is_smooth(tmp_path: Path) -> None:

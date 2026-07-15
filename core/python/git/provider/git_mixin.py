@@ -174,6 +174,7 @@ class GitMixin(ProviderBase):
         *,
         repository_url: str | None = None,
         repository_name: str | None = None,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository to the specified path and optionally checkout a branch.
 
@@ -182,6 +183,8 @@ class GitMixin(ProviderBase):
             branch: Specific branch to checkout after cloning. If None, no checkout is performed.
             repository_url: URL of the repository to clone.
             repository_name: Unused by the git mixin.
+            commit: Unused by the git mixin; commit pinning is not supported for
+                plain git clones.
 
         Raises:
             ProviderError: If the clone operation fails.

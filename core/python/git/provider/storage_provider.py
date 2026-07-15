@@ -11,7 +11,7 @@ from auth.base import HttpAuthBase
 from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
-from storage.factory import create_bucket_storage
+from storage.factory import add_storage
 from utils.Logger import logger
 
 if TYPE_CHECKING:
@@ -43,6 +43,7 @@ class StorageProvider(ProviderBase):
         auth: HttpAuthBase | None = None,
         *,
         quiet: bool = False,
+        storage: StorageBase | None = None,
     ) -> None:
         """Initialize the storage provider.
 
@@ -50,6 +51,8 @@ class StorageProvider(ProviderBase):
             config: Full providers configuration. Defaults to DEFAULT_PROVIDERS_CONFIG.
             auth: HTTP authentication for the Nexus backend, when applicable.
             quiet: When True, suppress informational download output.
+            storage: Pre-built storage backend to use instead of creating one from
+                config (e.g. a backend scoped to a specific container/bucket).
 
         """
         self._config = config or DEFAULT_PROVIDERS_CONFIG
@@ -57,11 +60,11 @@ class StorageProvider(ProviderBase):
         self._quiet = quiet
         self._backend = self._config.storage.backend
         self.branch_used: str | None = None
-        self._storage = self._create_storage()
+        self._storage = storage or self._create_storage()
 
     def _create_storage(self) -> StorageBase:
         """Create the storage backend for the configured provider backend."""
-        return create_bucket_storage(
+        return add_storage(
             self._backend,
             **self._config.storage.get_backend_kwargs(self._auth),
         )
@@ -72,19 +75,31 @@ class StorageProvider(ProviderBase):
         return self._storage
 
     @staticmethod
-    def _build_object_key(repository_name: str, branch: str | None) -> str:
-        """Build the object key for a repository archive."""
+    def _build_object_key(
+        repository_name: str, branch: str | None, commit: str | None = None
+    ) -> str:
+        """Build the object key for a repository archive.
+
+        Args:
+            repository_name: Name of the repository/product.
+            branch: Branch the archive was built from. Defaults to "master".
+            commit: Commit to pin the archive to. If None, the "latest" archive
+                for the branch is targeted instead.
+
+        """
         branch_name = branch or "master"
-        return f"{branch_name}/{repository_name}/{repository_name}_latest.tar.gz"
+        suffix = commit or "latest"
+        return f"{branch_name}/{repository_name}/{repository_name}_{suffix}.tar.gz"
 
     def _clone_from_storage(
         self,
         repository_name: str,
         target_path: Path,
         branch_to_use: str,
+        commit: str | None = None,
     ) -> None:
         """Download and extract a repository archive from the active backend."""
-        key = self._build_object_key(repository_name, branch_to_use)
+        key = self._build_object_key(repository_name, branch_to_use, commit)
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._log(
@@ -120,6 +135,7 @@ class StorageProvider(ProviderBase):
         *,
         _repository_url: str | None = None,
         repository_name: str | None = None,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository from the configured storage backend.
 
@@ -128,6 +144,8 @@ class StorageProvider(ProviderBase):
             branch: Specific branch to checkout after cloning. If None, uses master.
             repository_url: Unused by the storage provider.
             repository_name: Name of the repository to clone.
+            commit: Specific commit to pin the archive to. If None, the "latest"
+                archive for the branch is downloaded instead.
 
         Raises:
             ProviderError: If the clone operation fails.
@@ -137,7 +155,9 @@ class StorageProvider(ProviderBase):
             msg = "repository_name is required"
             raise ValueError(msg)
         branch_to_use = branch or self.branch
-        self._clone_from_storage(repository_name, Path(target_path), branch_to_use)
+        self._clone_from_storage(
+            repository_name, Path(target_path), branch_to_use, commit
+        )
 
     @override
     def check_remote_repository_exists(self, repository_name: str) -> bool:

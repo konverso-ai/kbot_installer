@@ -31,7 +31,6 @@ class ProductDownloadable(DownloadableBase):
         table: InstallationTable | None = None,
         *,
         include_dependencies: bool = True,
-        **kwargs,
     ) -> None:
         """Initialize the installable.
 
@@ -56,7 +55,6 @@ class ProductDownloadable(DownloadableBase):
 
         """
         path = ensure_directory(path=path)
-        self.__table.begin_installation(self.__product.name)
         if self.__include_dependencies:
             self._download_with_dependencies(path)
         else:
@@ -78,6 +76,7 @@ class ProductDownloadable(DownloadableBase):
             ValueError: If the product has no build information to clone from.
 
         """
+        self.__table.begin_installation(product.name)
         pinned_commit = product.build.commit if product.build else None
         if self._is_up_to_date(path, pinned_commit):
             self.__table.complete_installation(
@@ -100,6 +99,11 @@ class ProductDownloadable(DownloadableBase):
             branch=product.build.branch,
             repository_name=path.name,
             commit=pinned_commit or None,
+        )
+        self.__table.complete_installation(
+            product_name=product.name,
+            provider_name=self.__provider.get_name(),
+            status="success",
         )
 
     @staticmethod

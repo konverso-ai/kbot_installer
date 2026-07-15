@@ -63,7 +63,7 @@ class NexusStorageSettings(BaseModel):
     repository: str
 
     def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
-        """Return kwargs for ``create_bucket_storage("nexus", ...)``."""
+        """Return kwargs for ``add_storage("nexus", ...)``."""
         return {
             "domain": self.domain,
             "repository": self.repository,
@@ -84,7 +84,7 @@ class S3StorageSettings(BaseModel):
     )
 
     def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
-        """Return kwargs for ``create_bucket_storage("s3", ...)``."""
+        """Return kwargs for ``add_storage("s3", ...)``."""
         credentials = cast("StorageCredentialsBase", add_credentials("s3"))
         return {
             "bucket_name": self.bucket_name,
@@ -111,7 +111,7 @@ class AzureStorageSettings(BaseModel):
     )
 
     def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
-        """Return kwargs for ``create_bucket_storage("azure", ...)``."""
+        """Return kwargs for ``add_storage("azure", ...)``."""
         kwargs: dict[str, Any] = {
             "account_url": self.account_url,
             "container_name": self.container_name,
@@ -127,18 +127,47 @@ class AzureStorageSettings(BaseModel):
         return kwargs
 
 
+class OciStorageSettings(BaseModel):
+    """OCI Object Storage-specific storage backend settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    bucket_name: str
+    namespace_name: str
+    region: str = "eu-frankfurt-1"
+    env_vars: list[str] = Field(
+        default_factory=lambda: [
+            "OCI_USER_OCID",
+            "OCI_TENANCY_OCID",
+            "OCI_FINGERPRINT",
+            "OCI_PRIVATE_KEY_PATH",
+        ]
+    )
+
+    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
+        """Return kwargs for ``add_storage("oci", ...)``."""
+        credentials = cast("StorageCredentialsBase", add_credentials("oci"))
+        return {
+            "bucket_name": self.bucket_name,
+            "namespace_name": self.namespace_name,
+            "region": self.region,
+            **credentials.storage_kwargs(),
+        }
+
+
 class StorageSectionConfig(BaseModel):
     """Storage backend selection and per-backend settings."""
 
     model_config = ConfigDict(extra="forbid")
 
-    backend: Literal["nexus", "s3", "azure"]
+    backend: Literal["nexus", "s3", "azure", "oci"]
     nexus: NexusStorageSettings
     s3: S3StorageSettings
     azure: AzureStorageSettings
+    oci: OciStorageSettings
 
     def get_backend_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
-        """Return kwargs for ``create_bucket_storage`` for the active backend."""
+        """Return kwargs for ``add_storage`` for the active backend."""
         settings = getattr(self, self.backend)
         return settings.storage_kwargs(auth)
 

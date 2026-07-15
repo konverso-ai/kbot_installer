@@ -8,6 +8,7 @@ import pytest
 from git.provider.config import (
     AzureStorageSettings,
     NexusStorageSettings,
+    OciStorageSettings,
     ProvidersConfig,
     S3StorageSettings,
     StorageSectionConfig,
@@ -27,6 +28,7 @@ def _empty_providers_config() -> ProvidersConfig:
                 account_url="https://example.blob.core.windows.net",
                 container_name="container",
             ),
+            oci=OciStorageSettings(bucket_name="bucket", namespace_name="ns"),
         ),
     )
 
@@ -71,7 +73,7 @@ class TestSelectorProviderExtended:
                 return_value=MagicMock(),
             ),
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
         ):
             # Setup mocks
@@ -125,7 +127,7 @@ class TestSelectorProviderExtended:
                 return_value=MagicMock(),
             ),
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
         ):
             # Setup mocks
@@ -169,7 +171,7 @@ class TestSelectorProviderExtended:
                 target_path="/tmp/test", repository_url="https://example.com/repo"
             )
             mock_clone_by_url.assert_called_once_with(
-                "https://example.com/repo", "/tmp/test", None
+                "https://example.com/repo", "/tmp/test", None, commit=None
             )
 
     def test_clone_by_name_success(self) -> None:
@@ -180,7 +182,9 @@ class TestSelectorProviderExtended:
             selector.clone_and_checkout(
                 target_path="/tmp/test", repository_name="test-repo"
             )
-            mock_clone_by_name.assert_called_once_with("test-repo", "/tmp/test", None)
+            mock_clone_by_name.assert_called_once_with(
+                "test-repo", "/tmp/test", None, commit=None
+            )
 
     def test_clone_with_branch(self) -> None:
         """Test clone with specific branch."""
@@ -190,7 +194,9 @@ class TestSelectorProviderExtended:
             selector.clone_and_checkout(
                 target_path="/tmp/test", repository_name="test-repo", branch="dev"
             )
-            mock_clone_by_name.assert_called_once_with("test-repo", "/tmp/test", "dev")
+            mock_clone_by_name.assert_called_once_with(
+                "test-repo", "/tmp/test", "dev", commit=None
+            )
 
     def test_print_clone_results_table_empty(self) -> None:
         """Test printing empty results table."""
@@ -306,7 +312,7 @@ class TestSelectorProviderExtended:
                 target_path="/tmp/test", repository_url="https://example.com/repo"
             )
             mock_clone_by_url.assert_called_once_with(
-                "https://example.com/repo", "/tmp/test", None
+                "https://example.com/repo", "/tmp/test", None, commit=None
             )
 
     def test_clone_by_name_with_path_object(self) -> None:
@@ -318,7 +324,9 @@ class TestSelectorProviderExtended:
             selector.clone_and_checkout(
                 target_path=target_path, repository_name="test-repo"
             )
-            mock_clone_by_name.assert_called_once_with("test-repo", target_path, None)
+            mock_clone_by_name.assert_called_once_with(
+                "test-repo", target_path, None, commit=None
+            )
 
     def test_credential_manager_initialization(self) -> None:
         """Test that credential manager is properly initialized."""
@@ -368,7 +376,7 @@ class TestSelectorProviderExtended:
                 selector.credential_manager, "get_auth_for_provider", return_value=None
             ),
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
         ):
             # Setup mocks

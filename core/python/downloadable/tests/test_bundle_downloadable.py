@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from downloadable.bundle_downloadable import BundleDownloadable
-from storage.base import StorageBackend
+from storage.base import StorageBackendEnum
 from utils.bundle import Bundle
 from utils.product.build import Build
 from utils.product.product import Product
@@ -66,7 +66,7 @@ class TestBundleDownloadableInit:
         bundle_storage.get.return_value = json.dumps(_bundle_json())
 
         downloadable = BundleDownloadable(
-            storage_name=StorageBackend.S3,
+            storage_name=StorageBackendEnum.S3,
             name="acme-bundle",
             installer_dir=tmp_path,
         )
@@ -86,7 +86,7 @@ class TestBundleDownloadableInit:
 
         with pytest.raises(ValueError, match="was not found"):
             BundleDownloadable(
-                storage_name=StorageBackend.S3,
+                storage_name=StorageBackendEnum.S3,
                 name="acme-bundle",
                 installer_dir=tmp_path,
             )
@@ -103,7 +103,7 @@ class TestBundleDownloadableDownload:
         bundle_storage.get.return_value = json.dumps(_bundle_json())
 
         downloadable = BundleDownloadable(
-            storage_name=StorageBackend.S3,
+            storage_name=StorageBackendEnum.S3,
             name="acme-bundle",
             installer_dir=tmp_path,
         )
@@ -142,7 +142,7 @@ class TestBundleDownloadableDownload:
             mock_storage_provider_cls.return_value = mock_provider
 
             downloadable = BundleDownloadable(
-                storage_name=StorageBackend.S3,
+                storage_name=StorageBackendEnum.S3,
                 name="acme-bundle",
                 installer_dir=tmp_path,
             )

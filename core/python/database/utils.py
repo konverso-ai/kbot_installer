@@ -56,11 +56,11 @@ def ensure_version_table(settings: DbSettings) -> None:
     with connect(settings) as conn, conn.cursor() as cur:
         cur.execute(
             f"""
-                    CREATE TABLE IF NOT EXISTS {SCHEMA_VERSION_TABLE} (
-                        version TEXT PRIMARY KEY,
-                        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    )
-                """
+                CREATE TABLE IF NOT EXISTS {SCHEMA_VERSION_TABLE} (
+                    version TEXT PRIMARY KEY,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """
         )
 
 

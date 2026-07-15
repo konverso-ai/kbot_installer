@@ -1,7 +1,8 @@
-"""Installable package for managing installable definitions and dependencies.
+"""Installable package for workarea installation.
 
-This package provides functionality to load, manage, and visualize installable
-definitions from XML and JSON files, including dependency graph analysis.
+This package exposes ``WorkareaInstallable``, the only concrete installable,
+through the ``create_installable`` factory. Product and bundle downloads live
+in the ``downloadable`` package.
 """
 
 from installable.factory import create_installable

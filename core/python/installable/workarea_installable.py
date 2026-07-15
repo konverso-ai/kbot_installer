@@ -5,13 +5,12 @@ import os
 import shutil
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from installable.base import InstallableBase
-from installable.product_collection import ProductCollection
 from installable.updater.factory import UpdaterName, add_updater
 from utils.Logger import logger
 from workarea.utils import (
@@ -58,6 +57,20 @@ class WorkareaInstallable(BaseModel, InstallableBase):
     ]
 
     @override
+    def download(self, path: Path) -> None:
+        """Raise: a workarea is not a downloadable unit.
+
+        Args:
+            path: Unused; present to satisfy the ``InstallableBase`` contract.
+
+        Raises:
+            NotImplementedError: Always; workareas are laid out from products
+                already present under ``installer_root``, not downloaded.
+
+        """
+        msg = "WorkareaInstallable does not support download()"
+        raise NotImplementedError(msg)
+
     def install(self) -> None:
         """Build the workarea from scratch.
 
@@ -88,7 +101,6 @@ class WorkareaInstallable(BaseModel, InstallableBase):
             interactive=self.update_mode == UpdaterName.INTERACTIVE,
         )
 
-    @override
     def update(self) -> None:
         """Update the workarea using the configured updater strategy.
 
@@ -98,7 +110,6 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         updater = add_updater(name=self.update_mode.value, workarea=self)
         updater()
 
-    @override
     def repair(self) -> None:
         """Repair the workarea using the `repair` updater strategy, regardless of `update_mode`."""
         updater = add_updater(name=UpdaterName.REPAIR.value, workarea=self)
@@ -178,60 +189,3 @@ class WorkareaInstallable(BaseModel, InstallableBase):
             if not full_path.exists():
                 msg = f"Missing runtime PYTHONPATH entry: {full_path}"
                 raise FileNotFoundError(msg)
-
-    @override
-    def load_from_installer_folder(self, folder_path: Path) -> None:
-        """Not supported for a workarea.
-
-        Raises:
-            NotImplementedError: Always; a workarea is not loaded from a single installer folder.
-
-        """
-        msg = "load_from_installer_folder is not implemented for WorkareaInstallable"
-        raise NotImplementedError(msg)
-
-    @override
-    def to_xml(self) -> str:
-        """Not supported for a workarea.
-
-        Raises:
-            NotImplementedError: Always; a workarea has no XML description.
-
-        """
-        msg = "to_xml is not implemented for WorkareaInstallable"
-        raise NotImplementedError(msg)
-
-    @override
-    def to_json(self) -> dict[str, Any]:
-        """Not supported for a workarea.
-
-        Raises:
-            NotImplementedError: Always; a workarea has no JSON description.
-
-        """
-        msg = "to_json is not implemented for WorkareaInstallable"
-        raise NotImplementedError(msg)
-
-    @override
-    def download(self, path: Path, *, dependencies: bool = True) -> None:
-        """Not supported for a workarea.
-
-        Raises:
-            NotImplementedError: Always; a workarea is assembled from already-downloaded products,
-                not downloaded itself.
-
-        """
-        msg = "download is not implemented for WorkareaInstallable"
-        raise NotImplementedError(msg)
-
-    @override
-    def get_dependencies(self) -> ProductCollection:
-        """Not supported for a workarea.
-
-        Raises:
-            NotImplementedError: Always; a workarea aggregates a fixed product list rather
-                than resolving dependencies of its own.
-
-        """
-        msg = "get_dependencies is not implemented for WorkareaInstallable"
-        raise NotImplementedError(msg)

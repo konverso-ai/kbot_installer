@@ -35,7 +35,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -65,7 +65,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -92,7 +92,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -119,7 +119,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.create_provider"
+                "git.provider.selector_provider.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -152,6 +152,7 @@ class TestSelectorProvider:
             mock_provider.clone_and_checkout.assert_called_once_with(
                 Path("/tmp/test_path"),
                 "main",
+                commit=None,
                 repository_url="test_repo",
             )
 
@@ -175,11 +176,13 @@ class TestSelectorProvider:
             mock_nexus.clone_and_checkout.assert_called_once_with(
                 Path("/tmp/test_path"),
                 "main",
+                commit=None,
                 repository_url="test_repo",
             )
             mock_github.clone_and_checkout.assert_called_once_with(
                 Path("/tmp/test_path"),
                 "main",
+                commit=None,
                 repository_url="test_repo",
             )
 
@@ -273,7 +276,7 @@ class TestSelectorProvider:
         expected = "SelectorProvider(providers=['storage'], base_url='')"
         assert repr(selector) == expected
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_clone_by_name_success(self, mock_create: MagicMock) -> None:
         """Test successful cloning by repository name."""
         # Mock provider
@@ -295,10 +298,11 @@ class TestSelectorProvider:
             mock_provider.clone_and_checkout.assert_called_once_with(
                 Path("/tmp/test"),
                 "main",
+                commit=None,
                 repository_name="test-repo",
             )
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_clone_by_name_all_providers_fail(self, mock_create: MagicMock) -> None:
         """Test cloning by name when all providers fail."""
         mock_create.return_value = None
@@ -401,7 +405,7 @@ class TestSelectorProvider:
         assert "github" in repr_str
         assert "https://example.com" in repr_str
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_provider_name_updated_in_clone_by_name(
         self, mock_create: MagicMock
     ) -> None:
@@ -453,7 +457,7 @@ class TestSelectorProvider:
             "dev",
         ]
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_clone_git_fails_fast_when_branch_missing_on_remote(
         self, mock_create: MagicMock
     ) -> None:
@@ -493,7 +497,7 @@ class TestSelectorProvider:
 
             mock_clone.assert_not_called()
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_get_branch_returns_used_branch_after_clone(
         self, mock_create: MagicMock
     ) -> None:
@@ -518,7 +522,7 @@ class TestSelectorProvider:
             # After clone with branch "main", should return "main"
             assert selector.get_branch() == "main"
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_get_branch_returns_fallback_branch_when_requested_not_found(
         self, mock_create: MagicMock
     ) -> None:
@@ -561,7 +565,7 @@ class TestSelectorProvider:
                 selector.branch_used = "master"
                 assert selector.get_branch() == "master"
 
-    @patch("git.provider.selector_provider.create_provider")
+    @patch("git.provider.selector_provider.add_provider")
     def test_provider_name_updated_in_clone_by_url(
         self, mock_create: MagicMock
     ) -> None:

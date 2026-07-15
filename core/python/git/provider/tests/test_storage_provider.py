@@ -79,7 +79,7 @@ class TestStorageProvider:
         config.storage.backend = "s3"
         config.storage.s3.bucket_name = "test-bucket"
 
-        with patch("git.provider.storage_provider.create_bucket_storage") as mock_storage:
+        with patch("git.provider.storage_provider.add_storage") as mock_storage:
             mock_bucket = MagicMock()
             mock_storage.return_value = mock_bucket
             provider = StorageProvider(config=config)
@@ -100,7 +100,7 @@ class TestStorageProvider:
         config.storage.backend = "s3"
         config.storage.s3.bucket_name = "test-bucket"
 
-        with patch("git.provider.storage_provider.create_bucket_storage") as mock_storage:
+        with patch("git.provider.storage_provider.add_storage") as mock_storage:
             mock_bucket = MagicMock()
             mock_bucket.get.return_value = "content"
             mock_storage.return_value = mock_bucket

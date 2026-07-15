@@ -41,7 +41,6 @@ class BundleDownloadable(DownloadableBase):
         installer_dir: Path,
         *,
         verbose: bool = False,
-        **kwargs,
     ) -> None:
         """Initialize the installable by fetching the bundle descriptor.
 

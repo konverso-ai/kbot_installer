@@ -17,7 +17,7 @@ from git.provider.config import (
 )
 from git.provider.credential_manager import CredentialManager
 from git.provider.errors import ProviderError
-from git.provider.factory import create_provider
+from git.provider.factory import add_provider
 from git.provider.git_mixin import GitMixin
 from installer_support.env_loader import format_missing_env_vars_message
 from utils.Logger import logger
@@ -125,7 +125,7 @@ class SelectorProvider(ProviderBase):
             log.debug(
                 "Creating provider '%s' with parameters: %s", provider_name, params
             )
-            return create_provider(name=provider_name, **params)
+            return add_provider(name=provider_name, **params)
         except ProviderError as e:
             log.exception(
                 "Failed to create provider '%s': %s", provider_name, type(e).__name__
@@ -158,6 +158,7 @@ class SelectorProvider(ProviderBase):
         *,
         repository_url: str | None = None,
         repository_name: str | None = None,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository using the first available provider and optionally checkout a branch.
 
@@ -166,6 +167,9 @@ class SelectorProvider(ProviderBase):
             branch: Specific branch to checkout after cloning. If None, no checkout is performed.
             repository_url: URL of the repository to clone (mutually exclusive with repository_name).
             repository_name: Name of the repository to clone (mutually exclusive with repository_url).
+            commit: Specific commit to pin the checkout to. Only honored by providers
+                that support commit pinning (e.g. storage-backed providers); ignored
+                by plain git providers.
 
         Raises:
             ProviderError: If all providers fail to clone the repository.
@@ -180,9 +184,9 @@ class SelectorProvider(ProviderBase):
             raise ValueError(msg)
 
         if repository_url:
-            self._clone_by_url(repository_url, target_path, branch)
+            self._clone_by_url(repository_url, target_path, branch, commit=commit)
         elif repository_name is not None:
-            self._clone_by_name(repository_name, target_path, branch)
+            self._clone_by_name(repository_name, target_path, branch, commit=commit)
         else:
             msg = "Must specify either repository_url or repository_name"
             raise ValueError(msg)
@@ -341,6 +345,7 @@ class SelectorProvider(ProviderBase):
         branch_to_try: str | None,
         *,
         by_url: bool,
+        commit: str | None = None,
     ) -> None:
         """Attempt to clone with a specific branch.
 
@@ -350,6 +355,7 @@ class SelectorProvider(ProviderBase):
             target_path: Local path where repository should be cloned.
             branch_to_try: Branch to try, or None for default.
             by_url: Whether ``repository_identifier`` is a repository URL.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Raises:
             ProviderError: If clone fails.
@@ -364,6 +370,7 @@ class SelectorProvider(ProviderBase):
             provider.clone_and_checkout(
                 target_path,
                 branch_to_try,
+                commit=commit,
                 **clone_kwargs,
             )
         except ProviderError:
@@ -542,6 +549,7 @@ class SelectorProvider(ProviderBase):
         requested_branch: str | None,
         *,
         by_url: bool,
+        commit: str | None = None,
     ) -> tuple[str, str]:
         """Clone repository with a provider, trying branches in fallback order.
 
@@ -552,6 +560,7 @@ class SelectorProvider(ProviderBase):
             target_path: Local path where repository should be cloned.
             requested_branch: Requested branch, or None for default.
             by_url: Whether ``repository_identifier`` is a repository URL.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Returns:
             Tuple of (branch_used, success_message).
@@ -582,6 +591,7 @@ class SelectorProvider(ProviderBase):
                 branches_to_try,
                 requested_branch,
                 by_url=by_url,
+                commit=commit,
             )
             if isinstance(result, ProviderError):
                 last_error = result
@@ -607,6 +617,7 @@ class SelectorProvider(ProviderBase):
         requested_branch: str | None,
         *,
         by_url: bool,
+        commit: str | None = None,
     ) -> tuple[str, str] | ProviderError:
         """Try cloning a single fallback branch.
 
@@ -618,6 +629,7 @@ class SelectorProvider(ProviderBase):
             branches_to_try: Full fallback branch list (for error handling context).
             requested_branch: Originally requested branch, or None for default.
             by_url: Whether ``repository_identifier`` is a repository URL.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Returns:
             A (branch_used, success_message) tuple on success, or the
@@ -635,6 +647,7 @@ class SelectorProvider(ProviderBase):
                 target_path,
                 branch_to_try,
                 by_url=by_url,
+                commit=commit,
             )
             self._update_provider_name(provider)
         except ProviderError as e:
@@ -680,6 +693,7 @@ class SelectorProvider(ProviderBase):
         branch: str | None = None,
         *,
         by_url: bool,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository using available providers.
 
@@ -688,6 +702,7 @@ class SelectorProvider(ProviderBase):
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to clone. If None, clones the default branch.
             by_url: Whether ``repository_identifier`` is a repository URL.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Raises:
             ProviderError: If all providers fail to clone the repository.
@@ -731,6 +746,7 @@ class SelectorProvider(ProviderBase):
                     target_path,
                     branch,
                     by_url=by_url,
+                    commit=commit,
                 )
                 # Store the branch that was successfully used
                 self.branch_used = branch_used
@@ -767,7 +783,12 @@ class SelectorProvider(ProviderBase):
         raise ProviderError(error_msg)
 
     def _clone_by_url(
-        self, repository_url: str, target_path: str | Path, branch: str | None = None
+        self,
+        repository_url: str,
+        target_path: str | Path,
+        branch: str | None = None,
+        *,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository by URL using the first available provider.
 
@@ -775,15 +796,23 @@ class SelectorProvider(ProviderBase):
             repository_url: URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to clone. If None, clones the default branch.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Raises:
             ProviderError: If all providers fail to clone the repository.
 
         """
-        self._clone_with_providers(repository_url, target_path, branch, by_url=True)
+        self._clone_with_providers(
+            repository_url, target_path, branch, by_url=True, commit=commit
+        )
 
     def _clone_by_name(
-        self, repository_name: str, target_path: str | Path, branch: str | None = None
+        self,
+        repository_name: str,
+        target_path: str | Path,
+        branch: str | None = None,
+        *,
+        commit: str | None = None,
     ) -> None:
         """Clone a repository by name using the first available provider.
 
@@ -794,12 +823,15 @@ class SelectorProvider(ProviderBase):
             repository_name: Name of the repository to clone.
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to clone. If None, clones the default branch.
+            commit: Specific commit to pin the checkout to, when supported.
 
         Raises:
             ProviderError: If all providers fail to clone the repository.
 
         """
-        self._clone_with_providers(repository_name, target_path, branch, by_url=False)
+        self._clone_with_providers(
+            repository_name, target_path, branch, by_url=False, commit=commit
+        )
 
     @override
     def check_remote_repository_exists(self, repository_url: str) -> bool:
