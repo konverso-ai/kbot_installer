@@ -108,8 +108,6 @@ deps = [
 lint = [
     "pylint",
     "pylint-django",
-    "pylint-django-settings",
-    "pylint-plugin-utils",
     "ruff",
 ]
 test = [
