@@ -1,7 +1,8 @@
-defusedxml
-cryptography<47
-python-json-logger
 azure-identity==1.25.3
 azure-storage-blob==12.28.0
 boto3==1.37.34
 botocore==1.37.34
+cryptography<47
+defusedxml
+oci>=2.182.0
+python-json-logger
