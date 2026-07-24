@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 log = logger.get_package_logger("backend")
 
 
-class S3Backend:
+class S3StorageBackend:
     """Backend for AWS S3."""
 
     _client: S3Client | None

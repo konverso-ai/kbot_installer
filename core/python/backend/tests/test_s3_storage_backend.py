@@ -1,23 +1,23 @@
-"""Tests for s3_backend module."""
+"""Tests for s3_storage_backend module."""
 
 from unittest.mock import MagicMock, patch
 
 from pytest import MonkeyPatch
 
-from backend.s3_backend import S3Backend
+from backend.s3_storage_backend import S3StorageBackend
 from credentials.s3_credentials import S3Credentials
 from utils.utils_for_unit_tests import compare
 
 
-class TestS3Backend:
-    """Test cases for S3Backend class."""
+class TestS3StorageBackend:
+    """Test cases for S3StorageBackend class."""
 
     def test_init_valid_builds_client_from_credentials(
         self, monkeypatch: MonkeyPatch
     ) -> None:
-        """Test S3Backend builds a boto3 S3 client from the given credentials."""
+        """Test S3StorageBackend builds a boto3 S3 client from the given credentials."""
         monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-3")
-        with patch("backend.s3_backend.boto3") as mock_boto3:
+        with patch("backend.s3_storage_backend.boto3") as mock_boto3:
             mock_client = MagicMock()
             mock_boto3.client.return_value = mock_client
 
@@ -26,7 +26,7 @@ class TestS3Backend:
                 retry_max_attempts=2,
             )
 
-            backend = S3Backend(credentials)
+            backend = S3StorageBackend(credentials)
 
             mock_boto3.client.assert_called_once()
             args, kwargs = mock_boto3.client.call_args

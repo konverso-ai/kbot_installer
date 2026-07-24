@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 log = logger.get_package_logger("backend")
 
 
-class AzureBackend:
+class AzureBlobBackend:
     """Backend for Azure Blob Storage."""
 
     _client: BlobServiceClient
@@ -33,7 +33,7 @@ class AzureBackend:
         """
         self.__credentials = credentials
         if self.__credentials.account_url is None:
-            msg = "AzureCredentials.account_url must be set to build an AzureBackend"
+            msg = "AzureCredentials.account_url must be set to build an AzureBlobBackend"
             raise ValueError(msg)
         self.__client = BlobServiceClient(
             account_url=self.__credentials.account_url,

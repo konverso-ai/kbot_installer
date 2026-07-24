@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 log = logger.get_package_logger("backend")
 
 
-class OciBackend:
+class OciStorageBackend:
     """Backend for Oracle Cloud Infrastructure (OCI) Object Storage."""
 
     _client: ObjectStorageClient

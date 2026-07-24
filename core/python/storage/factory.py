@@ -40,7 +40,7 @@ def add_s3_storage(bucket_name: str, cluster_name: str | None = None) -> Storage
 
     """
     credentials = S3Credentials()
-    backend = add_backend(name="s3", credentials=credentials)
+    backend = add_backend(name="s3_storage", credentials=credentials)
     return add_storage(
         name="s3",
         backend=backend,
@@ -60,7 +60,7 @@ def add_azure_storage(container_name: str) -> StorageBase:
 
     """
     credentials = AzureCredentials()
-    backend = add_backend(name="azure", credentials=credentials)
+    backend = add_backend(name="azure_blob", credentials=credentials)
     return add_storage(name="azure", backend=backend, container_name=container_name)
 
 
@@ -76,7 +76,7 @@ def add_oci_storage(bucket_name: str, namespace_name: str) -> StorageBase:
 
     """
     credentials = OciCredentials()
-    backend = add_backend(name="oci", credentials=credentials)
+    backend = add_backend(name="oci_storage", credentials=credentials)
     return add_storage(
         name="oci",
         backend=backend,

@@ -97,7 +97,7 @@ class TestAddS3Storage:
             result = add_s3_storage(bucket_name="bucket", cluster_name="cluster")
 
             mock_add_backend.assert_called_once_with(
-                name="s3", credentials="s3-credentials"
+                name="s3_storage", credentials="s3-credentials"
             )
             mock_add_storage.assert_called_once_with(
                 name="s3",
@@ -127,7 +127,7 @@ class TestAddAzureStorage:
             result = add_azure_storage(container_name="container")
 
             mock_add_backend.assert_called_once_with(
-                name="azure", credentials="azure-credentials"
+                name="azure_blob", credentials="azure-credentials"
             )
             mock_add_storage.assert_called_once_with(
                 name="azure",
@@ -156,7 +156,7 @@ class TestAddOciStorage:
             result = add_oci_storage(bucket_name="bucket", namespace_name="namespace")
 
             mock_add_backend.assert_called_once_with(
-                name="oci", credentials="oci-credentials"
+                name="oci_storage", credentials="oci-credentials"
             )
             mock_add_storage.assert_called_once_with(
                 name="oci",
