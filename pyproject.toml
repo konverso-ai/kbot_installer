@@ -1,30 +1,153 @@
 [project]
 name = "kbot-installer"
 version = "2.0.0"
-description = "Add your description here"
-readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "aiofiles",
+    "azure-identity>=1.25.3",
+    "azure-storage-blob>=12.30.0",
+    "boto3>=1.43.32",
+    "click",
+    "colorama",
+    "dulwich>=1.2.6",
+    "furl",
+    "httpx",
+    "more-itertools>=11.1.0",
+    "oci>=2.181.1",
+    "packaging",
+    "psutil",
+    "pydantic-settings",
+    "pygit2",
+    "python-dotenv",
+    "python-json-logger",
+    "requests",
+    "rich",
+    "typing_extensions",
+    "tqdm",
+    "xmltodict>=1.0.4",
+    "tomlkit>=0.15.0",
+    "psycopg[binary]",
+    "drf-yasg>=1.21.15",
 ]
-requires-python = "==3.10.15"
-dependencies = []
+
+[project.scripts]
+kbot-installer = "cli.__main__:main"
+tries = "tools.tries:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["core/python", "rest"]
-py-modules = ["Bot", "Load", "Learn", "System"]
+only-include = ["core/python"]
 
 [tool.hatch.build.targets.wheel.sources]
 "core/python" = "."
-"rest" = "."
 
 [tool.hatch.build.targets.wheel.force-include]
+"conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
+"pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
-[[tool.uv.index]]
-name = "konverso-nexus"
-url = "https://nexus.konverso.ai/repository/python_whl/simple/"
-publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+# [[tool.uv.index]]
+# name = "konverso-aws-private"
+# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+# publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
+
+# [[tool.uv.index]]
+# name = "konverso-aws-pypi-proxy"
+# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+# default = true
+
+[dependency-groups]
+deps = [
+    "deptry",
+]
+lint = [
+    "pylint",
+    "ruff",
+]
+
+typecheck = [
+    "ty",
+    "mypy-boto3-s3",
+]
+
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock",
+]
+
+dev = [
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "test" },
+]
+
+[tool.deptry]
+extend_exclude = [
+    "installer_tests",
+    "core/python/utils/setup_workarea.py",
+    "core/python/utils/kbot.py",
+    "core/python/utils/deps.py",
+]
+known_first_party = [
+    "auth",
+    "backend",
+    "cli",
+    "config",
+    "credentials",
+    "database",
+    "downloadable",
+    "errors",
+    "git",
+    "installable",
+    "installer_support",
+    "interactivity",
+    "publisher",
+    "service",
+    "storage",
+    "utils",
+    "workarea",
+    "writer",
+]
+
+[tool.deptry.optional_dependencies_dev_groups]
+dev = ["lint", "typecheck", "test", "deps"]
+
+[tool.deptry.package_module_name_map]
+python-json-logger = "pythonjsonlogger"
+
+[tool.deptry.per_rule_ignores]
+DEP001 = ["tomllib", "Bot"]
+DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm", "drf-yasg"]
+DEP003 = ["botocore", "pydantic"]
+DEP004 = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["core/python"]
+
+[tool.ty.environment]
+extra-paths = ["core/python"]
+
+[tool.ty.src]
+exclude = [
+    "core/python/**/tests/**",
+    "core/python/installer_tests/**",
+    "core/python/examples.py",
+    "core/python/simple_examples.py",
+    "core/python/git/provider/examples.py",
+    "core/python/git/provider/simple_examples.py",
+    "core/python/utils/setup_workarea.py",
+    "core/python/utils/kbot.py",
+    "core/python/interactivity/**",
+]
+
+[tool.ty.rules]
+all = "warn"
+invalid-method-override = "ignore"
+unresolved-import = "ignore"
+possibly-missing-import = "ignore"
+missing-argument = "ignore"

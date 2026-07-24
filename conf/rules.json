@@ -1,0 +1,101 @@
+[
+    {
+        "source": "core/python",
+        "target": "core/python",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
+        "source": "core/python",
+        "target": "core/python",
+        "action": "copy",
+        "recursive": false,
+        "includes": [
+            "RunBot",
+            "RunBot.py",
+            "Learn",
+            "Learn.py",
+            "Load",
+            "Load.py"
+        ]
+    },
+    {
+        "source": "rest/api",
+        "target": "rest/api",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
+        "source": "rest/rest_addons",
+        "target": "rest/rest_addons",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
+        "source": "bin",
+        "action": "link",
+        "excludes": [
+            "rc/kbot"
+        ]
+    },
+    {
+        "source": "bin",
+        "action": "copy",
+        "recursive": false,
+        "includes": ["rc/kbot"],
+        "placeholders": ["__KBOT_HOME__", "__KBOT_USER__"]
+    },
+    {
+        "source": "ui",
+        "target": "ui",
+        "action": "link",
+        "includes": [
+            "client/**",
+            "locales/**",
+            "widget/**",
+            "msteams_app/**",
+            "msteams_tab/**",
+            "in_tab_auth/**",
+            "jira_ext/**",
+            "chrome_ext/**",
+            "ignoreDirs/**",
+            "static/**"
+        ]
+    },
+    {
+        "source": "ui",
+        "target": "ui",
+        "action": "copy",
+        "recursive": true,
+        "excludes": [
+            "web/images/**"
+        ]
+    },
+    {
+        "source": "ui",
+        "action": "link",
+        "recursive": true,
+        "includes": [
+            "web/images/**"
+        ]
+    },
+    {
+        "source": "var",
+        "target": "var",
+        "action": "copy"
+    },
+    {
+        "source": "tests",
+        "target": "tests",
+        "action": "link"
+    }
+]

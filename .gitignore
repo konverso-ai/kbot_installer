@@ -3,6 +3,8 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+examples/
+
 .venv
 # Node artifact files
 node_modules/
@@ -13,6 +15,10 @@ dist/
 
 # Compiled Python bytecode
 *.py[cod]
+
+# Python egg-info
+*.egg-info/
+.egg-info/
 
 # Log files
 *.log
@@ -27,6 +33,9 @@ dist/
 # JetBrains IDE
 .idea/
 
+# VSCode
+.vscode/
+
 # Unit test reports
 TEST*.xml
 
@@ -40,6 +49,9 @@ Thumbs.db
 *.app
 *.exe
 *.war
+
+# uv builds
+build/
 
 # Large media files
 *.mp4

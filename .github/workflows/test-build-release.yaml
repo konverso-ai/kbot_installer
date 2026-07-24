@@ -75,13 +75,8 @@ jobs:
           UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
           UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
 
-      - name: Lint code with Ruff
-        run: uv ruff check
-        continue-on-error: true
-  
-      - name: Run Pylint
-        run: uv pylint .
-        continue-on-error: true
+      - name: Run tox
+        run: uvx tox
 
       - name: Build
         run: uv build
