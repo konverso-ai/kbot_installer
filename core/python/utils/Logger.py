@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from pythonjsonlogger.json import JsonFormatter
 
 if TYPE_CHECKING:
-    from errors import ErrorCode
+    from kerrors.base import ErrorCode
 
 try:
     glevel = int(os.environ["KBOTDEBUG"])

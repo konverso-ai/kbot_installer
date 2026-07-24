@@ -8,8 +8,8 @@ import oci
 from oci.exceptions import ServiceError
 from oci.object_storage.models import BatchDeleteObjectIdentifier, BatchDeleteObjectsDetails
 
-from utils import logger
-from utils.bucket_storage import BucketStorage
+from utils.Logger import logger
+from utils.bucket_storagei.base import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
 
