@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from oci.object_storage import ObjectStorageClient
 
-    from backend.oci_backend import OciBackend
+    from backend.oci_storage_backend import OciStorageBackend
 
 log = logger.get_package_logger("storage")
 
@@ -27,7 +27,7 @@ class OciStorage(StorageBase):
     """``StorageBase`` backend backed by Oracle Cloud Infrastructure Object Storage."""
 
     name = "oci"
-    _backend: OciBackend
+    _backend: OciStorageBackend
 
     @override
     def get_name(self) -> str:
@@ -36,7 +36,7 @@ class OciStorage(StorageBase):
 
     def __init__(
         self,
-        backend: OciBackend,
+        backend: OciStorageBackend,
         bucket_name: str,
         namespace_name: str,
     ) -> None:
@@ -59,7 +59,7 @@ class OciStorage(StorageBase):
             self.namespace_name,
         )
 
-    def _get_backend(self) -> OciBackend:
+    def _get_backend(self) -> OciStorageBackend:
         """Return the backend used by this storage."""
         return self._backend
 

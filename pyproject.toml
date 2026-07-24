@@ -28,6 +28,7 @@ dependencies = [
     "tomlkit>=0.15.0",
     "psycopg[binary]",
     "drf-yasg>=1.21.7",
+    "azure-keyvault-secrets>=4.11.0",
 ]
 
 [project.scripts]
@@ -71,6 +72,7 @@ lint = [
 typecheck = [
     "ty",
     "mypy-boto3-s3",
+    "mypy-boto3-secretsmanager>=1.43.0",
 ]
 
 test = [
@@ -110,6 +112,7 @@ known_first_party = [
     "service",
     "storage",
     "utils",
+    "vault",
     "workarea",
     "writer",
 ]

@@ -93,6 +93,20 @@ wheels = [
 ]
 
 [[package]]
+name = "azure-keyvault-secrets"
+version = "4.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "azure-core" },
+    { name = "isodate" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/b8/03c7b4edd1e3355ad5fffb70e68af70cd09542963f45cf3a2aa9fb3930b5/azure_keyvault_secrets-4.11.0.tar.gz", hash = "sha256:ac14727b9159cca353173ec5a454d8d7b192a6f2f5e7eb540f9fbcf914fa0ca0", size = 112291, upload-time = "2026-04-17T00:52:12.422Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/76/41c513917c0e8dc68de0c33578c6a0668b4a09eb4dc3e2782d382dc2947f/azure_keyvault_secrets-4.11.0-py3-none-any.whl", hash = "sha256:d8543b710423569bd00ada2a2533fe83d52d8e1fe026e1c47f41a3bc0fc73ef5", size = 103148, upload-time = "2026-04-17T00:52:13.796Z" },
+]
+
+[[package]]
 name = "azure-storage-blob"
 version = "12.30.0"
 source = { registry = "https://pypi.org/simple" }
@@ -681,6 +695,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
     { name = "azure-identity" },
+    { name = "azure-keyvault-secrets" },
     { name = "azure-storage-blob" },
     { name = "boto3" },
     { name = "click" },
@@ -713,6 +728,7 @@ deps = [
 ]
 dev = [
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -733,6 +749,7 @@ test = [
 ]
 typecheck = [
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager" },
     { name = "ty" },
 ]
 
@@ -740,6 +757,7 @@ typecheck = [
 requires-dist = [
     { name = "aiofiles" },
     { name = "azure-identity", specifier = ">=1.25.3" },
+    { name = "azure-keyvault-secrets", specifier = ">=4.11.0" },
     { name = "azure-storage-blob", specifier = ">=12.30.0" },
     { name = "boto3", specifier = ">=1.43.32" },
     { name = "click" },
@@ -769,6 +787,7 @@ requires-dist = [
 deps = [{ name = "deptry" }]
 dev = [
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager", specifier = ">=1.43.0" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -789,6 +808,7 @@ test = [
 ]
 typecheck = [
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager", specifier = ">=1.43.0" },
     { name = "ty" },
 ]
 
@@ -867,6 +887,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/97/e6/83141bd1cb8e060ecfd98ba23cfc295eae0123194add7d02e16d6d7e211e/mypy_boto3_s3-1.43.50.tar.gz", hash = "sha256:206817d22e80795da35daf704225f2e2a2b561fa4bf8c609f2150b04800ae811", size = 78807, upload-time = "2026-07-16T19:56:32.496Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/f4/39480da24fe26490234d081bc36b967a6ed1b592507d459a94338558bc35/mypy_boto3_s3-1.43.50-py3-none-any.whl", hash = "sha256:778aa2a48314ea47aeccca48ae151fe208b48d568d02578494b7201621ff2d6a", size = 86184, upload-time = "2026-07-16T19:56:30.283Z" },
+]
+
+[[package]]
+name = "mypy-boto3-secretsmanager"
+version = "1.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c6/e0/3b9f954dcce063407224e6601ed5af2d684185387b0572901c5f984fc8f6/mypy_boto3_secretsmanager-1.43.0.tar.gz", hash = "sha256:265ee2fddf9d3e42ae39685625fb7861a539110d8e324372847c0e1cbd666b20", size = 19967, upload-time = "2026-04-29T23:05:45.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/93/ae939d61eed240972553395b5e31f780825685b99f0ab4ebe5767430f103/mypy_boto3_secretsmanager-1.43.0-py3-none-any.whl", hash = "sha256:38415cdecb73dd20e485707a7cf456f6dde54ff4b155e7fb255eb001eb47d5bc", size = 27335, upload-time = "2026-04-29T23:05:43.152Z" },
 ]
 
 [[package]]
