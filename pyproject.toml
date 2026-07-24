@@ -27,7 +27,7 @@ dependencies = [
     "xmltodict>=1.0.4",
     "tomlkit>=0.15.0",
     "psycopg[binary]",
-    "drf-yasg>=1.21.15",
+    "drf-yasg>=1.21.7",
 ]
 
 [project.scripts]
@@ -140,6 +140,7 @@ exclude = [
     "core/python/simple_examples.py",
     "core/python/git/provider/examples.py",
     "core/python/git/provider/simple_examples.py",
+    "core/python/git/versioner/examples.py",
     "core/python/utils/setup_workarea.py",
     "core/python/utils/kbot.py",
     "core/python/interactivity/**",

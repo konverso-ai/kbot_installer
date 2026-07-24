@@ -10,7 +10,6 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from more_itertools import chunked
 from typing_extensions import override
 
-from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
 from utils.Logger import logger
@@ -39,22 +38,21 @@ class S3Storage(StorageBase):
 
     def __init__(
         self,
+        backend: BackendBase,
         bucket_name: str,
         cluster_name: str | None = None,
-        backend: BackendBase | None = None,
     ) -> None:
         """Initialize S3 storage.
 
         Args:
+            backend: Pre-configured S3 backend used to reach AWS S3. Building
+                the backend (and its credentials) is not this class's
+                responsibility.
             bucket_name: S3 bucket name.
             cluster_name: Optional root directory prefix inside the bucket.
-            region_name: AWS region name.
-            aws_access_key_id: AWS access key ID. Defaults to the environment.
-            aws_secret_access_key: AWS secret access key. Defaults to the environment.
-            backend: Pre-configured S3 backend. Used mainly in tests.
 
         """
-        self._backend = backend or create_backend(name="s3")
+        self._backend = backend
         self.bucket_name = bucket_name
         self.cluster_name = cluster_name
         log.debug(

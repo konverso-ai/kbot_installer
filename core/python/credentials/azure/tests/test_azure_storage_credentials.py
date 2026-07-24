@@ -29,11 +29,6 @@ def test_missingenvvars_valid_client_secret_delegates(
     )
 
 
-def test_authkwargs_valid_returns_none() -> None:
-    creds = AzureStorageCredentials()
-    assert compare("eq", creds.auth_kwargs(), None)
-
-
 def test_clientsecretkwargs_valid_delegates_to_nested_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

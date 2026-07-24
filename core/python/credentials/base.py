@@ -11,9 +11,6 @@ class CredentialsBase(Protocol):
     def missing_env_vars(self) -> list[str]:
         """Return canonical environment variable names that are absent."""
 
-    def auth_kwargs(self) -> dict[str, str] | None:
-        """Return auth constructor kwargs when credentials are complete."""
-
 
 class StorageCredentialsBase(CredentialsBase, Protocol):
     """Protocol for credentials that expose storage backend kwargs."""
@@ -27,3 +24,10 @@ class ClientSecretCredentialsBase(CredentialsBase, Protocol):
 
     def client_secret_kwargs(self) -> dict[str, str | None]:
         """Return Azure client-secret fields for backend construction."""
+
+
+class AuthCredentialsBase(CredentialsBase, Protocol):
+    """Protocol for credentials that expose HTTP/SSH auth kwargs."""
+
+    def auth_kwargs(self) -> dict[str, object]:
+        """Return keyword arguments for building an authentication object."""

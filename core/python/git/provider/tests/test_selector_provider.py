@@ -35,7 +35,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -65,7 +65,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -92,7 +92,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -119,7 +119,7 @@ class TestSelectorProvider:
 
         with (
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
             patch.object(
                 selector.credential_manager, "has_credentials", return_value=True
@@ -276,7 +276,7 @@ class TestSelectorProvider:
         expected = "SelectorProvider(providers=['storage'], base_url='')"
         assert repr(selector) == expected
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_clone_by_name_success(self, mock_create: MagicMock) -> None:
         """Test successful cloning by repository name."""
         # Mock provider
@@ -302,7 +302,7 @@ class TestSelectorProvider:
                 repository_name="test-repo",
             )
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_clone_by_name_all_providers_fail(self, mock_create: MagicMock) -> None:
         """Test cloning by name when all providers fail."""
         mock_create.return_value = None
@@ -339,61 +339,6 @@ class TestSelectorProvider:
                 repository_name="test",
             )
 
-    def test_is_connection_error_true(self) -> None:
-        """Test _is_connection_error returns True for connection errors."""
-        selector = SelectorProvider(["storage"])
-
-        assert selector._is_connection_error("Connection failed to server")
-        assert selector._is_connection_error("Connection failed")
-
-    def test_is_connection_error_false(self) -> None:
-        """Test _is_connection_error returns False for non-connection errors."""
-        selector = SelectorProvider(["storage"])
-
-        assert not selector._is_connection_error("Repository not found")
-        assert not selector._is_connection_error("Authentication failed")
-        assert not selector._is_connection_error("Invalid URL")
-
-    def test_extract_streaming_error_with_client_error(self) -> None:
-        """Test _extract_streaming_error extracts HTTP error from client error."""
-        selector = SelectorProvider(["storage"])
-
-        error_msg = "Streaming download/extraction failed: Client error '404 Not Found'"
-        result = selector._extract_streaming_error(error_msg)
-
-        assert result == "HTTP 404 Not Found"
-
-    def test_extract_streaming_error_without_client_error(self) -> None:
-        """Test _extract_streaming_error returns generic message without client error."""
-        selector = SelectorProvider(["storage"])
-
-        error_msg = "Streaming download/extraction failed: Network timeout"
-        result = selector._extract_streaming_error(error_msg)
-
-        assert result == "Download failed"
-
-    def test_extract_last_meaningful_part_version_not_found(self) -> None:
-        """Test _extract_last_meaningful_part preserves version not found messages."""
-        selector = SelectorProvider(["storage"])
-
-        error_msg = "Version 'v1.0.0' not found for repository 'test-repo'"
-        result = selector._extract_last_meaningful_part(error_msg)
-
-        assert result == error_msg
-
-    def test_extract_last_meaningful_part_other_error(self) -> None:
-        """Test _extract_last_meaningful_part extracts meaningful part from other errors."""
-        selector = SelectorProvider(["storage"])
-
-        error_msg = (
-            "Failed to clone repository: Authentication failed: Invalid credentials"
-        )
-        result = selector._extract_last_meaningful_part(error_msg)
-
-        assert (
-            result == error_msg
-        )  # The method returns the full message for non-version errors
-
     def test_repr(self) -> None:
         """Test __repr__ returns detailed string representation."""
         selector = SelectorProvider(["storage", "github"], "https://example.com")
@@ -405,7 +350,7 @@ class TestSelectorProvider:
         assert "github" in repr_str
         assert "https://example.com" in repr_str
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_provider_name_updated_in_clone_by_name(
         self, mock_create: MagicMock
     ) -> None:
@@ -457,7 +402,7 @@ class TestSelectorProvider:
             "dev",
         ]
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_clone_git_fails_fast_when_branch_missing_on_remote(
         self, mock_create: MagicMock
     ) -> None:
@@ -497,7 +442,7 @@ class TestSelectorProvider:
 
             mock_clone.assert_not_called()
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_get_branch_returns_used_branch_after_clone(
         self, mock_create: MagicMock
     ) -> None:
@@ -522,7 +467,7 @@ class TestSelectorProvider:
             # After clone with branch "main", should return "main"
             assert selector.get_branch() == "main"
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_get_branch_returns_fallback_branch_when_requested_not_found(
         self, mock_create: MagicMock
     ) -> None:
@@ -565,7 +510,7 @@ class TestSelectorProvider:
                 selector.branch_used = "master"
                 assert selector.get_branch() == "master"
 
-    @patch("git.provider.selector_provider.add_provider")
+    @patch("git.provider.provider_builder.add_provider")
     def test_provider_name_updated_in_clone_by_url(
         self, mock_create: MagicMock
     ) -> None:

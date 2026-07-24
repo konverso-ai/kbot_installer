@@ -1,76 +1,65 @@
-"""Oracle Cloud Infrastructure (OCI) credentials loaded from the environment."""
+"""Oracle Cloud Infrastructure (OCI) default credentials, config only."""
 
 from typing import Annotated, TypeAlias
 
+import oci
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-OciUserOcid: TypeAlias = Annotated[
+OciRegion: TypeAlias = Annotated[
     str | None,
-    Field(default=None, validation_alias="OCI_USER_OCID"),
+    Field(default=None, validation_alias="OCI_REGION"),
 ]
-OciTenancyOcid: TypeAlias = Annotated[
-    str | None,
-    Field(default=None, validation_alias="OCI_TENANCY_OCID"),
-]
-OciFingerprint: TypeAlias = Annotated[
-    str | None,
-    Field(default=None, validation_alias="OCI_FINGERPRINT"),
-]
-OciPrivateKeyPath: TypeAlias = Annotated[
-    str | None,
-    Field(default=None, validation_alias="OCI_PRIVATE_KEY_PATH"),
-]
-OciPassPhrase: TypeAlias = Annotated[
-    str | None,
-    Field(default=None, validation_alias="OCI_PASS_PHRASE"),
+OciConfigProfile: TypeAlias = Annotated[
+    str,
+    Field(default="DEFAULT", validation_alias="OCI_CONFIG_PROFILE"),
 ]
 
 
 class OciCredentials(BaseSettings):
-    """OCI API-key credentials loaded from the environment."""
+    """OCI connection config for the default OCI config-file credentials.
+
+    This credential type requires nothing beyond connection config: actual
+    authentication is resolved by the OCI SDK's own default config file
+    (``~/.oci/config``, or ``OCI_CONFIG_FILE``/``OCI_CONFIG_PROFILE`` when set).
+    """
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    user_ocid: OciUserOcid
-    tenancy_ocid: OciTenancyOcid
-    fingerprint: OciFingerprint
-    private_key_path: OciPrivateKeyPath
-    pass_phrase: OciPassPhrase
+    region: OciRegion
+    config_profile: OciConfigProfile
 
     def missing_env_vars(self) -> list[str]:
         """Return canonical environment variable names that are absent.
 
         Returns:
-            Names of the OCI environment variables that are not set.
+            An empty list: this credential type relies on the OCI SDK's own
+            default config file and requires nothing from the environment.
 
         """
-        missing: list[str] = []
-        if not self.user_ocid:
-            missing.append("OCI_USER_OCID")
-        if not self.tenancy_ocid:
-            missing.append("OCI_TENANCY_OCID")
-        if not self.fingerprint:
-            missing.append("OCI_FINGERPRINT")
-        if not self.private_key_path:
-            missing.append("OCI_PRIVATE_KEY_PATH")
-        return missing
-
-    def auth_kwargs(self) -> dict[str, str] | None:
-        """Return HTTP auth constructor kwargs.
-
-        Returns:
-            None, as OCI credentials are not used for HTTP auth.
-
-        """
-        return None
+        return []
 
     def storage_kwargs(self) -> dict[str, str | None]:
-        """Return OCI credential fields for storage backend construction."""
-        return {
-            "user_ocid": self.user_ocid,
-            "tenancy_ocid": self.tenancy_ocid,
-            "fingerprint": self.fingerprint,
-            "private_key_path": self.private_key_path,
-            "pass_phrase": self.pass_phrase,
-        }
+        """Return credential fields for storage backend construction.
+
+        Returns:
+            An empty dict: authentication is resolved entirely by the OCI
+            SDK's own default config file, so no extra fields need to be
+            merged in.
+
+        """
+        return {}
+
+    def to_client_config(self) -> dict[str, str | None]:
+        """Build the OCI client config dict used to construct SDK clients.
+
+        Returns:
+            The config dict loaded from the OCI SDK's default config file
+            (``~/.oci/config`` unless overridden via ``OCI_CONFIG_FILE``),
+            with ``region`` overridden when explicitly configured.
+
+        """
+        config = oci.config.from_file(profile_name=self.config_profile)
+        if self.region:
+            config["region"] = self.region
+        return config

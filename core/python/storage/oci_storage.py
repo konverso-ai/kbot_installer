@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 from oci.exceptions import ServiceError
 from typing_extensions import override
 
-from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
 from utils.Logger import logger
@@ -37,42 +36,21 @@ class OciStorage(StorageBase):
 
     def __init__(
         self,
+        backend: OciBackend,
         bucket_name: str,
         namespace_name: str,
-        region: str = "eu-frankfurt-1",
-        user_ocid: str | None = None,
-        tenancy_ocid: str | None = None,
-        fingerprint: str | None = None,
-        private_key_path: str | None = None,
-        pass_phrase: str | None = None,
-        backend: OciBackend | None = None,
     ) -> None:
         """Initialize OCI Object Storage.
 
         Args:
+            backend: Pre-configured OCI backend used to reach OCI Object
+                Storage. Building the backend (and its credentials) is not
+                this class's responsibility.
             bucket_name: OCI Object Storage bucket name.
             namespace_name: Object Storage namespace of the tenancy.
-            region: OCI region identifier.
-            user_ocid: OCID of the calling user.
-            tenancy_ocid: OCID of the tenancy containing the user.
-            fingerprint: Fingerprint of the public key uploaded for the user.
-            private_key_path: Path to the PEM-encoded API signing key file.
-            pass_phrase: Passphrase protecting the private key, if any.
-            backend: Pre-configured OCI backend. Used mainly in tests.
 
         """
-        self._backend = backend or cast(
-            "OciBackend",
-            create_backend(
-                "oci",
-                region=region,
-                user_ocid=user_ocid,
-                tenancy_ocid=tenancy_ocid,
-                fingerprint=fingerprint,
-                private_key_path=private_key_path,
-                pass_phrase=pass_phrase,
-            ),
-        )
+        self._backend = backend
         self.bucket_name = bucket_name
         self.namespace_name = namespace_name
         log.debug(

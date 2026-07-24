@@ -3,7 +3,7 @@
 from typing import Literal, cast
 
 from installable.base import InstallableBase
-from utils.factory.factory import factory_class
+from utils.factory.loader import factory_class
 
 
 def create_installable(

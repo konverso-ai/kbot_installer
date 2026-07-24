@@ -3,7 +3,7 @@
 from typing import cast
 
 from auth.base import HttpAuthBase
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 
 def create_auth(name: str, **kwargs: object) -> HttpAuthBase:

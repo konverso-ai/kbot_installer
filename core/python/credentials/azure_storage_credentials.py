@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias
 
 from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import override
 
-from credentials.factory import add_credentials
+from credentials.azure.azure_client_secret_credentials import (
+    AzureClientSecretCredentials,
+)
 
 if TYPE_CHECKING:
     from credentials.base import ClientSecretCredentialsBase
@@ -34,10 +36,7 @@ class AzureStorageCredentials(BaseSettings):
     @override
     def model_post_init(self, context: Any, /) -> None:
         """Initialize nested client-secret credentials."""
-        self._client_secret = cast(
-            "ClientSecretCredentialsBase",
-            add_credentials("azure_client_secret"),
-        )
+        self._client_secret = AzureClientSecretCredentials()
 
     def missing_env_vars(self) -> list[str]:
         """Return canonical environment variable names that are absent.
@@ -50,15 +49,6 @@ class AzureStorageCredentials(BaseSettings):
         if self.credential_type == "default_azure":
             return []
         return self._client_secret.missing_env_vars()
-
-    def auth_kwargs(self) -> dict[str, str] | None:
-        """Return HTTP auth constructor kwargs.
-
-        Returns:
-            None, as Azure storage credentials are not used for HTTP auth.
-
-        """
-        return None
 
     def client_secret_kwargs(self) -> dict[str, str | None]:
         """Return Azure client-secret fields for storage backend construction."""

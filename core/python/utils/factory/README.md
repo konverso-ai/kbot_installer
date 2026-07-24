@@ -46,13 +46,31 @@ github = factory_object("github", "versioner", token="test_token")
 print(github)  # GitHubVersioner(https://github.com)
 ```
 
+#### `factory_function(module_name: str, attribute_name: str) -> T`
+
+Get an attribute (class, function, or any object) from an explicit module path, with
+no naming convention required between `module_name` and `attribute_name`. This is a
+thin wrapper around `importlib.import_module(module_name)` + `getattr(module, attribute_name)`,
+for cases where `factory_class`'s `{name}_{package}` / `{Name}{Package}` convention
+does not apply.
+
+```python
+from utils.factory import factory_function
+
+# Explicit module path + attribute name, no convention involved
+NexusProvider = factory_function("provider.nexus_provider", "NexusProvider")
+print(NexusProvider)  # <class 'provider.nexus_provider.NexusProvider'>
+
+build_url = factory_function("provider.utils", "build_url")
+print(build_url)  # <function build_url at 0x...>
+```
+
 ### `factory_method(name: str, package: str, **kwargs: Any) -> Any`
 
-Create an instance using generic naming convention. This function:
-1. Gets the class using `factory_class(name, package)`
-2. Instantiates the class with the provided arguments
-
-This is essentially a convenience wrapper around `factory_class`.
+Create an instance using generic naming convention. This function is a convenience
+alias kept for backward compatibility: it behaves exactly like `factory_object` and
+simply delegates to it (which itself builds the module/class names and delegates to
+`factory_function`).
 
 ```python
 from utils.factory import factory_method

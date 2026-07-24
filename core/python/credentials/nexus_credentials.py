@@ -1,6 +1,6 @@
 """Nexus credentials loaded from the environment."""
 
-from typing import Annotated, TypeAlias, cast
+from typing import Annotated, TypeAlias
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,17 +37,8 @@ class NexusCredentials(BaseSettings):
             missing.append("NEXUS_PASSWORD")
         return missing
 
-    def auth_kwargs(self) -> dict[str, str] | None:
-        """Return HTTP auth constructor kwargs when credentials are complete.
-
-        Returns:
-            A mapping with ``username`` and ``password``, or None if either is
-            missing.
-
-        """
-        if self.missing_env_vars():
-            return None
-        return cast(
-            "dict[str, str]",
-            {"username": self.username, "password": self.password},
-        )
+    def auth_kwargs(self) -> dict[str, object]:
+        """Return keyword arguments for ``add_http_auth("basic", **kwargs)``."""
+        if not self.username or not self.password:
+            return {}
+        return {"username": self.username, "password": self.password}

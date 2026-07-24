@@ -3,7 +3,7 @@
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
 from azure.storage.blob import (
@@ -16,7 +16,6 @@ from more_itertools import chunked
 from typing_extensions import override
 
 from backend.base import BackendBase
-from backend.factory import create_backend
 from storage.base import StorageBase
 from storage.download_utils import download_and_extract_tar_gz
 from utils.Logger import logger
@@ -32,46 +31,22 @@ class AzureStorage(StorageBase):
 
     def __init__(
         self,
+        backend: BackendBase,
         container_name: str,
-        account_url: str = "",
-        credential_type: Literal["default_azure", "client_secret"] = "default_azure",
-        tenant_id: str | None = None,
-        client_id: str | None = None,
-        client_secret: str | None = None,
-        backend: BackendBase | None = None,
     ) -> None:
         """Initialize Azure storage.
 
         Args:
+            backend: Pre-configured Azure backend used to reach Azure Blob
+                Storage. Building the backend (and its credentials) is not
+                this class's responsibility.
             container_name: Blob container name.
-            account_url: Azure Blob Storage account URL.
-            credential_type: Azure credential strategy.
-            tenant_id: Azure tenant ID for client-secret auth.
-            client_id: Azure client ID for client-secret auth.
-            client_secret: Azure client secret for client-secret auth.
-            backend: Pre-configured Azure backend. Used mainly in tests.
 
         """
-        if backend is None:
-            if not account_url:
-                msg = "account_url is required when backend is not provided"
-                raise ValueError(msg)
-            self._backend = create_backend(
-                "azure",
-                account_url=account_url,
-                credential_type=credential_type,
-                tenant_id=tenant_id,
-                client_id=client_id,
-                client_secret=client_secret,
-            )
-            logged_account_url = account_url
-        else:
-            self._backend = backend
-            logged_account_url = account_url or getattr(backend, "account_url", "")
+        self._backend = backend
         self.container_name = container_name
         log.debug(
-            "Creating AzureStorage(account_url='%s', container_name='%s')",
-            logged_account_url,
+            "Creating AzureStorage(container_name='%s')",
             self.container_name,
         )
 
@@ -132,7 +107,7 @@ class AzureStorage(StorageBase):
             log.debug("CONTAINER = %s :: %s", key, self.container_name)
             # download_blob() is called without `encoding`, so it always
             # resolves to the bytes overload, not the str one.
-            data = cast("bytes", blob_client.download_blob().readall())
+            data = blob_client.download_blob().readall()
             log.debug(
                 "Successfully retrieved object from Azure Blob Storage: %s; encoding: %s",
                 key,

@@ -7,7 +7,8 @@ from auth.apikey_auth import ApikeyAuth
 from auth.basic_auth import BasicAuth
 from auth.bearer_auth import BearerAuth
 from auth.factory import create_auth
-from auth.ssh_auth import SshAuth
+from auth.ssh.factory import add_ssh_auth
+from auth.ssh.ssh_auth import SshAuth
 from utils.utils_for_unit_tests import compare
 
 
@@ -21,19 +22,23 @@ from utils.utils_for_unit_tests import compare
         ),
         ("bearer", {"secret": SecretStr("token")}, BearerAuth),
         ("apikey", {"secret": SecretStr("key")}, ApikeyAuth),
-        ("ssh", {"use_agent": True}, SshAuth),
     ],
 )
 def test_createauth_valid_builds_auth_instance(
     name: str,
     params: dict,
     expected_type: type,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if name == "ssh":
-        monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
     auth = create_auth(name, **params)
     assert compare("eq", isinstance(auth, expected_type), True)
+
+
+def test_addsshauth_valid_builds_ssh_auth_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
+    auth = add_ssh_auth("ssh", use_agent=True)
+    assert compare("eq", isinstance(auth, SshAuth), True)
 
 
 @pytest.mark.parametrize(

@@ -5,7 +5,8 @@ including clone, add, pull, commit, and push.
 """
 
 from git.versioner.factory import create_versioner
-from git.versioner.base import VersionerBase, VersionerError
+from git.versioner.base import VersionerBase
+from git.versioner.errors import VersionerError
 
 __all__ = [
     "VersionerBase",

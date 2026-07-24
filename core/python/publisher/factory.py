@@ -3,7 +3,7 @@
 from typing import cast
 
 from publisher.base import PublisherBase
-from utils.factory.factory import factory_object
+from utils.factory.loader import factory_object
 
 
 def create_publisher(name: str, **kwargs: object) -> PublisherBase:

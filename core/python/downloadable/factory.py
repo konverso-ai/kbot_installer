@@ -3,7 +3,7 @@
 from typing import cast
 
 from downloadable.base import DownloadableBase
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 
 def add_downloadable(name: str, **kwargs: object) -> DownloadableBase:

@@ -3,7 +3,7 @@
 from typing import Literal, cast
 
 from database.base import DatabaseBackend, DbSettings
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 DbMode = Literal["internal", "external"]
 

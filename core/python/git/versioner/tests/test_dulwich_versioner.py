@@ -8,7 +8,8 @@ from dulwich.errors import GitProtocolError, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
 
 from auth.base import HttpAuthBase
-from git.versioner.base import VersionerBase, VersionerError
+from git.versioner.base import VersionerBase
+from git.versioner.errors import VersionerError
 from git.versioner.dulwich_versioner import DulwichVersioner
 from utils.utils_for_unit_tests import compare
 
@@ -41,7 +42,6 @@ class TestDulwichVersioner:
             "username": "user",
             "password": "pass",
         }
-        mock_auth.git_cli_environment.return_value = None
         return mock_auth
 
     def test_inherits_from_versioner_base(self) -> None:
@@ -78,7 +78,6 @@ class TestDulwichVersioner:
             "username": "git",
             "key_filename": "/priv",
         }
-        mock_auth.git_cli_environment.return_value = None
         versioner = DulwichVersioner(auth=mock_auth)
         assert versioner._get_remote_kwargs() == {
             "username": "git",
@@ -154,56 +153,49 @@ class TestDulwichVersioner:
             )
 
     @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
-    def test_clone_with_ssh_auth_uses_git_cli(self) -> None:
-        """Test SSH authentication clones through the git CLI."""
-        from auth.factory import create_auth
+    def test_clone_with_ssh_agent_auth_passes_remote_kwargs(self) -> None:
+        """Test SSH agent authentication clones purely through Dulwich porcelain."""
+        from auth.ssh.factory import add_ssh_auth
 
-        auth = create_auth("ssh", username="git", use_agent=True)
+        auth = add_ssh_auth("ssh", username="git", use_agent=True)
         versioner = DulwichVersioner(auth=auth)
-        git_env = auth.git_cli_environment()
-        with (
-            patch.object(versioner, "_clone_with_git_cli") as mock_git_clone,
-            patch("git.versioner.dulwich_versioner.porcelain.clone") as mock_dulwich_clone,
-        ):
+        with patch("git.versioner.dulwich_versioner.porcelain.clone") as mock_clone:
             versioner.clone(
                 "git@github.com:test/repo.git",
                 "/tmp/test",
                 branch="main",
                 depth=1,
             )
-            mock_git_clone.assert_called_once_with(
+            mock_clone.assert_called_once_with(
                 "git@github.com:test/repo.git",
-                Path("/tmp/test"),
-                git_env,
+                "/tmp/test",
+                username="git",
+                ssh_command=auth.remote_kwargs()["ssh_command"],
                 branch="main",
                 depth=1,
             )
-            mock_dulwich_clone.assert_not_called()
 
     @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
-    def test_list_remote_branches_with_ssh_auth_uses_git_cli(self) -> None:
-        """Test SSH authentication lists branches through the git CLI."""
-        from auth.factory import create_auth
+    def test_list_remote_branches_with_ssh_agent_auth_passes_remote_kwargs(
+        self,
+    ) -> None:
+        """Test SSH agent authentication lists branches purely through Dulwich."""
+        from auth.ssh.factory import add_ssh_auth
 
-        auth = create_auth("ssh", username="git", use_agent=True)
+        auth = add_ssh_auth("ssh", username="git", use_agent=True)
         versioner = DulwichVersioner(auth=auth)
-        git_env = auth.git_cli_environment()
-        with (
-            patch.object(
-                versioner,
-                "_list_remote_branches_with_git_cli",
-                return_value=["main"],
-            ) as mock_git_ls,
-            patch("git.versioner.dulwich_versioner.porcelain.ls_remote") as mock_dulwich_ls,
-        ):
+        with patch(
+            "git.versioner.dulwich_versioner.porcelain.ls_remote",
+            return_value={b"refs/heads/main": b"sha1"},
+        ) as mock_ls_remote:
             assert versioner.list_remote_branches(
                 "git@github.com:test/repo.git"
             ) == ["main"]
-            mock_git_ls.assert_called_once_with(
+            mock_ls_remote.assert_called_once_with(
                 "git@github.com:test/repo.git",
-                git_env,
+                username="git",
+                ssh_command=auth.remote_kwargs()["ssh_command"],
             )
-            mock_dulwich_ls.assert_not_called()
 
     def test_clone_failure(self, versioner: DulwichVersioner) -> None:
         """Test clone wraps Dulwich errors."""
@@ -344,203 +336,6 @@ class TestDulwichVersioner:
 
         versioner = create_versioner("dulwich")
         assert isinstance(versioner, DulwichVersioner)
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        (
-            {
-                "returncode": 0,
-                "stdout": "abc123\trefs/heads/main\ndef456\trefs/heads/dev\n",
-                "stderr": "",
-            },
-            ["dev", "main"],
-        ),
-        (
-            {
-                "returncode": 0,
-                "stdout": "abc123\trefs/heads/main\n\n",
-                "stderr": "",
-            },
-            ["main"],
-        ),
-    ],
-)
-def test_list_remote_branches_with_git_cli_valid_parses_branches(
-    bare_versioner: DulwichVersioner,
-    params: dict,
-    expected: list[str],
-) -> None:
-    mock_result = MagicMock()
-    mock_result.returncode = params["returncode"]
-    mock_result.stdout = params["stdout"]
-    mock_result.stderr = params["stderr"]
-    with patch(
-        "git.versioner.dulwich_versioner.subprocess.run",
-        return_value=mock_result,
-    ):
-        branches = bare_versioner._list_remote_branches_with_git_cli(
-            "git@github.com:test/repo.git",
-            {"GIT_SSH_COMMAND": "ssh"},
-        )
-    assert compare("eq", branches, expected)
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        ({"side_effect": FileNotFoundError("git")}, VersionerError),
-        (
-            {
-                "returncode": 1,
-                "stdout": "",
-                "stderr": "permission denied",
-            },
-            VersionerError,
-        ),
-    ],
-)
-def test_list_remote_branches_with_git_cli_invalid_raises(
-    bare_versioner: DulwichVersioner,
-    params: dict,
-    expected: type[BaseException],
-) -> None:
-    if "side_effect" in params:
-        with (
-            patch(
-                "git.versioner.dulwich_versioner.subprocess.run",
-                side_effect=params["side_effect"],
-            ),
-            pytest.raises(expected, match="git executable not found"),
-        ):
-            bare_versioner._list_remote_branches_with_git_cli(
-                "git@github.com:test/repo.git",
-                {},
-            )
-        return
-
-    mock_result = MagicMock()
-    mock_result.returncode = params["returncode"]
-    mock_result.stdout = params["stdout"]
-    mock_result.stderr = params["stderr"]
-    with (
-        patch(
-            "git.versioner.dulwich_versioner.subprocess.run",
-            return_value=mock_result,
-        ),
-        pytest.raises(expected, match="Failed to list remote branches"),
-    ):
-        bare_versioner._list_remote_branches_with_git_cli(
-            "git@github.com:test/repo.git",
-            {},
-        )
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        (
-            {
-                "returncode": 0,
-                "stdout": "",
-                "stderr": "",
-                "branch": None,
-                "depth": None,
-            },
-            None,
-        ),
-        (
-            {
-                "returncode": 0,
-                "stdout": "",
-                "stderr": "",
-                "branch": "main",
-                "depth": 1,
-            },
-            None,
-        ),
-    ],
-)
-def test_clone_with_git_cli_valid_succeeds(
-    bare_versioner: DulwichVersioner,
-    params: dict,
-    expected: None,
-) -> None:
-    _ = expected
-    mock_result = MagicMock()
-    mock_result.returncode = params["returncode"]
-    mock_result.stdout = params["stdout"]
-    mock_result.stderr = params["stderr"]
-    with patch(
-        "git.versioner.dulwich_versioner.subprocess.run",
-        return_value=mock_result,
-    ) as mock_run:
-        bare_versioner._clone_with_git_cli(
-            "git@github.com:test/repo.git",
-            Path("/tmp/test"),
-            {"GIT_SSH_COMMAND": "ssh"},
-            branch=params["branch"],
-            depth=params["depth"],
-        )
-    cmd = mock_run.call_args.args[0]
-    assert compare("eq", cmd[0:2], ["git", "clone"])
-    if params["branch"] is not None:
-        assert compare("in", "--branch", cmd)
-    if params["depth"] is not None:
-        assert compare("in", "--depth", cmd)
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        ({"side_effect": FileNotFoundError("git")}, VersionerError),
-        (
-            {
-                "returncode": 128,
-                "stdout": "",
-                "stderr": "fatal: repository not found",
-            },
-            VersionerError,
-        ),
-    ],
-)
-def test_clone_with_git_cli_invalid_raises(
-    bare_versioner: DulwichVersioner,
-    params: dict,
-    expected: type[BaseException],
-) -> None:
-    if "side_effect" in params:
-        with (
-            patch(
-                "git.versioner.dulwich_versioner.subprocess.run",
-                side_effect=params["side_effect"],
-            ),
-            pytest.raises(expected, match="git executable not found"),
-        ):
-            bare_versioner._clone_with_git_cli(
-                "git@github.com:test/repo.git",
-                Path("/tmp/test"),
-                {},
-            )
-        return
-
-    mock_result = MagicMock()
-    mock_result.returncode = params["returncode"]
-    mock_result.stdout = params["stdout"]
-    mock_result.stderr = params["stderr"]
-    with (
-        patch(
-            "git.versioner.dulwich_versioner.subprocess.run",
-            return_value=mock_result,
-        ),
-        pytest.raises(expected, match="Failed to clone repository"),
-    ):
-        bare_versioner._clone_with_git_cli(
-            "git@github.com:test/repo.git",
-            Path("/tmp/test"),
-            {},
-        )
 
 
 @pytest.mark.parametrize(
@@ -945,23 +740,6 @@ def test_clone_invalid_wraps_generic_error(bare_versioner: DulwichVersioner) -> 
         bare_versioner.clone("https://github.com/test/repo.git", "/tmp/test")
 
 
-@patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
-def test_list_remote_branches_invalid_reraises_versioner_error() -> None:
-    from auth.factory import create_auth
-
-    auth = create_auth("ssh", username="git", use_agent=True)
-    versioner = DulwichVersioner(auth=auth)
-    with (
-        patch.object(
-            versioner,
-            "_list_remote_branches_with_git_cli",
-            side_effect=VersionerError("ssh failed"),
-        ),
-        pytest.raises(VersionerError, match="ssh failed"),
-    ):
-        versioner.list_remote_branches("git@github.com:test/repo.git")
-
-
 @pytest.mark.parametrize(
     "params, expected",
     [
@@ -1234,21 +1012,19 @@ def test_safe_pull_valid_logs_when_stash_restore_fails(
     mock_warning.assert_called_once()
 
 
-@patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
-def test_remote_exists_valid_uses_git_cli() -> None:
-    from auth.factory import create_auth
+def test_remote_exists_valid_uses_ssh_agent_auth() -> None:
+    """Test remote_exists works purely through Dulwich with SSH agent auth."""
+    from auth.ssh.factory import add_ssh_auth
 
-    auth = create_auth("ssh", username="git", use_agent=True)
+    with patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True):
+        auth = add_ssh_auth("ssh", username="git", use_agent=True)
     versioner = DulwichVersioner(auth=auth)
-    git_env = auth.git_cli_environment()
-    with patch.object(
-        versioner,
-        "_list_remote_branches_with_git_cli",
-        return_value=["main"],
-    ) as mock_git_ls:
+    with patch(
+        "git.versioner.dulwich_versioner.porcelain.ls_remote",
+        return_value={b"refs/heads/main": b"sha1"},
+    ):
         assert compare(
             "eq",
             versioner.remote_exists("git@github.com:test/repo.git"),
             True,
         )
-    mock_git_ls.assert_called_once_with("git@github.com:test/repo.git", git_env)

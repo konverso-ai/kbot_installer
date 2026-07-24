@@ -4,7 +4,7 @@ from enum import Enum
 from typing import cast
 
 from installable.updater.base import UpdaterBase
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 
 class UpdaterName(str, Enum):

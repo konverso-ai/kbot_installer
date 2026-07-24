@@ -1,8 +1,8 @@
-"""Tests for credentials.azure_client_secret_credentials module."""
+"""Tests for credentials.azure.azure_client_secret_credentials module."""
 
 import pytest
 
-from credentials.azure_client_secret_credentials import AzureClientSecretCredentials
+from credentials.azure.azure_client_secret_credentials import AzureClientSecretCredentials
 from utils.utils_for_unit_tests import compare
 
 
@@ -39,11 +39,6 @@ def test_missingenvvars_valid_reports_gaps(
 
     creds = AzureClientSecretCredentials()
     assert compare("eq", creds.missing_env_vars(), expected_missing)
-
-
-def test_authkwargs_valid_returns_none() -> None:
-    creds = AzureClientSecretCredentials()
-    assert compare("eq", creds.auth_kwargs(), None)
 
 
 def test_clientsecretkwargs_valid_dumps_model(

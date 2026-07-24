@@ -3,7 +3,7 @@
 from typing import cast
 
 from credentials.base import CredentialsBase
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 
 def add_credentials(name: str, **kwargs: object) -> CredentialsBase:

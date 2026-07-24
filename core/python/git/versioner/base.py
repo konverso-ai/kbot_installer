@@ -9,12 +9,7 @@ from pathlib import Path
 
 from auth.base import HttpAuthBase
 
-
-class VersionerError(Exception):
-    """Base exception for versioner-related errors.
-
-    This exception is raised when versioner operations fail.
-    """
+__all__ = ["VersionerBase"]
 
 
 class VersionerBase(ABC):

@@ -1,0 +1,26 @@
+"""Base model for authentication fields."""
+
+from abc import abstractmethod
+from collections.abc import Iterator
+from typing import Annotated, TypeAlias
+
+import httpx
+from pydantic import BaseModel, Field, SecretStr
+from typing_extensions import override
+
+HeaderName: TypeAlias = Annotated[str, Field(default="Authorization")]
+Prefix: TypeAlias = Annotated[str, Field(default="")]
+Secret: TypeAlias = Annotated[SecretStr, Field(default=SecretStr(""))]
+
+
+class HttpAuthBase(BaseModel, httpx.Auth):
+    """Shared authentication fields for header-based auth."""
+
+    header_name: HeaderName
+    prefix: Prefix
+    secret: Secret
+
+    @abstractmethod
+    @override
+    def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
+        """Apply authentication to an outgoing HTTP request."""

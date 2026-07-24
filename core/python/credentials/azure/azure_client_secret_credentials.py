@@ -45,15 +45,6 @@ class AzureClientSecretCredentials(BaseSettings):
             missing.append("AZURE_CLIENT_SECRET")
         return missing
 
-    def auth_kwargs(self) -> dict[str, str] | None:
-        """Return HTTP auth constructor kwargs.
-
-        Returns:
-            None, as service-principal credentials are not used for HTTP auth.
-
-        """
-        return None
-
     def client_secret_kwargs(self) -> dict[str, str | None]:
         """Return Azure client-secret fields for storage backend construction."""
         return self.model_dump()

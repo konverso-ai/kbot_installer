@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from utils.factory.factory import factory_object
+from utils.factory.loader import factory_object
 from writer.base import Writer
 
 

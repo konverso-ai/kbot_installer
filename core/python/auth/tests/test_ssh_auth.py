@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from auth.ssh_auth import SshAuth
+from auth.ssh.ssh_auth import SshAuth
 from utils.utils_for_unit_tests import compare
 
 

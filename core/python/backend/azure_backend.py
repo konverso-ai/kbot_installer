@@ -1,62 +1,45 @@
 """Azure Blob Storage authentication and client management."""
 
-from typing import Annotated, Literal
+from __future__ import annotations
 
-from azure.core.credentials import TokenCredential
-from azure.identity import ClientSecretCredential, DefaultAzureCredential
+from typing import TYPE_CHECKING
+
 from azure.storage.blob import BlobServiceClient
-from pydantic import ConfigDict, Field, PrivateAttr
-from typing_extensions import override
 
-from backend.base import BackendBase
 from utils.Logger import logger
+
+if TYPE_CHECKING:
+    from credentials.azure_credentials import AzureCredentials
 
 log = logger.get_package_logger("backend")
 
 
-class AzureBackend(BackendBase):
+class AzureBackend:
     """Backend for Azure Blob Storage."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    _client: BlobServiceClient
 
-    account_url: str
-    credential_type: Annotated[
-        Literal["default_azure", "client_secret"], Field(default="default_azure")
-    ]
+    def __init__(self, credentials: AzureCredentials) -> None:
+        """Build the Azure Blob Storage client from the given credentials.
 
-    tenant_id: Annotated[str | None, Field(default=None)]
-    client_id: Annotated[str | None, Field(default=None)]
-    client_secret: Annotated[str | None, Field(default=None)]
+        Args:
+            credentials: Azure connection config used to configure the
+                underlying client. Authentication itself is resolved by
+                Azure's own default credential chain.
 
-    _client: BlobServiceClient | None = PrivateAttr(default=None)
+        Raises:
+            ValueError: If ``credentials.account_url`` is not set.
 
-    def _get_credential(self) -> TokenCredential:
-        """Return the Azure credential."""
-        if self.credential_type == "default_azure":
-            return DefaultAzureCredential()
-        if self.credential_type == "client_secret":
-            if not self.tenant_id or not self.client_id or not self.client_secret:
-                msg = "tenant_id, client_id, and client_secret are required for client_secret credential"
-                raise ValueError(msg)
-            return ClientSecretCredential(
-                self.tenant_id,
-                self.client_id,
-                self.client_secret,
-            )
-        msg = f"Unsupported credential_type: {self.credential_type}"
-        raise ValueError(msg)
-
-    def model_post_init(self, _context: object, /) -> None:
-        """Initialize the Azure backend."""
-        self._client = BlobServiceClient(
-            account_url=self.account_url,
-            credential=self._get_credential(),
+        """
+        self.__credentials = credentials
+        if self.__credentials.account_url is None:
+            msg = "AzureCredentials.account_url must be set to build an AzureBackend"
+            raise ValueError(msg)
+        self.__client = BlobServiceClient(
+            account_url=self.__credentials.account_url,
+            credential=self.__credentials.get_credential(),
         )
 
-    @override
     def get_client(self) -> BlobServiceClient:
         """Return the Azure Blob Storage client."""
-        if self._client is None:
-            msg = "Azure Blob Storage client is not initialized"
-            raise RuntimeError(msg)
-        return self._client
+        return self.__client

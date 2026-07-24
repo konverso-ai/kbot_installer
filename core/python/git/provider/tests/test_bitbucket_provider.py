@@ -3,8 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 from auth.base import HttpAuthBase
-from git.provider.bitbucket_provider import BitbucketProvider
 from git.provider.base import ProviderBase
+from git.provider.bitbucket_provider import BitbucketProvider
+from git.provider.git_provider_base import GitProviderBase
 
 
 class TestBitbucketProvider:
@@ -13,6 +14,7 @@ class TestBitbucketProvider:
     def test_inherits_from_provider_base(self) -> None:
         """Test that BitbucketProvider inherits from ProviderBase."""
         assert issubclass(BitbucketProvider, ProviderBase)
+        assert issubclass(BitbucketProvider, GitProviderBase)
 
     def test_initialization_with_auth(self) -> None:
         """Test proper initialization of BitbucketProvider with authentication."""
@@ -32,10 +34,13 @@ class TestBitbucketProvider:
 
         assert provider.account_name == "test_account"
         assert provider._auth is None
-        assert (
-            provider.base_url
-            == "https://{name}.org/{account_name}/{repository_name}.git"
-        )
+
+    def test_initialization_with_injected_versioner(self) -> None:
+        """Test that a pre-built versioner can be injected via the constructor."""
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
+
+        assert provider._get_versioner() is mock_versioner
 
     def test_get_auth_with_auth(self) -> None:
         """Test that _get_auth returns the authentication object when provided."""
@@ -50,46 +55,42 @@ class TestBitbucketProvider:
 
         assert provider._get_auth() is None
 
-    @patch(
-        "git.provider.bitbucket_provider.GitMixin.clone_and_checkout"
-    )
-    def test_clone_calls_parent_clone(self, mock_clone) -> None:
-        """Test that clone calls the parent clone method."""
-        provider = BitbucketProvider("test_account")
+    def test_clone_calls_versioner_with_https_url(self) -> None:
+        """Test that clone_and_checkout builds the expected HTTPS URL."""
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
         provider.clone_and_checkout("/test/path", "main", repository_name="test_repo")
 
-        mock_clone.assert_called_once_with(
+        mock_versioner.clone.assert_called_once_with(
+            "https://bitbucket.org/test_account/test_repo.git",
             "/test/path",
-            "main",
-            repository_url="https://bitbucket.org/test_account/test_repo.git",
+            branch="main",
+            depth=1,
         )
 
-    @patch(
-        "git.provider.bitbucket_provider.GitMixin.clone_and_checkout"
-    )
-    def test_clone_without_branch(self, mock_clone) -> None:
+    def test_clone_without_branch(self) -> None:
         """Test that clone works without specifying branch."""
-        provider = BitbucketProvider("test_account")
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
         provider.clone_and_checkout("/test/path", repository_name="test_repo")
 
-        mock_clone.assert_called_once_with(
-            "/test/path",
-            None,
-            repository_url="https://bitbucket.org/test_account/test_repo.git",
+        mock_versioner.clone.assert_called_once_with(
+            "https://bitbucket.org/test_account/test_repo.git", "/test/path"
         )
 
-    @patch(
-        "git.provider.bitbucket_provider.GitMixin.clone_and_checkout"
-    )
-    def test_clone_with_different_branch(self, mock_clone) -> None:
+    def test_clone_with_different_branch(self) -> None:
         """Test that clone works with different branch."""
-        provider = BitbucketProvider("test_account")
-        provider.clone_and_checkout("/test/path", "develop", repository_name="test_repo")
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
+        provider.clone_and_checkout(
+            "/test/path", "develop", repository_name="test_repo"
+        )
 
-        mock_clone.assert_called_once_with(
+        mock_versioner.clone.assert_called_once_with(
+            "https://bitbucket.org/test_account/test_repo.git",
             "/test/path",
-            "develop",
-            repository_url="https://bitbucket.org/test_account/test_repo.git",
+            branch="develop",
+            depth=1,
         )
 
     def test_check_remote_repository_exists_success(self) -> None:
@@ -104,7 +105,6 @@ class TestBitbucketProvider:
             result = provider.check_remote_repository_exists("test_repo")
 
             assert result is True
-            mock_get_versioner.assert_called_once()
 
     def test_check_remote_repository_exists_failure(self) -> None:
         """Test check_remote_repository_exists returns False when repository doesn't exist."""
@@ -118,7 +118,6 @@ class TestBitbucketProvider:
             result = provider.check_remote_repository_exists("test_repo")
 
             assert result is False
-            mock_get_versioner.assert_called_once()
 
     def test_check_remote_repository_exists_exception(self) -> None:
         """Test check_remote_repository_exists returns False when exception occurs."""
@@ -126,15 +125,12 @@ class TestBitbucketProvider:
 
         with patch.object(provider, "_get_versioner") as mock_get_versioner:
             mock_versioner = MagicMock()
-            mock_versioner.remote_exists.side_effect = RuntimeError(
-                "Network error"
-            )
+            mock_versioner.remote_exists.side_effect = RuntimeError("Network error")
             mock_get_versioner.return_value = mock_versioner
 
             result = provider.check_remote_repository_exists("test_repo")
 
             assert result is False
-            mock_get_versioner.assert_called_once()
 
     def test_docstring_contains_expected_content(self) -> None:
         """Test that the class docstring contains expected content."""
@@ -146,57 +142,24 @@ class TestBitbucketProvider:
     def test_get_branch_returns_empty_before_clone(self) -> None:
         """Test get_branch returns empty string before clone."""
         provider = BitbucketProvider("test_account")
-        # Before clone, branch_used is None, so should return empty string
         assert provider.get_branch() == ""
 
-    @patch(
-        "git.provider.bitbucket_provider.GitMixin.clone_and_checkout"
-    )
-    def test_get_branch_returns_used_branch_after_clone(
-        self, mock_clone_and_checkout
-    ) -> None:
+    def test_get_branch_returns_used_branch_after_clone(self) -> None:
         """Test get_branch returns the branch used during clone."""
-        provider = BitbucketProvider("test_account")
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
 
-        # Mock the parent clone to simulate setting branch_used
-        def mock_clone(
-            _target_path: object,
-            branch: object,
-            *,
-            repository_url: object = None,
-            repository_name: object = None,
-        ) -> None:
-            provider.branch_used = branch
+        provider.clone_and_checkout(
+            "/test/path", "develop", repository_name="test_repo"
+        )
 
-        mock_clone_and_checkout.side_effect = mock_clone
-
-        provider.clone_and_checkout("/test/path", "develop", repository_name="test_repo")
-
-        # After clone with branch "develop", should return "develop"
         assert provider.get_branch() == "develop"
 
-    @patch(
-        "git.provider.bitbucket_provider.GitMixin.clone_and_checkout"
-    )
-    def test_get_branch_returns_empty_when_no_branch(
-        self, mock_clone_and_checkout
-    ) -> None:
+    def test_get_branch_returns_empty_when_no_branch(self) -> None:
         """Test get_branch returns empty string when no branch specified."""
-        provider = BitbucketProvider("test_account")
-
-        # Mock the parent clone to simulate setting branch_used to None
-        def mock_clone(
-            _target_path: object,
-            _branch: object,
-            *,
-            repository_url: object = None,
-            repository_name: object = None,
-        ) -> None:
-            provider.branch_used = None
-
-        mock_clone_and_checkout.side_effect = mock_clone
+        mock_versioner = MagicMock()
+        provider = BitbucketProvider("test_account", versioner=mock_versioner)
 
         provider.clone_and_checkout("/test/path", None, repository_name="test_repo")
 
-        # When None is specified, should return empty string
         assert provider.get_branch() == ""

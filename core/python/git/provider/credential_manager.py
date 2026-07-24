@@ -6,8 +6,11 @@ a clean interface to check credential availability and create authentication
 objects without hardcoding credentials in the code.
 """
 
+from typing import TYPE_CHECKING, cast
+
 from auth.base import HttpAuthBase
-from auth.factory import create_auth
+from auth.http.factory import add_http_auth
+from auth.ssh.factory import add_ssh_auth
 from git.provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProviderConfig,
@@ -15,7 +18,30 @@ from git.provider.config import (
 )
 from utils.Logger import logger
 
+if TYPE_CHECKING:
+    from credentials.base import AuthCredentialsBase
+
 log = logger.get_package_logger("git.provider")
+
+
+def create_auth(auth_type: str, **kwargs: object) -> HttpAuthBase:
+    """Create an authentication instance for the given provider auth type.
+
+    Dispatches ``"ssh"`` to :func:`add_ssh_auth` and any other transport
+    (e.g. ``"basic"``) to :func:`add_http_auth`.
+
+    Args:
+        auth_type: Authentication transport, either ``"ssh"`` or an HTTP
+            auth name understood by :func:`add_http_auth` (e.g. ``"basic"``).
+        **kwargs: Keyword arguments passed to the underlying auth constructor.
+
+    Returns:
+        An instance of the matching authentication class.
+
+    """
+    if auth_type == "ssh":
+        return add_ssh_auth("ssh", **kwargs)
+    return add_http_auth(auth_type, **kwargs)
 
 
 class CredentialManager:
@@ -86,7 +112,7 @@ class CredentialManager:
             return None
 
         try:
-            auth_kwargs = credentials.auth_kwargs()
+            auth_kwargs = cast("AuthCredentialsBase", credentials).auth_kwargs()
             if not auth_kwargs:
                 return None
 

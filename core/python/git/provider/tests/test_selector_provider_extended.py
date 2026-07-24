@@ -73,7 +73,7 @@ class TestSelectorProviderExtended:
                 return_value=MagicMock(),
             ),
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
         ):
             # Setup mocks
@@ -127,7 +127,7 @@ class TestSelectorProviderExtended:
                 return_value=MagicMock(),
             ),
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
         ):
             # Setup mocks
@@ -197,111 +197,6 @@ class TestSelectorProviderExtended:
             mock_clone_by_name.assert_called_once_with(
                 "test-repo", "/tmp/test", "dev", commit=None
             )
-
-    def test_print_clone_results_table_empty(self) -> None:
-        """Test printing empty results table."""
-        selector = SelectorProvider(providers=["storage"])
-
-        # Should not raise any exception
-        selector._print_clone_results_table([])
-
-    def test_print_clone_results_table_with_results(self) -> None:
-        """Test printing results table with data."""
-        selector = SelectorProvider(providers=["storage"])
-
-        results = [
-            ("storage", "✅ Success", "Repository cloned successfully"),
-            ("github", "❌ Error", "Repository not found"),
-            ("bitbucket", "❌ Error", "Authentication failed"),
-        ]
-
-        # Should not raise any exception
-        selector._print_clone_results_table(results)
-
-    def test_print_clone_results_table_long_cause(self) -> None:
-        """Test printing results table with long cause messages."""
-        selector = SelectorProvider(providers=["storage"])
-
-        long_cause = "This is a very long error message that should be truncated because it exceeds the maximum length allowed for cause messages in the results table"
-        results = [("storage", "❌ Error", long_cause)]
-
-        # Should not raise any exception
-        selector._print_clone_results_table(results)
-
-    def test_extract_clean_error_cause_simple(self) -> None:
-        """Test extracting clean error cause from simple error message."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "Repository not found"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "Repository not found"
-
-    def test_extract_clean_error_cause_with_exception(self) -> None:
-        """Test extracting clean error cause from exception message."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "Exception: Repository not found at line 123"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "Exception: Repository not found at line 123"
-
-    def test_extract_clean_error_cause_with_httpx_error(self) -> None:
-        """Test extracting clean error cause from HTTPX error."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "HTTPXError: 404 Not Found - Repository not found"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "Repository not found (404)"
-
-    def test_extract_clean_error_cause_with_provider_error(self) -> None:
-        """Test extracting clean error cause from ProviderError."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "ProviderError: Failed to clone repository: Authentication failed"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert (
-            result == "ProviderError: Failed to clone repository: Authentication failed"
-        )
-
-    def test_extract_clean_error_cause_with_git_error(self) -> None:
-        """Test extracting clean error cause from Git error."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = (
-            "GitError: fatal: repository 'https://example.com/repo.git' not found"
-        )
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "//example.com/repo.git' not found"
-
-    def test_extract_clean_error_cause_with_connection_error(self) -> None:
-        """Test extracting clean error cause from connection error."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "ConnectionError: Failed to connect to server: Connection timeout"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "Request timeout"
-
-    def test_extract_clean_error_cause_with_unknown_error(self) -> None:
-        """Test extracting clean error cause from unknown error format."""
-        selector = SelectorProvider(providers=["storage"])
-
-        error_msg = "SomeUnknownError: This is a custom error message"
-        result = selector._extract_clean_error_cause(error_msg)
-        assert result == "This is a custom error message"
-
-    def test_extract_clean_error_cause_empty_message(self) -> None:
-        """Test extracting clean error cause from empty message."""
-        selector = SelectorProvider(providers=["storage"])
-
-        result = selector._extract_clean_error_cause("")
-        assert result == ""
-
-    def test_extract_clean_error_cause_none_message(self) -> None:
-        """Test extracting clean error cause from None message."""
-        selector = SelectorProvider(providers=["storage"])
-
-        # The method should handle None gracefully
-        with pytest.raises(TypeError):
-            selector._extract_clean_error_cause(None)
 
     def test_clone_by_url_with_string_path(self) -> None:
         """Test clone by URL with string path."""
@@ -376,7 +271,7 @@ class TestSelectorProviderExtended:
                 selector.credential_manager, "get_auth_for_provider", return_value=None
             ),
             patch(
-                "git.provider.selector_provider.add_provider"
+                "git.provider.provider_builder.add_provider"
             ) as mock_create,
         ):
             # Setup mocks

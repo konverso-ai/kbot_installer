@@ -9,6 +9,13 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from credentials import add_credentials
+from credentials.azure_storage_credentials import AzureStorageCredentials
+from credentials.bitbucket.basic_bitbucket_credentials import (
+    BasicBitbucketCredentials,
+)
+from credentials.bitbucket.ssh_bitbucket_credentials import SshBitbucketCredentials
+from credentials.github.basic_github_credentials import BasicGithubCredentials
+from credentials.github.ssh_github_credentials import SshGithubCredentials
 
 if TYPE_CHECKING:
     from auth.base import HttpAuthBase
@@ -17,6 +24,15 @@ if TYPE_CHECKING:
         CredentialsBase,
         StorageCredentialsBase,
     )
+
+_SSH_CREDENTIALS_BY_PROVIDER: dict[str, type[SshGithubCredentials | SshBitbucketCredentials]] = {
+    "github": SshGithubCredentials,
+    "bitbucket": SshBitbucketCredentials,
+}
+_BASIC_CREDENTIALS_BY_PROVIDER: dict[str, type[BasicGithubCredentials | BasicBitbucketCredentials]] = {
+    "github": BasicGithubCredentials,
+    "bitbucket": BasicBitbucketCredentials,
+}
 
 DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH = Path("conf") / "default_providers_config.json"
 INSTALLED_PROVIDERS_CONFIG_GLOB = "installer/*/conf/default_providers_config.json"
@@ -33,10 +49,7 @@ def _resolve_default_providers_config_path() -> Path:
             if installed_candidate.is_file():
                 return installed_candidate
 
-    msg = (
-        f"Could not find {DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH} "
-        f"or {INSTALLED_PROVIDERS_CONFIG_GLOB}"
-    )
+    msg = f"Could not find {DEFAULT_PROVIDERS_CONFIG_RELATIVE_PATH} or {INSTALLED_PROVIDERS_CONFIG_GLOB}"
     raise FileNotFoundError(msg)
 
 
@@ -79,9 +92,7 @@ class S3StorageSettings(BaseModel):
     bucket_name: str
     cluster_name: str = ""
     region_name: str = "eu-west-1"
-    env_vars: list[str] = Field(
-        default_factory=lambda: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
-    )
+    env_vars: list[str] = Field(default_factory=lambda: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"])
 
     def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage("s3", ...)``."""
@@ -121,7 +132,7 @@ class AzureStorageSettings(BaseModel):
             kwargs.update(
                 cast(
                     "ClientSecretCredentialsBase",
-                    add_credentials("azure_storage", credential_type="client_secret"),
+                    AzureStorageCredentials(credential_type="client_secret"),
                 ).client_secret_kwargs()
             )
         return kwargs
@@ -183,20 +194,34 @@ class ProvidersConfig(BaseModel):
     def get_credentials(self, provider_name: str) -> CredentialsBase | None:
         """Return environment-backed credentials for a provider."""
         if provider_name == "storage":
-            backend = self.storage.backend
-            if backend == "azure":
-                return add_credentials(
-                    "azure_storage",
-                    credential_type=self.storage.azure.credential_type,
-                )
-            return add_credentials(backend)
+            return self._get_storage_credentials()
 
+        return self._get_provider_credentials(provider_name)
+
+    def _get_storage_credentials(self) -> CredentialsBase:
+        """Return environment-backed credentials for the storage backend."""
+        backend = self.storage.backend
+        if backend == "azure":
+            return AzureStorageCredentials(
+                credential_type=self.storage.azure.credential_type,
+            )
+        return add_credentials(backend)
+
+    def _get_provider_credentials(self, provider_name: str) -> CredentialsBase | None:
+        """Return environment-backed credentials for a git provider."""
         if provider_name not in self.provider:
             return None
 
         provider_config = self.provider[provider_name]
         if provider_config.auth_type == "ssh":
+            ssh_credentials_class = _SSH_CREDENTIALS_BY_PROVIDER.get(provider_name)
+            if ssh_credentials_class is not None:
+                return ssh_credentials_class()
             return add_credentials("ssh")
+
+        basic_credentials_class = _BASIC_CREDENTIALS_BY_PROVIDER.get(provider_name)
+        if basic_credentials_class is not None:
+            return basic_credentials_class()
 
         return add_credentials(provider_name)
 

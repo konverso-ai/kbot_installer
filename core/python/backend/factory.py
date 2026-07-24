@@ -3,10 +3,10 @@
 from typing import cast
 
 from backend.base import BackendBase
-from utils.factory.factory import factory_method
+from utils.factory.loader import factory_method
 
 
-def create_backend(name: str, **kwargs: object) -> BackendBase:
+def add_backend(name: str, **kwargs: object) -> BackendBase:
     """Create a backend instance by name.
 
     Args:
