@@ -1,7 +1,7 @@
 # Makefile for kbot-installer project
 # Uses uv for Python package management and execution
 
-.PHONY: help install install-dev lint lint-fix format check test test-cov clean
+.PHONY: help install install-dev lint lint-fix format check test test-cov tox clean
 
 # Default target - Show help with all available targets and their descriptions
 help:
@@ -16,6 +16,7 @@ help:
 	@echo "  lint-fix     - Run code linter and automatically fix issues"
 	@echo "  test         - Run all tests using pytest"
 	@echo "  test-cov     - Run tests with coverage report (HTML and terminal output)"
+	@echo "  tox          - Run the full tox matrix (py310/py312: deps/lint/typecheck/test)"
 	@echo ""
 	@echo "Usage examples:"
 	@echo "  make test                    # Run all tests"
@@ -96,6 +97,10 @@ else
 	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term -v
 endif
 
+
+# Run the full tox matrix (py310/py312, each with deps/lint/typecheck/test)
+tox:
+	uvx tox
 
 # Clean Python cache files
 clean:
