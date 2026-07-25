@@ -2,10 +2,7 @@
 
 from typing import TYPE_CHECKING, cast
 
-from backend.factory import add_backend
-from credentials.azure_credentials import AzureCredentials
-from credentials.oci_credentials import OciCredentials
-from credentials.s3_credentials import S3Credentials
+from backend.factory import add_builtin_backend
 from storage.base import StorageBase
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
@@ -39,8 +36,7 @@ def add_s3_storage(bucket_name: str, cluster_name: str | None = None) -> Storage
         A ready-to-use S3 storage instance.
 
     """
-    credentials = S3Credentials()
-    backend = add_backend(name="s3_storage", credentials=credentials)
+    backend = add_builtin_backend(name="s3_storage")
     return add_storage(
         name="s3",
         backend=backend,
@@ -61,12 +57,7 @@ def add_azure_storage(account_url: str, container_name: str) -> StorageBase:
         A ready-to-use Azure storage instance.
 
     """
-    credentials = AzureCredentials()
-    backend = add_backend(
-        name="azure_blob",
-        account_url=account_url,
-        credentials=credentials,
-    )
+    backend = add_builtin_backend(name="azure_blob", account_url=account_url)
     return add_storage(name="azure", backend=backend, container_name=container_name)
 
 
@@ -81,8 +72,7 @@ def add_oci_storage(bucket_name: str, namespace_name: str) -> StorageBase:
         A ready-to-use OCI storage instance.
 
     """
-    credentials = OciCredentials()
-    backend = add_backend(name="oci_storage", credentials=credentials)
+    backend = add_builtin_backend(name="oci_storage")
     return add_storage(
         name="oci",
         backend=backend,

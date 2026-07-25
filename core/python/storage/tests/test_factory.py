@@ -82,23 +82,19 @@ class TestAddS3Storage:
     """Test cases for add_s3_storage function."""
 
     def test_add_s3_storage_builds_backend_and_storage(self) -> None:
-        """Test add_s3_storage wires S3 credentials, backend and storage together."""
+        """Test add_s3_storage wires the s3 backend and storage together."""
         mock_backend = MagicMock()
         mock_storage = MagicMock(spec=StorageBase)
         with (
-            patch("storage.factory.S3Credentials") as mock_credentials_cls,
-            patch("storage.factory.add_backend") as mock_add_backend,
+            patch("storage.factory.add_builtin_backend") as mock_add_builtin_backend,
             patch("storage.factory.add_storage") as mock_add_storage,
         ):
-            mock_credentials_cls.return_value = "s3-credentials"
-            mock_add_backend.return_value = mock_backend
+            mock_add_builtin_backend.return_value = mock_backend
             mock_add_storage.return_value = mock_storage
 
             result = add_s3_storage(bucket_name="bucket", cluster_name="cluster")
 
-            mock_add_backend.assert_called_once_with(
-                name="s3_storage", credentials="s3-credentials"
-            )
+            mock_add_builtin_backend.assert_called_once_with(name="s3_storage")
             mock_add_storage.assert_called_once_with(
                 name="s3",
                 backend=mock_backend,
@@ -112,16 +108,14 @@ class TestAddAzureStorage:
     """Test cases for add_azure_storage function."""
 
     def test_add_azure_storage_builds_backend_and_storage(self) -> None:
-        """Test add_azure_storage wires Azure credentials, backend and storage together."""
+        """Test add_azure_storage wires the azure backend and storage together."""
         mock_backend = MagicMock()
         mock_storage = MagicMock(spec=StorageBase)
         with (
-            patch("storage.factory.AzureCredentials") as mock_credentials_cls,
-            patch("storage.factory.add_backend") as mock_add_backend,
+            patch("storage.factory.add_builtin_backend") as mock_add_builtin_backend,
             patch("storage.factory.add_storage") as mock_add_storage,
         ):
-            mock_credentials_cls.return_value = "azure-credentials"
-            mock_add_backend.return_value = mock_backend
+            mock_add_builtin_backend.return_value = mock_backend
             mock_add_storage.return_value = mock_storage
 
             result = add_azure_storage(
@@ -129,10 +123,9 @@ class TestAddAzureStorage:
                 container_name="container",
             )
 
-            mock_add_backend.assert_called_once_with(
+            mock_add_builtin_backend.assert_called_once_with(
                 name="azure_blob",
                 account_url="https://account.blob.core.windows.net",
-                credentials="azure-credentials",
             )
             mock_add_storage.assert_called_once_with(
                 name="azure",
@@ -146,23 +139,19 @@ class TestAddOciStorage:
     """Test cases for add_oci_storage function."""
 
     def test_add_oci_storage_builds_backend_and_storage(self) -> None:
-        """Test add_oci_storage wires OCI credentials, backend and storage together."""
+        """Test add_oci_storage wires the oci backend and storage together."""
         mock_backend = MagicMock()
         mock_storage = MagicMock(spec=StorageBase)
         with (
-            patch("storage.factory.OciCredentials") as mock_credentials_cls,
-            patch("storage.factory.add_backend") as mock_add_backend,
+            patch("storage.factory.add_builtin_backend") as mock_add_builtin_backend,
             patch("storage.factory.add_storage") as mock_add_storage,
         ):
-            mock_credentials_cls.return_value = "oci-credentials"
-            mock_add_backend.return_value = mock_backend
+            mock_add_builtin_backend.return_value = mock_backend
             mock_add_storage.return_value = mock_storage
 
             result = add_oci_storage(bucket_name="bucket", namespace_name="namespace")
 
-            mock_add_backend.assert_called_once_with(
-                name="oci_storage", credentials="oci-credentials"
-            )
+            mock_add_builtin_backend.assert_called_once_with(name="oci_storage")
             mock_add_storage.assert_called_once_with(
                 name="oci",
                 backend=mock_backend,
