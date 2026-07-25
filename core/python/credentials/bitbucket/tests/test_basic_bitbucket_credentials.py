@@ -33,3 +33,29 @@ def test_missingenvvars_valid_reports_gaps(
 
     creds = BasicBitbucketCredentials()
     assert compare("eq", creds.missing_env_vars(), expected_missing)
+
+
+def test_authkwargs_valid_returns_username_and_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test auth_kwargs returns username/password when both are set."""
+    monkeypatch.setenv("BITBUCKET_USERNAME", "user")
+    monkeypatch.setenv("BITBUCKET_APP_PASSWORD", "app-password")
+
+    creds = BasicBitbucketCredentials()
+    assert compare(
+        "eq",
+        creds.auth_kwargs(),
+        {"username": "user", "password": "app-password"},
+    )
+
+
+def test_authkwargs_invalid_returns_empty_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test auth_kwargs returns an empty dict when credentials are incomplete."""
+    monkeypatch.delenv("BITBUCKET_USERNAME", raising=False)
+    monkeypatch.delenv("BITBUCKET_APP_PASSWORD", raising=False)
+
+    creds = BasicBitbucketCredentials()
+    assert compare("eq", creds.auth_kwargs(), {})

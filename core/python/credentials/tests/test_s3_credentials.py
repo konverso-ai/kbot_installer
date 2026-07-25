@@ -38,3 +38,9 @@ def test_poolandretry_valid_default_values() -> None:
     creds = S3Credentials()
     assert compare("eq", creds.max_pool_connections, 10)
     assert compare("eq", creds.retry_max_attempts, 3)
+
+
+def test_storagekwargs_valid_always_empty() -> None:
+    """Test storage_kwargs always returns an empty dict (default credentials)."""
+    creds = S3Credentials()
+    assert compare("eq", creds.storage_kwargs(), {})

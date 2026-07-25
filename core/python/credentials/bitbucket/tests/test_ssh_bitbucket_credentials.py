@@ -40,3 +40,13 @@ def test_missing_env_vars_nonempty_when_no_source_available(mock_home: object) -
     creds = SshBitbucketCredentials()
 
     assert creds.missing_env_vars() != []
+
+
+@patch.dict(os.environ, {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
+@patch("credentials.ssh_utils.Path.home")
+def test_auth_kwargs_valid_uses_forwarded_agent(mock_home: object) -> None:
+    """auth_kwargs should prefer a forwarded SSH agent when available."""
+    mock_home.return_value = Path("/empty/home")
+    creds = SshBitbucketCredentials()
+
+    assert creds.auth_kwargs() == {"username": "git", "use_agent": True}

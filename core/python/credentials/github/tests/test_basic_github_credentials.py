@@ -24,3 +24,43 @@ def test_missingenvvars_valid_reports_gaps(
 
     creds = BasicGithubCredentials()
     assert compare("eq", creds.missing_env_vars(), expected_missing)
+
+
+def test_authkwargs_valid_returns_default_username_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test auth_kwargs defaults username to x-access-token when unset."""
+    monkeypatch.delenv("GITHUB_USERNAME", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "gh-token")
+
+    creds = BasicGithubCredentials()
+    assert compare(
+        "eq",
+        creds.auth_kwargs(),
+        {"username": "x-access-token", "password": "gh-token"},
+    )
+
+
+def test_authkwargs_valid_returns_configured_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test auth_kwargs uses the configured username when set."""
+    monkeypatch.setenv("GITHUB_USERNAME", "octocat")
+    monkeypatch.setenv("GITHUB_TOKEN", "gh-token")
+
+    creds = BasicGithubCredentials()
+    assert compare(
+        "eq",
+        creds.auth_kwargs(),
+        {"username": "octocat", "password": "gh-token"},
+    )
+
+
+def test_authkwargs_invalid_returns_empty_when_token_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test auth_kwargs returns an empty dict when GITHUB_TOKEN is unset."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    creds = BasicGithubCredentials()
+    assert compare("eq", creds.auth_kwargs(), {})

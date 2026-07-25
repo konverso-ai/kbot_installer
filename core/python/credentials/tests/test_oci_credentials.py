@@ -36,6 +36,12 @@ def test_configprofile_valid_defaults_to_default() -> None:
     assert compare("eq", creds.config_profile, "DEFAULT")
 
 
+def test_storagekwargs_valid_always_empty() -> None:
+    """Test storage_kwargs always returns an empty dict (default credentials)."""
+    creds = OciCredentials()
+    assert compare("eq", creds.storage_kwargs(), {})
+
+
 def test_toclientconfig_valid_loads_from_file_and_applies_region(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
