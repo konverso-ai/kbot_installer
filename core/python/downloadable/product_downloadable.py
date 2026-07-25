@@ -58,9 +58,7 @@ class ProductDownloadable(DownloadableBase):
         if self.__include_dependencies:
             self._download_with_dependencies(path)
         else:
-            self._download_without_dependencies(
-                self.__product, path / self.__product.name
-            )
+            self._download_without_dependencies(self.__product, path / self.__product.name)
 
     def _download_without_dependencies(self, product: Product, path: Path) -> None:
         """Clone product into path, unless it is already present.
@@ -95,10 +93,10 @@ class ProductDownloadable(DownloadableBase):
             )
             raise ValueError(msg)
         self.__provider.clone_and_checkout(
-            target_path=path,
+            path.name,
+            path,
             branch=product.build.branch,
-            repository_name=path.name,
-            commit=pinned_commit or None,
+            commit_id=pinned_commit or None,
         )
         self.__table.complete_installation(
             product_name=product.name,
@@ -127,10 +125,7 @@ class ProductDownloadable(DownloadableBase):
         if not description_json.exists():
             return False
         existing_product = Product.from_json_file(description_json)
-        return (
-            existing_product.build is not None
-            and existing_product.build.commit == pinned_commit
-        )
+        return existing_product.build is not None and existing_product.build.commit == pinned_commit
 
     def _download_with_dependencies(self, path: Path) -> None:
         """Download the product and its dependencies using breadth-first traversal.
@@ -156,22 +151,14 @@ class ProductDownloadable(DownloadableBase):
             processed.add(name)
 
             product_path = path / name
-            product_to_clone = (
-                self.__product
-                if name == self.__product.name
-                else Product(name=name, build=main_build)
-            )
+            product_to_clone = self.__product if name == self.__product.name else Product(name=name, build=main_build)
             self._download_without_dependencies(product_to_clone, product_path)
 
             product = self._get_product(path, name)
             if name == self.__product.name:
                 self.__product = product
 
-            queue.extend(
-                parent_name
-                for parent_name in product.parent_names
-                if parent_name not in processed
-            )
+            queue.extend(parent_name for parent_name in product.parent_names if parent_name not in processed)
 
     def _get_product(self, path: Path, name: str) -> Product:
         """Load the product description from its downloaded folder.

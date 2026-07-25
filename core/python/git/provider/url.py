@@ -1,7 +1,7 @@
 """Pure helper for building git repository URLs.
 
 Kept independent of any provider instance so it can be unit tested and
-reused without constructing a full ``GitProviderBase`` subclass.
+reused without constructing a full ``ProviderMixin`` subclass.
 """
 
 from auth.ssh.ssh_auth import SshAuth
@@ -48,6 +48,4 @@ def build_git_url(
     if not base_url:
         msg = "Provider cannot build a repository URL: base_url is required"
         raise ValueError(msg)
-    return base_url.format(
-        name=name, account_name=account_name, repository_name=repository_name
-    )
+    return base_url.format(name=name, account_name=account_name, repository_name=repository_name)

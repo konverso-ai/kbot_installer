@@ -1016,13 +1016,15 @@ def test_remote_exists_valid_uses_ssh_agent_auth() -> None:
     """Test remote_exists works purely through Dulwich with SSH agent auth."""
     from auth.ssh.factory import add_ssh_auth
 
-    with patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True):
-        auth = add_ssh_auth("ssh", username="git", use_agent=True)
-    versioner = DulwichVersioner(auth=auth)
-    with patch(
-        "git.versioner.dulwich_versioner.porcelain.ls_remote",
-        return_value={b"refs/heads/main": b"sha1"},
+    with (
+        patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True),
+        patch(
+            "git.versioner.dulwich_versioner.porcelain.ls_remote",
+            return_value={b"refs/heads/main": b"sha1"},
+        ),
     ):
+        auth = add_ssh_auth("ssh", username="git", use_agent=True)
+        versioner = DulwichVersioner(auth=auth)
         assert compare(
             "eq",
             versioner.remote_exists("git@github.com:test/repo.git"),

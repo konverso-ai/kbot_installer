@@ -1,10 +1,11 @@
 """Tests for selector_provider module."""
 
 from pathlib import Path
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from git.provider.base import ProviderBase
 from git.provider.errors import ProviderError
 from git.provider.selector_provider import SelectorProvider
 
@@ -14,522 +15,206 @@ class TestSelectorProvider:
 
     def test_initialization(self) -> None:
         """Test SelectorProvider initialization."""
-        providers = ["storage", "github", "bitbucket"]
+        providers = [MagicMock(spec=ProviderBase), MagicMock(spec=ProviderBase)]
         selector = SelectorProvider(providers)
 
         assert selector.providers == providers
-        assert selector.base_url == ""
+        assert selector.quiet is False
 
-    def test_initialization_with_base_url(self) -> None:
-        """Test SelectorProvider initialization with base_url."""
-        providers = ["storage", "github"]
-        base_url = "https://example.com"
-        selector = SelectorProvider(providers, base_url)
+    def test_initialization_quiet(self) -> None:
+        """Test SelectorProvider initialization with quiet=True."""
+        selector = SelectorProvider([], quiet=True)
 
-        assert selector.providers == providers
-        assert selector.base_url == base_url
-
-    def test_create_provider_with_defaults_storage(self) -> None:
-        """Test _create_provider_with_defaults for storage provider."""
-        selector = SelectorProvider(["storage"])
-
-        with (
-            patch(
-                "git.provider.provider_builder.add_provider"
-            ) as mock_create,
-            patch.object(
-                selector.credential_manager, "has_credentials", return_value=True
-            ),
-            patch.object(
-                selector.credential_manager,
-                "get_auth_for_provider",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_provider = MagicMock()
-            mock_create.return_value = mock_provider
-
-            result = selector._create_provider_with_credentials("storage")
-
-            mock_create.assert_called_once_with(
-                name="storage",
-                config=selector.config,
-                quiet=False,
-                auth=ANY,
-            )
-            assert result is mock_provider
-
-    def test_create_provider_with_defaults_github(self) -> None:
-        """Test _create_provider_with_defaults for github provider."""
-        selector = SelectorProvider(["github"])
-
-        with (
-            patch(
-                "git.provider.provider_builder.add_provider"
-            ) as mock_create,
-            patch.object(
-                selector.credential_manager, "has_credentials", return_value=True
-            ),
-            patch.object(
-                selector.credential_manager,
-                "get_auth_for_provider",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_provider = MagicMock()
-            mock_create.return_value = mock_provider
-
-            result = selector._create_provider_with_credentials("github")
-
-            mock_create.assert_called_once_with(
-                name="github", account_name="konverso-ai", auth=ANY
-            )
-            assert result is mock_provider
-
-    def test_create_provider_with_defaults_bitbucket(self) -> None:
-        """Test _create_provider_with_defaults for bitbucket provider."""
-        selector = SelectorProvider(["bitbucket"])
-
-        with (
-            patch(
-                "git.provider.provider_builder.add_provider"
-            ) as mock_create,
-            patch.object(
-                selector.credential_manager, "has_credentials", return_value=True
-            ),
-            patch.object(
-                selector.credential_manager,
-                "get_auth_for_provider",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_provider = MagicMock()
-            mock_create.return_value = mock_provider
-
-            result = selector._create_provider_with_credentials("bitbucket")
-
-            mock_create.assert_called_once_with(
-                name="bitbucket", account_name="konversoai", auth=ANY
-            )
-            assert result is mock_provider
-
-    def test_create_provider_with_defaults_unknown(self) -> None:
-        """Test _create_provider_with_credentials for unknown provider returns None."""
-        selector = SelectorProvider(["unknown"])
-
-        with (
-            patch(
-                "git.provider.provider_builder.add_provider"
-            ) as mock_create,
-            patch.object(
-                selector.credential_manager, "has_credentials", return_value=True
-            ),
-            patch.object(
-                selector.credential_manager,
-                "get_auth_for_provider",
-                return_value=MagicMock(),
-            ),
-        ):
-            result = selector._create_provider_with_credentials("unknown")
-
-            # Should not call create_provider for unknown provider
-            mock_create.assert_not_called()
-            assert result is None
+        assert selector.quiet is True
 
     def test_clone_success_first_provider(self) -> None:
         """Test successful clone with first provider."""
-        selector = SelectorProvider(["storage", "github"])
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_github = MagicMock(spec=ProviderBase)
+        selector = SelectorProvider([mock_storage, mock_github])
 
-        with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            mock_provider = MagicMock()
-            mock_create.return_value = mock_provider
+        selector.clone_and_checkout("test_repo", "/tmp/test_path", branch="main")
 
-            selector.clone_and_checkout(
-                "/tmp/test_path", "main", repository_url="test_repo"
-            )
-
-            mock_create.assert_called_once_with("storage")
-            mock_provider.clone_and_checkout.assert_called_once_with(
-                Path("/tmp/test_path"),
-                "main",
-                commit=None,
-                repository_url="test_repo",
-            )
+        mock_storage.clone_and_checkout.assert_called_once_with(
+            "test_repo",
+            Path("/tmp/test_path"),
+            branch="main",
+            commit_id=None,
+        )
+        mock_github.clone_and_checkout.assert_not_called()
 
     def test_clone_success_second_provider(self) -> None:
         """Test successful clone with second provider after first fails."""
-        selector = SelectorProvider(["storage", "github"])
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_github = MagicMock(spec=ProviderBase)
+        mock_storage.clone_and_checkout = MagicMock(side_effect=ProviderError("Storage failed"))
+        selector = SelectorProvider([mock_storage, mock_github])
 
-        with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            mock_nexus = MagicMock()
-            mock_github = MagicMock()
-            mock_nexus.clone_and_checkout = MagicMock(
-                side_effect=ProviderError("Nexus failed")
-            )
-            mock_create.side_effect = [mock_nexus, mock_github]
+        selector.clone_and_checkout("test_repo", "/tmp/test_path", branch="main")
 
-            selector.clone_and_checkout(
-                "/tmp/test_path", "main", repository_url="test_repo"
-            )
-
-            assert mock_create.call_count == 2
-            mock_nexus.clone_and_checkout.assert_called_once_with(
-                Path("/tmp/test_path"),
-                "main",
-                commit=None,
-                repository_url="test_repo",
-            )
-            mock_github.clone_and_checkout.assert_called_once_with(
-                Path("/tmp/test_path"),
-                "main",
-                commit=None,
-                repository_url="test_repo",
-            )
+        mock_storage.clone_and_checkout.assert_called_once_with(
+            "test_repo",
+            Path("/tmp/test_path"),
+            branch="main",
+            commit_id=None,
+        )
+        mock_github.clone_and_checkout.assert_called_once_with(
+            "test_repo",
+            Path("/tmp/test_path"),
+            branch="main",
+            commit_id=None,
+        )
 
     def test_clone_all_providers_fail_provider_error(self) -> None:
         """Test clone when all providers fail with ProviderError."""
-        selector = SelectorProvider(["storage", "github"])
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_github = MagicMock(spec=ProviderBase)
+        mock_storage.clone_and_checkout = MagicMock(side_effect=ProviderError("Storage failed"))
+        mock_github.clone_and_checkout = MagicMock(side_effect=ProviderError("Github failed"))
+        selector = SelectorProvider([mock_storage, mock_github])
 
-        with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            # Create separate mock providers for each provider name
-            def mock_create_side_effect(provider_name: str) -> MagicMock:  # noqa: ARG001
-                mock_provider = MagicMock()
-                mock_provider.clone_and_checkout = MagicMock(
-                    side_effect=ProviderError("All providers failed")
-                )
-                return mock_provider
-
-            mock_create.side_effect = mock_create_side_effect
-
-            with pytest.raises(
-                ProviderError, match="All providers failed to clone repository"
-            ):
-                selector.clone_and_checkout(
-                    "/tmp/test_path", "main", repository_url="test_repo"
-                )
+        with pytest.raises(ProviderError, match="All providers failed to clone repository"):
+            selector.clone_and_checkout("test_repo", "/tmp/test_path", branch="main")
 
     def test_clone_all_providers_fail_general_exception(self) -> None:
-        """Test clone when all providers fail with general exception."""
-        selector = SelectorProvider(["storage"])
+        """Test clone when all providers fail with a general exception."""
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_storage.clone_and_checkout = MagicMock(side_effect=Exception("Boom"))
+        selector = SelectorProvider([mock_storage])
 
-        with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            mock_create.side_effect = Exception("Provider creation failed")
-
-        with pytest.raises(
-            ProviderError, match="All providers failed to clone repository"
-        ):
-            selector.clone_and_checkout(
-                "/tmp/test_path", "main", repository_url="test_repo"
-            )
+        with pytest.raises(ProviderError, match="All providers failed to clone repository"):
+            selector.clone_and_checkout("test_repo", "/tmp/test_path", branch="main")
 
     def test_clone_mixed_failures(self) -> None:
-        """Test clone with mixed failure types."""
-        selector = SelectorProvider(["storage", "github", "bitbucket"])
+        """Test clone with mixed failure types across providers."""
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_github = MagicMock(spec=ProviderBase)
+        mock_bitbucket = MagicMock(spec=ProviderBase)
 
-        with patch.object(selector, "_create_provider_with_credentials") as mock_create:
-            mock_nexus = MagicMock()
-            MagicMock()
-            mock_bitbucket = MagicMock()
+        mock_storage.clone_and_checkout = MagicMock(side_effect=ProviderError("Storage failed"))
+        mock_github.clone_and_checkout = MagicMock(side_effect=RuntimeError("Github creation failed"))
+        mock_bitbucket.clone_and_checkout = MagicMock(side_effect=ProviderError("Bitbucket failed"))
 
-            mock_nexus.clone_and_checkout = MagicMock(
-                side_effect=ProviderError("Nexus failed")
-            )
-            mock_bitbucket.clone_and_checkout = MagicMock(
-                side_effect=ProviderError("Bitbucket failed")
-            )
+        selector = SelectorProvider([mock_storage, mock_github, mock_bitbucket])
 
-            # Mock the calls to return different providers
-            def side_effect(provider_name: str) -> object:
-                if provider_name == "storage":
-                    return mock_nexus
-                if provider_name == "github":
-                    error_msg = "GitHub creation failed"
-                    raise RuntimeError(error_msg)
-                if provider_name == "bitbucket":
-                    return mock_bitbucket
-                return None
+        with pytest.raises(ProviderError, match="All providers failed to clone repository"):
+            selector.clone_and_checkout("test_repo", "/tmp/test_path", branch="main")
 
-            mock_create.side_effect = side_effect
+    def test_clone_with_commit_id(self) -> None:
+        """Test clone forwards commit_id to the underlying provider."""
+        mock_provider = MagicMock(spec=ProviderBase)
+        selector = SelectorProvider([mock_provider])
 
-            with pytest.raises(
-                ProviderError, match="All providers failed to clone repository"
-            ):
-                selector.clone_and_checkout(
-                    "/tmp/test_path", "main", repository_url="test_repo"
-                )
+        selector.clone_and_checkout("test-repo", "/tmp/test", branch="dev", commit_id="deadbeef")
+
+        mock_provider.clone_and_checkout.assert_called_once_with(
+            "test-repo", Path("/tmp/test"), branch="dev", commit_id="deadbeef"
+        )
+
+    def test_clone_without_branch(self) -> None:
+        """Test clone without an explicit branch clones without branch fallback."""
+        mock_provider = MagicMock(spec=ProviderBase)
+        selector = SelectorProvider([mock_provider])
+
+        selector.clone_and_checkout("test-repo", "/tmp/test")
+
+        mock_provider.clone_and_checkout.assert_called_once_with(
+            "test-repo", Path("/tmp/test"), commit_id=None
+        )
 
     def test_str_representation(self) -> None:
         """Test string representation of SelectorProvider."""
-        selector = SelectorProvider(["storage", "github"])
-        expected = "SelectorProvider(providers=['storage', 'github'])"
-        assert str(selector) == expected
+        providers = [MagicMock(spec=ProviderBase), MagicMock(spec=ProviderBase)]
+        selector = SelectorProvider(providers)
+        assert str(selector) == f"SelectorProvider(providers={providers})"
 
     def test_repr_representation(self) -> None:
         """Test detailed string representation of SelectorProvider."""
-        selector = SelectorProvider(["storage", "github"], "https://example.com")
-        expected = "SelectorProvider(providers=['storage', 'github'], base_url='https://example.com')"
-        assert repr(selector) == expected
+        providers = [MagicMock(spec=ProviderBase)]
+        selector = SelectorProvider(providers)
+        assert repr(selector) == f"SelectorProvider(providers={providers})"
 
-    def test_repr_representation_empty_base_url(self) -> None:
-        """Test detailed string representation with empty base_url."""
-        selector = SelectorProvider(["storage"])
-        expected = "SelectorProvider(providers=['storage'], base_url='')"
-        assert repr(selector) == expected
+    def test_provider_name_updated_in_clone(self) -> None:
+        """Test that self.name is updated after a successful clone."""
+        mock_provider = MagicMock(spec=ProviderBase)
+        mock_provider.get_name.return_value = "bitbucket"
+        selector = SelectorProvider([mock_provider])
 
-    @patch("git.provider.provider_builder.add_provider")
-    def test_clone_by_name_success(self, mock_create: MagicMock) -> None:
-        """Test successful cloning by repository name."""
-        # Mock provider
-        mock_provider = MagicMock()
-        mock_create.return_value = mock_provider
+        selector.clone_and_checkout("test-repo", "/tmp/test", branch="main")
 
-        # Mock credential manager
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
-
-            selector = SelectorProvider(["github"])
-            selector.clone_and_checkout(
-                "/tmp/test", "main", repository_name="test-repo"
-            )
-
-            mock_create.assert_called_once()
-            mock_provider.clone_and_checkout.assert_called_once_with(
-                Path("/tmp/test"),
-                "main",
-                commit=None,
-                repository_name="test-repo",
-            )
-
-    @patch("git.provider.provider_builder.add_provider")
-    def test_clone_by_name_all_providers_fail(self, mock_create: MagicMock) -> None:
-        """Test cloning by name when all providers fail."""
-        mock_create.return_value = None
-
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
-
-            selector = SelectorProvider(["github", "bitbucket"])
-
-            with pytest.raises(
-                ProviderError, match="All providers failed to clone repository"
-            ):
-                selector.clone_and_checkout("/tmp/test", repository_name="test-repo")
-
-    def test_clone_validation_errors(self) -> None:
-        """Test clone method validation errors."""
-        selector = SelectorProvider(["github"])
-
-        # Test no arguments
-        with pytest.raises(
-            ValueError, match="Must specify either repository_url or repository_name"
-        ):
-            selector.clone_and_checkout("/tmp/test")
-
-        # Test both arguments
-        with pytest.raises(
-            ValueError, match="Cannot specify both repository_url and repository_name"
-        ):
-            selector.clone_and_checkout(
-                "/tmp/test",
-                repository_url="https://github.com/test",
-                repository_name="test",
-            )
-
-    def test_repr(self) -> None:
-        """Test __repr__ returns detailed string representation."""
-        selector = SelectorProvider(["storage", "github"], "https://example.com")
-
-        repr_str = repr(selector)
-
-        assert "SelectorProvider" in repr_str
-        assert "storage" in repr_str
-        assert "github" in repr_str
-        assert "https://example.com" in repr_str
-
-    @patch("git.provider.provider_builder.add_provider")
-    def test_provider_name_updated_in_clone_by_name(
-        self, mock_create: MagicMock
-    ) -> None:
-        """Test that self.name is updated when cloning by name."""
-        # Mock provider
-        mock_provider = MagicMock()
-        mock_provider.get_name.return_value = "github"
-        mock_create.return_value = mock_provider
-
-        # Mock credential manager
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
-
-            selector = SelectorProvider(["github"])
-            selector.clone_and_checkout(
-                "/tmp/test", "main", repository_name="test-repo"
-            )
-
-            # Verify that self.name was updated
-            assert selector.name == "github"
+        assert selector.name == "bitbucket"
 
     def test_get_branch_returns_empty_before_clone(self) -> None:
         """Test get_branch returns empty string before clone."""
-        selector = SelectorProvider(["storage", "github"])
-        # Before clone, branch_used is None, so should return empty string
+        selector = SelectorProvider([MagicMock(spec=ProviderBase), MagicMock(spec=ProviderBase)])
         assert selector.get_branch() == ""
 
-    def test_get_branches_to_try_explicit_branch_includes_provider_fallbacks(self) -> None:
-        """Test explicit branch keeps configured provider fallbacks."""
-        selector = SelectorProvider(["github"])
-        assert selector._get_branches_to_try("github", "master") == [
-            "master",
-            "main",
-            "dev",
-        ]
-
-    def test_get_branches_to_try_default_uses_config_branches(self) -> None:
-        """Test missing branch uses configured provider branches."""
-        selector = SelectorProvider(["github"])
-        assert selector._get_branches_to_try("github", None) == ["main", "dev"]
-
-    def test_get_branches_to_try_explicit_branch_deduplicates(self) -> None:
-        """Test explicit branch is not duplicated when already in configured fallbacks."""
-        selector = SelectorProvider(["bitbucket"])
-        assert selector._get_branches_to_try("bitbucket", "master") == [
-            "master",
-            "dev",
-        ]
-
-    @patch("git.provider.provider_builder.add_provider")
-    def test_clone_git_fails_fast_when_branch_missing_on_remote(
-        self, mock_create: MagicMock
-    ) -> None:
-        """Test git clone fails before download when branch is absent remotely."""
-        from git.provider.bitbucket_provider import BitbucketProvider
-
-        provider = BitbucketProvider(account_name="konversoai")
-        mock_create.return_value = provider
-
-        with (
-            patch.object(
-                provider,
-                "list_remote_branches",
-                return_value=["hotfix"],
-            ),
-            patch.object(provider, "clone_and_checkout") as mock_clone,
-            patch(
-                "git.provider.selector_provider.CredentialManager"
-            ) as mock_cred_mgr,
-        ):
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = MagicMock()
-            mock_cred_mgr.return_value.has_credentials.return_value = True
-
-            selector = SelectorProvider(["bitbucket"])
-            with pytest.raises(
-                ProviderError,
-                match=(
-                    "Branch\\(es\\) 'release-2025.02-dev', 'master', 'dev' "
-                    "not found on remote repository"
-                ),
-            ):
-                selector.clone_and_checkout(
-                    "/tmp/test",
-                    "release-2025.02-dev",
-                    repository_name="snow",
-                )
-
-            mock_clone.assert_not_called()
-
-    @patch("git.provider.provider_builder.add_provider")
-    def test_get_branch_returns_used_branch_after_clone(
-        self, mock_create: MagicMock
-    ) -> None:
+    def test_get_branch_returns_used_branch_after_clone(self) -> None:
         """Test get_branch returns the branch used during clone."""
-        # Mock provider
-        mock_provider = MagicMock()
+        mock_provider = MagicMock(spec=ProviderBase)
         mock_provider.get_name.return_value = "github"
-        mock_create.return_value = mock_provider
+        selector = SelectorProvider([mock_provider])
 
-        # Mock credential manager
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
-            mock_cred_mgr.return_value.has_credentials.return_value = True
+        selector.clone_and_checkout("test-repo", "/tmp/test", branch="main")
 
-            selector = SelectorProvider(["github"])
-            selector.clone_and_checkout(
-                "/tmp/test", "main", repository_name="test-repo"
-            )
+        assert selector.get_branch() == "main"
 
-            # After clone with branch "main", should return "main"
-            assert selector.get_branch() == "main"
+    def test_remote_exists_true_first_provider(self) -> None:
+        """Test remote_exists returns True as soon as a provider confirms it."""
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_storage.remote_exists.return_value = True
+        mock_github = MagicMock(spec=ProviderBase)
+        selector = SelectorProvider([mock_storage, mock_github])
 
-    @patch("git.provider.provider_builder.add_provider")
-    def test_get_branch_returns_fallback_branch_when_requested_not_found(
-        self, mock_create: MagicMock
-    ) -> None:
-        """Test get_branch returns fallback branch when requested branch not found."""
-        # Mock provider with branch fallback behavior
-        mock_provider = MagicMock()
-        mock_provider.get_name.return_value = "github"
+        assert selector.remote_exists("test-repo") is True
+        mock_github.remote_exists.assert_not_called()
 
-        # Simulate branch fallback by tracking clone calls
-        clone_calls = []
+    def test_remote_exists_false_when_all_fail(self) -> None:
+        """Test remote_exists returns False when no provider confirms it."""
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_storage.remote_exists.return_value = False
+        mock_github = MagicMock(spec=ProviderBase)
+        mock_github.remote_exists.return_value = False
+        selector = SelectorProvider([mock_storage, mock_github])
 
-        async def mock_clone(_repo, _path, branch):
-            clone_calls.append(branch)
-            # First call fails (branch not found), second succeeds with fallback
-            if len(clone_calls) == 1:
-                from git.provider.errors import ProviderError
+        assert selector.remote_exists("test-repo") is False
 
-                error_msg = "Branch not found"
-                raise ProviderError(error_msg)
+    def test_clone_falls_back_to_provider_configured_branches(self) -> None:
+        """Test that a provider's own fallback branches are tried after the requested one."""
+        mock_provider = MagicMock(spec=ProviderBase)
+        mock_provider.branches = ["main", "dev"]
+        mock_provider.clone_and_checkout.side_effect = [
+            ProviderError("Version 'master' not found"),
+            None,
+        ]
+        selector = SelectorProvider([mock_provider])
 
-        mock_provider.clone_and_checkout = mock_clone
-        mock_create.return_value = mock_provider
+        selector.clone_and_checkout("test-repo", "/tmp/test", branch="master")
 
-        # Mock credential manager
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
-            mock_cred_mgr.return_value.has_credentials.return_value = True
+        assert mock_provider.clone_and_checkout.call_count == 2
+        mock_provider.clone_and_checkout.assert_called_with(
+            "test-repo", Path("/tmp/test"), branch="main", commit_id=None
+        )
+        assert selector.get_branch() == "main"
 
-            # Mock config to provide fallback branches
-            with patch.object(
-                SelectorProvider,
-                "_get_branches_to_try",
-                return_value=["main", "master"],
-            ):
-                selector = SelectorProvider(["github"])
-                # This will try main first, then fallback to master
-                # We'll simplify and just test that branch_used is set
-                selector.branch_used = "master"
-                assert selector.get_branch() == "master"
+    def test_clone_without_branch_uses_provider_configured_branches(self) -> None:
+        """Test that provider fallback branches are used when no branch is requested."""
+        mock_provider = MagicMock(spec=ProviderBase)
+        mock_provider.branches = ["main", "dev"]
+        selector = SelectorProvider([mock_provider])
 
-    @patch("git.provider.provider_builder.add_provider")
-    def test_provider_name_updated_in_clone_by_url(
-        self, mock_create: MagicMock
-    ) -> None:
-        """Test that self.name is updated when cloning by URL."""
-        # Mock provider
-        mock_provider = MagicMock()
-        mock_provider.get_name.return_value = "bitbucket"
-        mock_create.return_value = mock_provider
+        selector.clone_and_checkout("test-repo", "/tmp/test")
 
-        # Mock credential manager
-        with patch(
-            "git.provider.selector_provider.CredentialManager"
-        ) as mock_cred_mgr:
-            mock_cred_mgr.return_value.get_auth_for_provider.return_value = None
+        mock_provider.clone_and_checkout.assert_called_once_with(
+            "test-repo", Path("/tmp/test"), branch="main", commit_id=None
+        )
 
-            selector = SelectorProvider(["bitbucket"])
-            selector.clone_and_checkout(
-                "/tmp/test", "main", repository_url="https://example.com/repo"
-            )
+    def test_remote_exists_continues_after_exception(self) -> None:
+        """Test remote_exists keeps trying other providers after an exception."""
+        mock_storage = MagicMock(spec=ProviderBase)
+        mock_storage.remote_exists.side_effect = Exception("boom")
+        mock_github = MagicMock(spec=ProviderBase)
+        mock_github.remote_exists.return_value = True
+        selector = SelectorProvider([mock_storage, mock_github])
 
-            # Verify that self.name was updated
-            assert selector.name == "bitbucket"
+        assert selector.remote_exists("test-repo") is True

@@ -35,7 +35,7 @@ class TestProductDownloadableWithoutDependencies:
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "github"
 
-        def _clone(*, target_path: Path, **_kwargs: object) -> None:
+        def _clone(_repository_name: str, target_path: Path, **_kwargs: object) -> None:
             _write_description_xml(Path(target_path), product)
 
         provider.clone_and_checkout.side_effect = _clone
@@ -49,10 +49,10 @@ class TestProductDownloadableWithoutDependencies:
         downloadable.download(tmp_path)
 
         provider.clone_and_checkout.assert_called_once_with(
-            target_path=tmp_path / "acme",
+            "acme",
+            tmp_path / "acme",
             branch="main",
-            repository_name="acme",
-            commit=None,
+            commit_id=None,
         )
         assert (tmp_path / "acme" / "description.xml").exists()
 
@@ -100,7 +100,7 @@ class TestProductDownloadableCommitPinning:
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "storage"
 
-        def _clone(*, target_path: Path, **_kwargs: object) -> None:
+        def _clone(_repository_name: str, target_path: Path, **_kwargs: object) -> None:
             _write_description_xml(Path(target_path), product)
 
         provider.clone_and_checkout.side_effect = _clone
@@ -113,10 +113,10 @@ class TestProductDownloadableCommitPinning:
         ).download(tmp_path)
 
         provider.clone_and_checkout.assert_called_once_with(
-            target_path=tmp_path / "acme",
+            "acme",
+            tmp_path / "acme",
             branch="main",
-            repository_name="acme",
-            commit="abc123",
+            commit_id="abc123",
         )
 
     def test_download_skips_when_pinned_commit_matches(self, tmp_path: Path) -> None:
@@ -155,7 +155,7 @@ class TestProductDownloadableCommitPinning:
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "storage"
 
-        def _clone(*, target_path: Path, **_kwargs: object) -> None:
+        def _clone(_repository_name: str, target_path: Path, **_kwargs: object) -> None:
             _write_description_xml(Path(target_path), new_product)
 
         provider.clone_and_checkout.side_effect = _clone
@@ -168,10 +168,10 @@ class TestProductDownloadableCommitPinning:
         ).download(tmp_path)
 
         provider.clone_and_checkout.assert_called_once_with(
-            target_path=product_dir,
+            "acme",
+            product_dir,
             branch="main",
-            repository_name="acme",
-            commit="new-commit",
+            commit_id="new-commit",
         )
 
 
@@ -186,7 +186,9 @@ class TestProductDownloadableWithDependencies:
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "github"
 
-        def _clone(*, target_path: Path, repository_name: str, **_kwargs: object) -> None:
+        def _clone(
+            repository_name: str, target_path: Path, **_kwargs: object
+        ) -> None:
             product = child if repository_name == "child" else parent
             target = Path(target_path)
             target.mkdir(parents=True, exist_ok=True)
@@ -216,7 +218,7 @@ class TestProductDownloadableWithDependencies:
         product = _make_product("acme")
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "github"
-        provider.clone_and_checkout.side_effect = lambda **_kwargs: None
+        provider.clone_and_checkout.side_effect = lambda *_args, **_kwargs: None
 
         with pytest.raises(ValueError, match="description.xml not found"):
             ProductDownloadable(

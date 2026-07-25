@@ -22,21 +22,19 @@ class ProviderBase(ABC):
     @abstractmethod
     def clone_and_checkout(
         self,
+        repository_name: str,
         target_path: str | Path,
-        branch: str | None = None,
         *,
-        repository_url: str | None = None,
-        repository_name: str | None = None,
-        commit: str | None = None,
+        branch: str | None = None,
+        commit_id: str | None = None,
     ) -> None:
         """Clone a repository to the specified path and optionally checkout a branch.
 
         Args:
+            repository_name: Name of the repository to clone.
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to checkout after cloning. If None, no checkout is performed.
-            repository_url: URL of the repository to clone.
-            repository_name: Name of the repository to clone.
-            commit: Specific commit to pin the checkout to. Providers that cannot
+            commit_id: Specific commit to pin the checkout to. Providers that cannot
                 honor commit pinning (e.g. plain git branch checkouts) ignore it.
 
         Raises:
@@ -45,11 +43,11 @@ class ProviderBase(ABC):
         """
 
     @abstractmethod
-    def check_remote_repository_exists(self, repository_url: str) -> bool:
+    def remote_exists(self, repository_name: str) -> bool:
         """Check if a remote repository exists.
 
         Args:
-            repository_url: URL of the remote repository.
+            repository_name: Name of the remote repository.
 
         Returns:
             bool: True if repository exists, False otherwise.

@@ -10,7 +10,7 @@ import os
 
 from dotenv import load_dotenv
 
-from git.provider.credential_manager import create_auth
+from auth.factory import add_auth
 from git.versioner.factory import add_versioner
 
 # Charger les variables d'environnement depuis le fichier .env
@@ -26,7 +26,7 @@ def example_ssh_auth() -> None:
     """
     print("=== Exemple avec authentification SSH ===")
     try:
-        ssh_auth = create_auth(
+        ssh_auth = add_auth(
             "ssh",
             username=os.getenv("SSH_AUTH_USERNAME", "git"),
         )
@@ -51,7 +51,7 @@ def example_basic_auth() -> None:
     """
     print("\n=== Exemple avec authentification Basic ===")
     try:
-        basic_auth = create_auth(
+        basic_auth = add_auth(
             "basic",
             username=os.getenv("BASIC_AUTH_USERNAME", "mon-username"),
             password=os.getenv("BASIC_AUTH_PASSWORD", "mon-mot-de-passe"),
