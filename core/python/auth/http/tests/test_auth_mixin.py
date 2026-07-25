@@ -1,11 +1,11 @@
-"""Tests for auth.auth_mixin module."""
+"""Tests for auth.http.auth_mixin module."""
 
 import httpx
 import pytest
 from pydantic import SecretStr
 
-from auth.auth_mixin import AuthMixin
-from auth.base import RequiredSecret
+from auth.http.auth_mixin import AuthMixin
+from auth.http.base import RequiredSecret
 from utils.utils_for_unit_tests import compare
 
 

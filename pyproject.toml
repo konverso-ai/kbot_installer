@@ -117,9 +117,6 @@ known_first_party = [
     "writer",
 ]
 
-[tool.deptry.optional_dependencies_dev_groups]
-dev = ["lint", "typecheck", "test", "deps"]
-
 [tool.deptry.package_module_name_map]
 python-json-logger = "pythonjsonlogger"
 

@@ -49,10 +49,12 @@ def add_s3_storage(bucket_name: str, cluster_name: str | None = None) -> Storage
     )
 
 
-def add_azure_storage(container_name: str) -> StorageBase:
+def add_azure_storage(account_url: str, container_name: str) -> StorageBase:
     """Create an Azure Blob Storage instance using the default Azure credential chain.
 
     Args:
+        account_url: URL of the Azure Storage account to connect to
+            (e.g. ``https://{account}.blob.core.windows.net``).
         container_name: Blob container name.
 
     Returns:
@@ -60,7 +62,11 @@ def add_azure_storage(container_name: str) -> StorageBase:
 
     """
     credentials = AzureCredentials()
-    backend = add_backend(name="azure_blob", credentials=credentials)
+    backend = add_backend(
+        name="azure_blob",
+        account_url=account_url,
+        credentials=credentials,
+    )
     return add_storage(name="azure", backend=backend, container_name=container_name)
 
 

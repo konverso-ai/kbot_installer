@@ -19,24 +19,20 @@ class AzureBlobBackend:
 
     _client: BlobServiceClient
 
-    def __init__(self, credentials: AzureCredentials) -> None:
-        """Build the Azure Blob Storage client from the given credentials.
+    def __init__(self, account_url: str, credentials: AzureCredentials) -> None:
+        """Build the Azure Blob Storage client from the given account URL and credentials.
 
         Args:
-            credentials: Azure connection config used to configure the
-                underlying client. Authentication itself is resolved by
-                Azure's own default credential chain.
-
-        Raises:
-            ValueError: If ``credentials.account_url`` is not set.
+            account_url: URL of the Azure Storage account to connect to
+                (e.g. ``https://{account}.blob.core.windows.net``). This is
+                connection configuration, not a credential.
+            credentials: Azure credentials used to authenticate. Authentication
+                itself is resolved by Azure's own default credential chain.
 
         """
         self.__credentials = credentials
-        if self.__credentials.account_url is None:
-            msg = "AzureCredentials.account_url must be set to build an AzureBlobBackend"
-            raise ValueError(msg)
         self.__client = BlobServiceClient(
-            account_url=self.__credentials.account_url,
+            account_url=account_url,
             credential=self.__credentials.get_credential(),
         )
 

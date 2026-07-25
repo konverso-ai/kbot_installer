@@ -1,25 +1,21 @@
-"""Azure Blob Storage default credentials, config only."""
-
-from typing import Annotated
+"""Azure Blob Storage default credentials."""
 
 from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AzureCredentials(BaseSettings):
-    """Azure Blob Storage connection config for the default credential chain.
+    """Azure default credential chain resolver.
 
-    This credential type requires nothing beyond connection config: actual
+    This credential type requires no configuration of its own: actual
     authentication is resolved by Azure's own default credential chain
     (environment variables, managed identity, or the Azure CLI, in order).
+    Connection details such as ``account_url`` are not credentials and are
+    not part of this class; they belong to the backend/storage that uses it.
     """
 
     model_config = SettingsConfigDict(extra="ignore")
-
-    account_url: Annotated[str | None, Field(default=None)]
-    container_name: Annotated[str | None, Field(default=None)]
 
     def missing_env_vars(self) -> list[str]:
         """Return canonical environment variable names that are absent.

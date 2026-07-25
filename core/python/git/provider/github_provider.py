@@ -5,7 +5,7 @@ operations specific to GitHub repositories, using a Versioner (dulwich by
 default) for the actual git operations.
 """
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.provider.git_provider_base import GitProviderBase
 from git.versioner import VersionerBase
 from utils.Logger import logger
@@ -19,7 +19,7 @@ class GithubProvider(GitProviderBase):
     Attributes:
         base_url (str): Base URL of the GitHub instance.
         account_name (str): Name of the GitHub account.
-        auth (HttpAuthBase | None): Authentication object for repository operations.
+        auth (GitAuthProtocol | None): Authentication object for repository operations.
 
     """
 
@@ -30,7 +30,7 @@ class GithubProvider(GitProviderBase):
     def __init__(
         self,
         account_name: str = "konverso-ai",
-        auth: HttpAuthBase | None = None,
+        auth: GitAuthProtocol | None = None,
         versioner: VersionerBase | None = None,
     ) -> None:
         """Initialize the GitHub provider.

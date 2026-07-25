@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from auth.base import HttpAuthBase
+import httpx
 from service.errors import NexusHttpError
 from storage.nexus_storage import NexusStorage
 from utils.utils_for_unit_tests import compare
@@ -23,7 +23,7 @@ class TestNexusStorage:
     @pytest.fixture
     def storage_with_auth(self) -> NexusStorage:
         """Create a NexusStorage instance with authentication."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=httpx.Auth)
         return NexusStorage(
             domain="konverso.ai",
             repository="kbot_raw",
@@ -46,7 +46,7 @@ class TestNexusStorage:
 
     def test_initialization_valid_with_auth(self) -> None:
         """Test NexusStorage initialization with authentication."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=httpx.Auth)
         storage = NexusStorage("konverso.ai", "kbot_raw", mock_auth)
 
         assert compare("eq", storage.domain, "konverso.ai")

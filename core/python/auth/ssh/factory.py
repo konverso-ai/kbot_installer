@@ -2,12 +2,12 @@
 
 from typing import cast
 
-from auth.base import HttpAuthBase
+from auth.ssh.base import SshAuthBase
 from utils.factory.loader import factory_function
 from utils.factory.utils import build_class_name, build_module_name
 
 
-def add_ssh_auth(name: str, **kwargs: object) -> HttpAuthBase:
+def add_ssh_auth(name: str, **kwargs: object) -> SshAuthBase:
     """Create an authentication instance by name.
 
     Naming convention:
@@ -25,4 +25,4 @@ def add_ssh_auth(name: str, **kwargs: object) -> HttpAuthBase:
     module_name = build_module_name(name, "auth")
     class_name = build_class_name(name, "auth")
     cls = factory_function(f"auth.ssh.{module_name}", class_name)
-    return cast("HttpAuthBase", cls(**kwargs))
+    return cast("SshAuthBase", cls(**kwargs))

@@ -10,8 +10,8 @@ import os
 
 from dotenv import load_dotenv
 
-from auth.factory import create_auth
-from git.versioner.factory import create_versioner
+from git.provider.credential_manager import create_auth
+from git.versioner.factory import add_versioner
 
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
@@ -31,7 +31,7 @@ def example_ssh_auth() -> None:
             username=os.getenv("SSH_AUTH_USERNAME", "git"),
         )
 
-        versioner = create_versioner("dulwich", auth=ssh_auth)
+        versioner = add_versioner("dulwich", auth=ssh_auth)
 
         repository_url = os.getenv("SSH_EXAMPLE_REPOSITORY_URL", "git@github.com:torvalds/linux.git")
         exists = versioner.remote_exists(repository_url)
@@ -57,7 +57,7 @@ def example_basic_auth() -> None:
             password=os.getenv("BASIC_AUTH_PASSWORD", "mon-mot-de-passe"),
         )
 
-        versioner = create_versioner("dulwich", auth=basic_auth)
+        versioner = add_versioner("dulwich", auth=basic_auth)
 
         repository_url = os.getenv(
             "BASIC_EXAMPLE_REPOSITORY_URL",

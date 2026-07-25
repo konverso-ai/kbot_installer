@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.provider.config import ProvidersConfig
 from git.provider.credential_manager import CredentialManager
 
@@ -100,13 +100,13 @@ class TestCredentialManager:
     def test_get_auth_for_provider_nexus_success(self, mock_create_auth) -> None:
         """Test get_auth_for_provider returns authentication object for Nexus when credentials are available."""
         manager = CredentialManager()
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         mock_create_auth.return_value = mock_auth
 
         result = manager.get_auth_for_provider("storage")
 
         assert result is not None
-        assert isinstance(result, HttpAuthBase)
+        assert isinstance(result, GitAuthProtocol)
         mock_create_auth.assert_called_once_with("basic", username="test_user", password="test_pass")
 
     @patch.dict(os.environ, {}, clear=True)
@@ -147,13 +147,13 @@ class TestCredentialManager:
         """Test get_auth_for_provider returns SSH auth for GitHub."""
         mock_home.return_value = Path("/tmp")
         manager = CredentialManager()
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         mock_create_auth.return_value = mock_auth
 
         result = manager.get_auth_for_provider("github")
 
         assert result is not None
-        assert isinstance(result, HttpAuthBase)
+        assert isinstance(result, GitAuthProtocol)
         mock_create_auth.assert_called_once_with("ssh", username="git", use_agent=True)
 
     @patch("credentials.ssh_utils.Path.home")
@@ -185,13 +185,13 @@ class TestCredentialManager:
         """Test get_auth_for_provider returns SSH auth for Bitbucket."""
         mock_home.return_value = Path("/tmp")
         manager = CredentialManager()
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         mock_create_auth.return_value = mock_auth
 
         result = manager.get_auth_for_provider("bitbucket")
 
         assert result is not None
-        assert isinstance(result, HttpAuthBase)
+        assert isinstance(result, GitAuthProtocol)
         mock_create_auth.assert_called_once_with("ssh", username="git", use_agent=True)
 
     @patch("credentials.ssh_utils.Path.home")

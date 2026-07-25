@@ -7,7 +7,7 @@ import pytest
 from dulwich.errors import GitProtocolError, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.versioner.base import VersionerBase
 from git.versioner.errors import VersionerError
 from git.versioner.dulwich_versioner import DulwichVersioner
@@ -31,13 +31,13 @@ class TestDulwichVersioner:
     @pytest.fixture
     def versioner_with_auth(self) -> DulwichVersioner:
         """Create a DulwichVersioner with authentication for testing."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         return DulwichVersioner(mock_auth)
 
     @pytest.fixture
     def mock_auth(self) -> MagicMock:
         """Create mock authentication with username/password remote kwargs."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         mock_auth.remote_kwargs.return_value = {
             "username": "user",
             "password": "pass",
@@ -73,7 +73,7 @@ class TestDulwichVersioner:
 
     def test_get_remote_kwargs_with_keypair(self) -> None:
         """Test remote kwargs from SSH key authentication."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         mock_auth.remote_kwargs.return_value = {
             "username": "git",
             "key_filename": "/priv",
@@ -332,9 +332,9 @@ class TestDulwichVersioner:
 
     def test_factory_creates_dulwich_versioner(self) -> None:
         """Test factory can create DulwichVersioner by name."""
-        from git.versioner.factory import create_versioner
+        from git.versioner.factory import add_versioner
 
-        versioner = create_versioner("dulwich")
+        versioner = add_versioner("dulwich")
         assert isinstance(versioner, DulwichVersioner)
 
 

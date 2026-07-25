@@ -11,7 +11,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from auth.factory import create_auth
+from git.provider.credential_manager import create_auth
 from git.provider.factory import create_provider
 
 # Charger les variables d'environnement depuis le fichier .env

@@ -1,7 +1,7 @@
 """Authentication module."""
 
-from auth.base import HttpAuthBase
-from auth.factory import create_auth
+from auth.http.base import HttpAuthBase
+from auth.http.factory import add_http_auth as create_auth
 
 __all__ = [
     "HttpAuthBase",

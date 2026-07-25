@@ -6,7 +6,6 @@ from pathlib import Path
 
 import httpx
 
-from auth.base import HttpAuthBase
 from service.errors import NexusHttpError
 from service.nexus_files import NexusFiles
 from storage.download_utils import extract_tar_gz_archive
@@ -18,7 +17,7 @@ REST_PREFIX = "service/rest"
 class NexusService:
     """Async service for Nexus repository operations."""
 
-    def __init__(self, host: str, auth: HttpAuthBase | None = None) -> None:
+    def __init__(self, host: str, auth: httpx.Auth | None = None) -> None:
         """Initialize the service for a given Nexus host.
 
         Args:

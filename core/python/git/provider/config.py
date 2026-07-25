@@ -18,7 +18,8 @@ from credentials.github.basic_github_credentials import BasicGithubCredentials
 from credentials.github.ssh_github_credentials import SshGithubCredentials
 
 if TYPE_CHECKING:
-    from auth.base import HttpAuthBase
+    import httpx
+
     from credentials.base import (
         ClientSecretCredentialsBase,
         CredentialsBase,
@@ -75,7 +76,7 @@ class NexusStorageSettings(BaseModel):
     domain: str
     repository: str
 
-    def storage_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, auth: httpx.Auth | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage("nexus", ...)``."""
         return {
             "domain": self.domain,
@@ -94,7 +95,7 @@ class S3StorageSettings(BaseModel):
     region_name: str = "eu-west-1"
     env_vars: list[str] = Field(default_factory=lambda: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"])
 
-    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, _auth: httpx.Auth | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage("s3", ...)``."""
         credentials = cast("StorageCredentialsBase", add_credentials("s3"))
         return {
@@ -121,7 +122,7 @@ class AzureStorageSettings(BaseModel):
         ]
     )
 
-    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, _auth: httpx.Auth | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage("azure", ...)``."""
         kwargs: dict[str, Any] = {
             "account_url": self.account_url,
@@ -155,7 +156,7 @@ class OciStorageSettings(BaseModel):
         ]
     )
 
-    def storage_kwargs(self, _auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def storage_kwargs(self, _auth: httpx.Auth | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage("oci", ...)``."""
         credentials = cast("StorageCredentialsBase", add_credentials("oci"))
         return {
@@ -177,7 +178,7 @@ class StorageSectionConfig(BaseModel):
     azure: AzureStorageSettings
     oci: OciStorageSettings
 
-    def get_backend_kwargs(self, auth: HttpAuthBase | None = None) -> dict[str, Any]:
+    def get_backend_kwargs(self, auth: httpx.Auth | None = None) -> dict[str, Any]:
         """Return kwargs for ``add_storage`` for the active backend."""
         settings = getattr(self, self.backend)
         return settings.storage_kwargs(auth)

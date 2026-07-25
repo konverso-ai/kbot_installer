@@ -10,7 +10,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from auth.bearer_auth import BearerAuth
+from auth.http.bearer_auth import BearerAuth
 from utils.async_api_client import AsyncAPIClient
 from utils.utils_for_unit_tests import compare
 

@@ -1,9 +1,9 @@
-"""Tests for auth.base module."""
+"""Tests for auth.http.base module."""
 
 import pytest
 from pydantic import SecretStr
 
-from auth.base import HttpAuthBase
+from auth.http.base import HttpAuthBase
 from utils.utils_for_unit_tests import compare
 
 

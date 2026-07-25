@@ -10,10 +10,12 @@ from pathlib import Path
 from queue import Queue
 from tempfile import SpooledTemporaryFile
 from threading import Event, Thread
-from typing import IO, Literal, cast
+from typing import IO, TYPE_CHECKING, Literal, cast
 
-from auth.base import HttpAuthBase
 from utils.Logger import logger
+
+if TYPE_CHECKING:
+    import httpx
 
 log = logger.get_package_logger("installer_support")
 
@@ -147,7 +149,7 @@ def ensure_directory(path: str | Path) -> Path:
 
 
 def optimized_download_and_extract(
-    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
+    url: str, target_dir: Path, auth_obj: "httpx.Auth | None" = None
 ) -> None:
     """Optimized download and extract using benchmark results.
 
@@ -200,7 +202,7 @@ def optimized_download_and_extract(
 
 
 def optimized_download_and_extract_bis(
-    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
+    url: str, target_dir: Path, auth_obj: "httpx.Auth | None" = None
 ) -> None:
     """Télécharge et extrait en parallèle avec threading.
 
@@ -274,7 +276,7 @@ def calculate_relative_path(src: Path, dst: Path) -> Path:
 
 
 def optimized_download_and_extract_ter(  # noqa: C901
-    url: str, target_dir: Path, auth_obj: HttpAuthBase | None = None
+    url: str, target_dir: Path, auth_obj: "httpx.Auth | None" = None
 ) -> None:
     """Download and extract a tar.gz file with true streaming and minimal memory.
 

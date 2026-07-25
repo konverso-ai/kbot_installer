@@ -8,9 +8,9 @@ objects without hardcoding credentials in the code.
 
 from typing import TYPE_CHECKING, cast
 
-from auth.base import HttpAuthBase
 from auth.http.factory import add_http_auth
 from auth.ssh.factory import add_ssh_auth
+from git.auth_protocol import GitAuthProtocol
 from git.provider.config import (
     DEFAULT_PROVIDERS_CONFIG,
     ProviderConfig,
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 log = logger.get_package_logger("git.provider")
 
 
-def create_auth(auth_type: str, **kwargs: object) -> HttpAuthBase:
+def create_auth(auth_type: str, **kwargs: object) -> GitAuthProtocol:
     """Create an authentication instance for the given provider auth type.
 
     Dispatches ``"ssh"`` to :func:`add_ssh_auth` and any other transport
@@ -96,7 +96,7 @@ class CredentialManager:
         self,
         provider_config: ProviderConfig,
         provider_name: str,
-    ) -> HttpAuthBase | None:
+    ) -> GitAuthProtocol | None:
         """Create authentication object based on configuration.
 
         Args:
@@ -133,14 +133,14 @@ class CredentialManager:
             )
             return None
 
-    def get_auth_for_provider(self, provider_name: str) -> HttpAuthBase | None:
+    def get_auth_for_provider(self, provider_name: str) -> GitAuthProtocol | None:
         """Get authentication object for a specific provider.
 
         Args:
             provider_name: Name of the provider to get authentication for.
 
         Returns:
-            HttpAuthBase | None: Authentication object if available, None otherwise.
+            GitAuthProtocol | None: Authentication object if available, None otherwise.
 
         """
         if not self.has_credentials(provider_name):

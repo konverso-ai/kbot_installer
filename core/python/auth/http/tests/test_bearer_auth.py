@@ -1,10 +1,10 @@
-"""Tests for auth.bearer_auth module."""
+"""Tests for auth.http.bearer_auth module."""
 
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from auth.bearer_auth import BearerAuth
+from auth.http.bearer_auth import BearerAuth
 from utils.utils_for_unit_tests import compare
 
 

@@ -3,17 +3,15 @@
 import os
 import stat
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Annotated, TypeAlias
 
-import httpx
 from pydantic import Field, PrivateAttr, SecretStr, model_validator
 from typing_extensions import Self, override
 
-from auth.auth_mixin import AuthMixin
-from auth.base import RemoteKwargs
+from auth.ssh.base import RemoteKwargs, SshAuthBase
 
 GitUsername: TypeAlias = Annotated[str, Field(default="git")]
 StrictHostKeyChecking: TypeAlias = Annotated[str, Field(default="accept-new")]
@@ -27,7 +25,7 @@ DEFAULT_KEY_FILENAMES: tuple[str, ...] = (
 )
 
 
-class SshAuth(AuthMixin):
+class SshAuth(SshAuthBase):
     """Authentication for Git over SSH, consumed by Dulwich via ``remote_kwargs``.
 
     Three mutually exclusive modes:
@@ -78,10 +76,6 @@ class SshAuth(AuthMixin):
             msg = "No SSH private key path found"
             raise RuntimeError(msg)
         return self._key_path
-
-    @override
-    def auth_flow(self, request: httpx.Request) -> Iterator[httpx.Request]:
-        yield request
 
     @override
     def remote_kwargs(self) -> RemoteKwargs:

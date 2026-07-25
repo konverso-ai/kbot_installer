@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.provider.base import ProviderBase
 from git.provider.bitbucket_provider import BitbucketProvider
 from git.provider.git_provider_base import GitProviderBase
@@ -18,7 +18,7 @@ class TestBitbucketProvider:
 
     def test_initialization_with_auth(self) -> None:
         """Test proper initialization of BitbucketProvider with authentication."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         provider = BitbucketProvider("test_account", mock_auth)
 
         assert provider.account_name == "test_account"
@@ -44,7 +44,7 @@ class TestBitbucketProvider:
 
     def test_get_auth_with_auth(self) -> None:
         """Test that _get_auth returns the authentication object when provided."""
-        mock_auth = MagicMock(spec=HttpAuthBase)
+        mock_auth = MagicMock(spec=GitAuthProtocol)
         provider = BitbucketProvider("test_account", mock_auth)
 
         assert provider._get_auth() == mock_auth

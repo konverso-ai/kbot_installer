@@ -1,10 +1,10 @@
-"""Tests for auth.apikey_auth module."""
+"""Tests for auth.http.apikey_auth module."""
 
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from auth.apikey_auth import ApikeyAuth
+from auth.http.apikey_auth import ApikeyAuth
 from utils.utils_for_unit_tests import compare
 
 

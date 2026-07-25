@@ -4,8 +4,8 @@ Kept independent of any provider instance so it can be unit tested and
 reused without constructing a full ``GitProviderBase`` subclass.
 """
 
-from auth.base import HttpAuthBase
 from auth.ssh.ssh_auth import SshAuth
+from git.auth_protocol import GitAuthProtocol
 
 
 def build_git_url(
@@ -15,7 +15,7 @@ def build_git_url(
     repository_name: str,
     base_url: str,
     ssh_host: str,
-    auth: HttpAuthBase | None,
+    auth: GitAuthProtocol | None,
 ) -> str:
     """Build the remote repository URL for the given auth mode.
 

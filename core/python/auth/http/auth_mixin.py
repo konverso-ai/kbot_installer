@@ -6,7 +6,7 @@ import httpx
 from pydantic import computed_field
 from typing_extensions import override
 
-from auth.base import HttpAuthBase, RemoteKwargs
+from auth.http.base import HttpAuthBase, RemoteKwargs
 
 
 class AuthMixin(HttpAuthBase):

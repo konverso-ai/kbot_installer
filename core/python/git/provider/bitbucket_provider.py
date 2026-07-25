@@ -5,7 +5,7 @@ operations specific to Bitbucket repositories, using a Versioner (dulwich by
 default) for the actual git operations.
 """
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.provider.git_provider_base import GitProviderBase
 from git.versioner import VersionerBase
 
@@ -16,7 +16,7 @@ class BitbucketProvider(GitProviderBase):
     Attributes:
         base_url (str): Base URL of the Bitbucket instance.
         account_name (str): Name of the Bitbucket account.
-        auth (HttpAuthBase | None): Authentication object for repository operations.
+        auth (GitAuthProtocol | None): Authentication object for repository operations.
 
     """
 
@@ -27,7 +27,7 @@ class BitbucketProvider(GitProviderBase):
     def __init__(
         self,
         account_name: str = "konversoai",
-        auth: HttpAuthBase | None = None,
+        auth: GitAuthProtocol | None = None,
         versioner: VersionerBase | None = None,
         **kwargs,  # noqa: ARG002
     ) -> None:

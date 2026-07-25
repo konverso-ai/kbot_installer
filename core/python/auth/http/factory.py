@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from auth.base import HttpAuthBase
+from auth.http.base import HttpAuthBase
 from utils.factory.loader import factory_function
 from utils.factory.utils import build_class_name, build_module_name
 

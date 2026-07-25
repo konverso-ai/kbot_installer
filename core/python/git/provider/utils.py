@@ -30,3 +30,21 @@ class FileInfo:
     def filename(self) -> str:
         """Complete filename for display."""
         return f"{self.name}_latest.tar.gz"
+
+
+def build_object_key(repository_name: str, branch: str | None, commit: str | None = None) -> str:
+    """Build the object key for a repository archive.
+
+    Args:
+        repository_name: Name of the repository/product.
+        branch: Branch the archive was built from. Defaults to "master".
+        commit: Commit to pin the archive to. If None, the "latest" archive
+            for the branch is targeted instead.
+
+    Returns:
+        The object key identifying the archive in storage.
+
+    """
+    branch_name = branch or "master"
+    suffix = commit or "latest"
+    return f"{branch_name}/{repository_name}/{repository_name}_{suffix}.tar.gz"

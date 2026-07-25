@@ -12,7 +12,6 @@ import httpx
 from more_itertools import batched
 from typing_extensions import Self
 
-from auth.base import HttpAuthBase
 from storage.download_utils import extract_tar_gz_archive
 
 
@@ -23,7 +22,7 @@ class AsyncAPIClient:
         self,
         base_url: str,
         prefix: str = "api",
-        auth: HttpAuthBase | None = None,
+        auth: httpx.Auth | None = None,
     ) -> None:
         """Configure the client without opening any connection yet.
 

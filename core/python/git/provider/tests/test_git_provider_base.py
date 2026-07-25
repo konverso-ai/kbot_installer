@@ -36,7 +36,7 @@ class TestGitProviderBase:
         """Test that _get_versioner creates a versioner only once, lazily."""
         provider = ConcreteProvider("acme")
 
-        with patch("git.provider.git_provider_base.create_versioner") as mock_create:
+        with patch("git.provider.git_provider_base.add_versioner") as mock_create:
             mock_versioner = MagicMock()
             mock_create.return_value = mock_versioner
 

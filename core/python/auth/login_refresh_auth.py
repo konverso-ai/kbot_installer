@@ -5,8 +5,8 @@ from typing import Annotated, TypeAlias
 import httpx
 from pydantic import Field, PrivateAttr, SecretStr
 
-from auth.auth_mixin import AuthMixin
-from auth.base import RequiredSecret
+from auth.http.auth_mixin import AuthMixin
+from auth.http.base import RequiredSecret
 
 Username: TypeAlias = Annotated[str, Field(min_length=1)]
 Password: TypeAlias = RequiredSecret

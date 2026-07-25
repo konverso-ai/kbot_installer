@@ -6,9 +6,9 @@ from collections.abc import Coroutine, Iterator
 from pathlib import Path
 from typing import Any, TypeVar
 
+import httpx
 from typing_extensions import override
 
-from auth.base import HttpAuthBase
 from service.nexus_service import NexusService
 from storage.base import StorageBase
 from utils.Logger import logger
@@ -32,7 +32,7 @@ class NexusStorage(StorageBase):
         self,
         domain: str,
         repository: str,
-        auth: HttpAuthBase | None = None,
+        auth: httpx.Auth | None = None,
     ) -> None:
         """Initialize the Nexus storage backend.
 

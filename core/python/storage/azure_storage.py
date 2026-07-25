@@ -303,8 +303,24 @@ class AzureStorage(StorageBase):
             return False
         return not blob_properties.deleted
 
-    def check_authorization(self) -> None:
-        """Validate Azure credentials and container access permissions."""
+    def check_authorization(
+        self,
+        timeout: int = 10,
+        connection_timeout: int = 5,
+        retry_total: int = 0,
+    ) -> None:
+        """Validate Azure credentials and container access permissions.
+
+        Args:
+            timeout: Server-side operation timeout, in seconds, sent to Azure
+                for each request (the ``timeout`` query parameter).
+            connection_timeout: Socket connection timeout, in seconds, for
+                each request. Overrides the client's default (20s).
+            retry_total: Maximum number of retries for each request.
+                Defaults to 0 (no retries) so a single failed attempt does
+                not extend the overall check duration via backoff.
+
+        """
         container_client = self._get_container_client()
         if container_client is None:
             msg = (
@@ -319,8 +335,22 @@ class AzureStorage(StorageBase):
                 name="temp_blob_for_checking",
                 data=b"Hi",
                 overwrite=True,
+                timeout=timeout,
+                connection_timeout=connection_timeout,
+                retry_total=retry_total,
             )
-            container_client.delete_blob("temp_blob_for_checking")
+            blob_client = container_client.get_blob_client("temp_blob_for_checking")
+            blob_client.download_blob(
+                timeout=timeout,
+                connection_timeout=connection_timeout,
+                retry_total=retry_total,
+            ).readall()
+            container_client.delete_blob(
+                "temp_blob_for_checking",
+                timeout=timeout,
+                connection_timeout=connection_timeout,
+                retry_total=retry_total,
+            )
             log.debug(
                 "Authorization check passed. Connected to Azure Blob Storage in "
                 "duration %.3f(s)",

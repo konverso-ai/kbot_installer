@@ -367,7 +367,48 @@ class TestAzureStorage:
         storage.check_authorization()
 
         container_client.upload_blob.assert_called_once()
-        container_client.delete_blob.assert_called_once_with("temp_blob_for_checking")
+        container_client.get_blob_client.assert_called_once_with(
+            "temp_blob_for_checking"
+        )
+        container_client.get_blob_client.return_value.download_blob.assert_called_once_with(
+            timeout=10,
+            connection_timeout=5,
+            retry_total=0,
+        )
+        container_client.delete_blob.assert_called_once_with(
+            "temp_blob_for_checking",
+            timeout=10,
+            connection_timeout=5,
+            retry_total=0,
+        )
+
+    def test_check_authorization_valid_forwards_custom_timeouts(
+        self, storage: AzureStorage, container_client: MagicMock
+    ) -> None:
+        """Test check_authorization forwards custom timeout values."""
+        storage.check_authorization(
+            timeout=3, connection_timeout=2, retry_total=1
+        )
+
+        container_client.upload_blob.assert_called_once_with(
+            name="temp_blob_for_checking",
+            data=b"Hi",
+            overwrite=True,
+            timeout=3,
+            connection_timeout=2,
+            retry_total=1,
+        )
+        container_client.get_blob_client.return_value.download_blob.assert_called_once_with(
+            timeout=3,
+            connection_timeout=2,
+            retry_total=1,
+        )
+        container_client.delete_blob.assert_called_once_with(
+            "temp_blob_for_checking",
+            timeout=3,
+            connection_timeout=2,
+            retry_total=1,
+        )
 
     def test_check_authorization_invalid_raises_when_no_client(
         self, backend: MagicMock

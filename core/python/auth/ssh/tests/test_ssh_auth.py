@@ -1,4 +1,4 @@
-"""Tests for auth.ssh_auth module."""
+"""Tests for auth.ssh.ssh_auth module."""
 
 from pathlib import Path
 

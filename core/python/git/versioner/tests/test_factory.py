@@ -4,14 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from git.versioner.factory import create_versioner
+from git.versioner.factory import add_versioner
 from git.versioner.base import VersionerBase
 
 
 class TestCreateVersioner:
-    """Test cases for create_versioner function."""
+    """Test cases for add_versioner function."""
 
-    def test_create_versioner_dulwich_success(self) -> None:
+    def test_add_versioner_dulwich_success(self) -> None:
         """Test creating DulwichVersioner successfully."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -20,7 +20,7 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("dulwich", auth=None)
+            result = add_versioner("dulwich", auth=None)
 
             # Verify factory_method was called with correct arguments
             mock_factory_method.assert_called_once_with(
@@ -28,7 +28,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_gitpython_success(self) -> None:
+    def test_add_versioner_gitpython_success(self) -> None:
         """Test creating GitPythonVersioner successfully."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -37,7 +37,7 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("gitpython", auth="test_auth")
+            result = add_versioner("gitpython", auth="test_auth")
 
             # Verify factory_method was called with correct arguments
             mock_factory_method.assert_called_once_with(
@@ -45,7 +45,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_with_multiple_kwargs(self) -> None:
+    def test_add_versioner_with_multiple_kwargs(self) -> None:
         """Test creating versioner with multiple keyword arguments."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -56,7 +56,7 @@ class TestCreateVersioner:
 
             kwargs = {"auth": "test_auth", "timeout": 30, "retries": 3}
 
-            result = create_versioner("dulwich", **kwargs)
+            result = add_versioner("dulwich", **kwargs)
 
             # Verify factory_method was called with all kwargs
             mock_factory_method.assert_called_once_with(
@@ -64,7 +64,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_with_no_kwargs(self) -> None:
+    def test_add_versioner_with_no_kwargs(self) -> None:
         """Test creating versioner with no keyword arguments."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -73,7 +73,7 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("dulwich")
+            result = add_versioner("dulwich")
 
             # Verify factory_method was called with only name and package
             mock_factory_method.assert_called_once_with(
@@ -81,7 +81,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_import_error(self) -> None:
+    def test_add_versioner_import_error(self) -> None:
         """Test handling of ImportError from factory_method."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -90,9 +90,9 @@ class TestCreateVersioner:
             mock_factory_method.side_effect = ImportError("Cannot import module")
 
             with pytest.raises(ImportError, match="Cannot import module"):
-                create_versioner("nonexistent")
+                add_versioner("nonexistent")
 
-    def test_create_versioner_attribute_error(self) -> None:
+    def test_add_versioner_attribute_error(self) -> None:
         """Test handling of AttributeError from factory_method."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -101,9 +101,9 @@ class TestCreateVersioner:
             mock_factory_method.side_effect = AttributeError("Class not found")
 
             with pytest.raises(AttributeError, match="Class not found"):
-                create_versioner("invalid")
+                add_versioner("invalid")
 
-    def test_create_versioner_type_error(self) -> None:
+    def test_add_versioner_type_error(self) -> None:
         """Test handling of TypeError from factory_method."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -112,10 +112,10 @@ class TestCreateVersioner:
             mock_factory_method.side_effect = TypeError("Invalid arguments")
 
             with pytest.raises(TypeError, match="Invalid arguments"):
-                create_versioner("dulwich", invalid_arg="test")
+                add_versioner("dulwich", invalid_arg="test")
 
-    def test_create_versioner_passes_through_exceptions(self) -> None:
-        """Test that create_versioner passes through all exceptions from factory_method."""
+    def test_add_versioner_passes_through_exceptions(self) -> None:
+        """Test that add_versioner passes through all exceptions from factory_method."""
         with patch(
             "git.versioner.factory.factory_method"
         ) as mock_factory_method:
@@ -131,13 +131,13 @@ class TestCreateVersioner:
                 mock_factory_method.side_effect = exception
 
                 with pytest.raises(type(exception), match=str(exception)):
-                    create_versioner("dulwich")
+                    add_versioner("dulwich")
 
-    def test_create_versioner_function_signature(self) -> None:
-        """Test that create_versioner has the correct function signature."""
+    def test_add_versioner_function_signature(self) -> None:
+        """Test that add_versioner has the correct function signature."""
         import inspect
 
-        sig = inspect.signature(create_versioner)
+        sig = inspect.signature(add_versioner)
         params = list(sig.parameters.keys())
 
         # Should have 'name' as first parameter and **kwargs
@@ -149,7 +149,7 @@ class TestCreateVersioner:
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
 
-    def test_create_versioner_docstring_example(self) -> None:
+    def test_add_versioner_docstring_example(self) -> None:
         """Test the example from the docstring works correctly."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -160,7 +160,7 @@ class TestCreateVersioner:
             mock_factory_method.return_value = mock_versioner
 
             # Test the example from docstring
-            versioner = create_versioner("dulwich", auth="test_auth")
+            versioner = add_versioner("dulwich", auth="test_auth")
             result = str(versioner)
 
             # Verify the example works
@@ -169,7 +169,7 @@ class TestCreateVersioner:
                 "dulwich", "git.versioner", auth="test_auth"
             )
 
-    def test_create_versioner_with_none_values(self) -> None:
+    def test_add_versioner_with_none_values(self) -> None:
         """Test creating versioner with None values in kwargs."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -180,7 +180,7 @@ class TestCreateVersioner:
 
             kwargs = {"auth": None, "timeout": None}
 
-            result = create_versioner("dulwich", **kwargs)
+            result = add_versioner("dulwich", **kwargs)
 
             # Verify factory_method was called with None values
             mock_factory_method.assert_called_once_with(
@@ -188,7 +188,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_with_empty_string(self) -> None:
+    def test_add_versioner_with_empty_string(self) -> None:
         """Test creating versioner with empty string name."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -197,7 +197,7 @@ class TestCreateVersioner:
             mock_versioner = MagicMock(spec=VersionerBase)
             mock_factory_method.return_value = mock_versioner
 
-            result = create_versioner("")
+            result = add_versioner("")
 
             # Verify factory_method was called with empty string
             mock_factory_method.assert_called_once_with(
@@ -205,7 +205,7 @@ class TestCreateVersioner:
             )
             assert result == mock_versioner
 
-    def test_create_versioner_with_special_characters(self) -> None:
+    def test_add_versioner_with_special_characters(self) -> None:
         """Test creating versioner with special characters in name."""
         with patch(
             "git.versioner.factory.factory_method"
@@ -215,7 +215,7 @@ class TestCreateVersioner:
             mock_factory_method.return_value = mock_versioner
 
             special_name = "test-versioner_123"
-            result = create_versioner(special_name)
+            result = add_versioner(special_name)
 
             # Verify factory_method was called with special characters
             mock_factory_method.assert_called_once_with(

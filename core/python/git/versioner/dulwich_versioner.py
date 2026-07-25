@@ -14,7 +14,7 @@ from dulwich.porcelain import Error as DulwichPorcelainError
 from dulwich.repo import Repo
 from typing_extensions import override
 
-from auth.base import HttpAuthBase, RemoteKwargs
+from git.auth_protocol import GitAuthProtocol, RemoteKwargs
 from git.versioner.author import Author
 from git.versioner.errors import VersionerError
 from git.versioner.str_repr_mixin import StrReprMixin
@@ -44,14 +44,14 @@ class DulwichVersioner(StrReprMixin):
     all necessary git functionality including clone, add, pull, commit, and push.
 
     Attributes:
-        auth (HttpAuthBase | None): Authentication object for git operations.
+        auth (GitAuthProtocol | None): Authentication object for git operations.
         author (Author): Author identity used for commit metadata.
 
     """
 
     def __init__(
         self,
-        auth: HttpAuthBase | None = None,
+        auth: GitAuthProtocol | None = None,
         author: Author = DEFAULT_AUTHOR,
     ) -> None:
         """Initialize the Dulwich versioner.
@@ -66,11 +66,11 @@ class DulwichVersioner(StrReprMixin):
         self._author = author
 
     @override
-    def _get_auth(self) -> HttpAuthBase | None:
+    def _get_auth(self) -> GitAuthProtocol | None:
         """Get the authentication object for git operations.
 
         Returns:
-            HttpAuthBase | None: The authentication object or None.
+            GitAuthProtocol | None: The authentication object or None.
 
         """
         return self._auth

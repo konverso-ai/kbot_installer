@@ -4,8 +4,8 @@ from typing import Annotated, TypeAlias
 
 from pydantic import Field
 
-from auth.auth_mixin import AuthMixin
-from auth.base import RequiredSecret
+from auth.http.auth_mixin import AuthMixin
+from auth.http.base import RequiredSecret
 
 BearerPrefix: TypeAlias = Annotated[str, Field(default="Bearer")]
 

@@ -124,10 +124,15 @@ class TestAddAzureStorage:
             mock_add_backend.return_value = mock_backend
             mock_add_storage.return_value = mock_storage
 
-            result = add_azure_storage(container_name="container")
+            result = add_azure_storage(
+                account_url="https://account.blob.core.windows.net",
+                container_name="container",
+            )
 
             mock_add_backend.assert_called_once_with(
-                name="azure_blob", credentials="azure-credentials"
+                name="azure_blob",
+                account_url="https://account.blob.core.windows.net",
+                credentials="azure-credentials",
             )
             mock_add_storage.assert_called_once_with(
                 name="azure",

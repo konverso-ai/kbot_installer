@@ -9,14 +9,14 @@ from pathlib import Path
 
 from typing_extensions import override
 
-from auth.base import HttpAuthBase
+from git.auth_protocol import GitAuthProtocol
 from git.provider.base import ProviderBase
 from git.provider.errors import ProviderError
 from git.provider.url import build_git_url
 from git.versioner import (
     VersionerBase,
     VersionerError,
-    create_versioner,
+    add_versioner,
 )
 
 
@@ -41,7 +41,7 @@ class GitProviderBase(ProviderBase):
     def __init__(
         self,
         account_name: str,
-        auth: HttpAuthBase | None = None,
+        auth: GitAuthProtocol | None = None,
         versioner: VersionerBase | None = None,
     ) -> None:
         """Initialize the provider.
@@ -60,7 +60,7 @@ class GitProviderBase(ProviderBase):
         self._versioner = versioner
         self.branch_used: str | None = None
 
-    def _get_auth(self) -> HttpAuthBase | None:
+    def _get_auth(self) -> GitAuthProtocol | None:
         """Return the authentication object configured for this provider."""
         return self._auth
 
@@ -72,7 +72,7 @@ class GitProviderBase(ProviderBase):
 
         """
         if self._versioner is None:
-            self._versioner = create_versioner("dulwich", auth=self._get_auth())
+            self._versioner = add_versioner("dulwich", auth=self._get_auth())
         return self._versioner
 
     def build_repository_url(self, repository_name: str) -> str:

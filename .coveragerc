@@ -3,7 +3,7 @@
 
 [run]
 data_file = /tmp/.coverage
-omit = */*example*,*/*examples*,*/test_*,*/tests/*,*/__pycache__/*,*/.*,gitpassword.py,nexus.py,kbot.py,setup_workarea.py
+omit = */*example*,*/*examples*,*/test_*,*/tests/*,*/__pycache__/*,*/.*,gitpassword.py,nexus.py,kbot.py,setup_workarea.py,work_in_progress.py
 
 [html]
 directory = /tmp/htmlcov

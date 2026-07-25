@@ -17,11 +17,13 @@ class TestAzureBlobBackend:
             mock_cls.return_value = mock_client
 
             credentials = MagicMock(spec=AzureCredentials)
-            credentials.account_url = "https://account.blob.core.windows.net"
             mock_token_credential = MagicMock()
             credentials.get_credential.return_value = mock_token_credential
 
-            backend = AzureBlobBackend(credentials)
+            backend = AzureBlobBackend(
+                "https://account.blob.core.windows.net",
+                credentials,
+            )
 
             credentials.get_credential.assert_called_once_with()
             mock_cls.assert_called_once_with(
