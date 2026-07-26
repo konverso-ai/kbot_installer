@@ -1,11 +1,11 @@
-"""Strict updater: clear the workarea before reinstalling."""
+"""Strict updatable strategy: clear the workarea before reinstalling."""
 
 from typing_extensions import override
 
-from installable.updater.base import UpdaterBase
+from updatable.base import UpdatableBase
 
 
-class StrictUpdater(UpdaterBase):
+class StrictUpdatable(UpdatableBase):
     """Clear the workarea then reinstall it from scratch."""
 
     @override

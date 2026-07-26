@@ -1,15 +1,15 @@
-"""Tests for installable.updater.smooth_updater module."""
+"""Tests for updatable.smooth_updatable module."""
 
 from unittest.mock import MagicMock
 
-from installable.updater.smooth_updater import SmoothUpdater
+from updatable.smooth_updatable import SmoothUpdatable
 
 
 def test_call_reinstalls_without_clearing() -> None:
     workarea = MagicMock()
-    updater = SmoothUpdater(workarea)
+    updatable = SmoothUpdatable(workarea)
 
-    updater()
+    updatable()
 
     workarea.clear.assert_not_called()
     workarea.install.assert_called_once_with()

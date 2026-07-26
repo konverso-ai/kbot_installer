@@ -12,8 +12,8 @@ dependencies, and lays out/updates the resulting workspace on disk.
 All actual Python source lives under `core/python/` (this is the package root — see
 `pythonpath = ["core/python"]` in `pyproject.toml` and `PYTHONPATH` in `tox.ini`). Top-level packages
 (`auth`, `backend`, `cli`, `credentials`, `database`, `errors`, `git`, `installable`,
-`installer_support`, `interactivity`, `publisher`, `service`, `setup`, `storage`, `utils`, `workarea`,
-`writer`) are imported as absolute imports, e.g. `from installable.base import InstallableBase`, not
+`installer_support`, `interactivity`, `publisher`, `service`, `setup`, `storage`, `updatable`, `utils`,
+`workarea`, `writer`) are imported as absolute imports, e.g. `from installable.base import InstallableBase`, not
 `from core.python.installable...`.
 
 ## Common commands
@@ -125,20 +125,20 @@ classDiagram
 ### Factory + naming-convention pattern (used pervasively)
 
 Nearly every extensible subsystem (`auth`, `backend`, `credentials`, `database`, `git/provider`,
-`git/versioner`, `installable`, `installable/updater`, `publisher`, `storage`, `writer`) follows the
+`git/versioner`, `installable`, `updatable`, `publisher`, `storage`, `writer`) follows the
 same shape:
 
 - `base.py` — an ABC defining the interface (e.g. `AuthBase`, `StorageBackend`, `DatabaseBackend`,
   `InstallableBase`, `UpdaterBase`).
 - One module per concrete implementation, named `{name}_{package}.py` containing class `{Name}{Package}`
-  — e.g. `s3_backend.py:S3Backend`, `github_provider.py:GithubProvider`, `strict_updater.py:StrictUpdater`.
+  — e.g. `s3_backend.py:S3Backend`, `github_provider.py:GithubProvider`, `strict_updatable.py:StrictUpdatable`.
 - `factory.py` — a small `create_x(name, **kwargs)` / `add_x(name, **kwargs)` function that resolves
   the implementation dynamically by name using `utils/factory/factory.py`'s `factory_class` /
   `factory_object` / `factory_method`. These use `importlib` + the naming convention above to import
   `{package}.{name}_{package}` and instantiate `{Name}{Package}`, so **new implementations don't require
   registration** — just add the file following the naming convention.
 
-When adding a new backend/provider/updater/etc., follow this convention exactly (module name and class
+When adding a new backend/provider/updatable/etc., follow this convention exactly (module name and class
 name are derived programmatically, not looked up in a registry) and add a corresponding `tests/`
 package alongside it.
 
@@ -168,8 +168,8 @@ package alongside it.
   - `BundleInstallable` — a group/bundle of products (see root `bundle.py`).
   - `WorkareaInstallable` — installs/updates the whole `Workarea` (see `workarea/workarea.py`, a pydantic
     model of `installer_root`/`work_root`/`products`/`rules`) and delegates *how* an update is applied to
-    the **updater strategy** (`installable/updater/`: `strict`, `smooth`, `repair`, `interactive`),
-    selected via `installable/updater/factory.py:add_updater`.
+    the **updatable strategy** (`updatable/`: `strict`, `smooth`, `repair`, `interactive`),
+    selected via `updatable/factory.py:add_updatable`.
 - **`workarea`** — filesystem layout rules for the installed workspace; `workarea_rule.py` /
   `rule_action.py` apply rules from `conf/rules.json` (copy/symlink/etc. between namespaced products and
   the aggregated workarea).
@@ -184,7 +184,7 @@ package alongside it.
 ### Tests
 
 Tests live in a `tests/` subpackage next to the code they cover (e.g. `database/tests/`,
-`installable/updater/tests/`), mirroring the module being tested (`test_{module}.py`). A separate
+`updatable/tests/`), mirroring the module being tested (`test_{module}.py`). A separate
 `core/python/installer_tests/` covers `installer_support`. Coverage config lives in `.coveragerc`
 (data file written to `/tmp/.coverage`, html to `/tmp/htmlcov`) and is loaded explicitly via
 `pytest.ini`'s `addopts = --cov-config=.coveragerc` since `coverage.py` does not read `pytest.ini`.

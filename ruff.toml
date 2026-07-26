@@ -131,6 +131,7 @@ known-first-party = [
     "publisher",
     "service",
     "storage",
+    "updatable",
     "utils",
     "workarea",
     "writer",

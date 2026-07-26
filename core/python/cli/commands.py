@@ -7,7 +7,7 @@ import click
 from downloadable.bundle_downloadable import BundleDownloadable
 from downloadable.product_downloadable import ProductDownloadable
 from git.models import GitProvider
-from git.provider.factory import add_provider
+from git.provider.factory import add_selector_provider
 from installer_support.installation_table import InstallationTable
 from installer_support.installer_service import InstallerService
 from installer_support.installer_utils import version_to_branch
@@ -169,7 +169,7 @@ def download(
                     "bitbucket",
                 ]
             )
-            selector = add_provider(name="selector", providers=selected_providers)
+            selector = add_selector_provider(provider_names=selected_providers)
             downloadable = ProductDownloadable(
                 product=product_obj,
                 provider=selector,
@@ -216,7 +216,6 @@ def list_products(
     """
     try:
         service = InstallerService(installer_dir)
-
         # Check if installer directory exists
         if not Path(installer_dir).exists():
             click.echo("Installer directory does not exist. No products installed.")

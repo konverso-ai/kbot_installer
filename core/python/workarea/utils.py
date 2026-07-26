@@ -29,14 +29,10 @@ def should_keep(path: Path, root: Path, rule: "WorkAreaRule") -> bool:
     """
     relative = path.relative_to(root).as_posix()
 
-    if rule.includes and not any(
-        fnmatch(relative, pattern) for pattern in rule.includes
-    ):
+    if rule.includes and not any(fnmatch(relative, pattern) for pattern in rule.includes):
         return False
 
-    return not (
-        rule.excludes and any(fnmatch(relative, pattern) for pattern in rule.excludes)
-    )
+    return not (rule.excludes and any(fnmatch(relative, pattern) for pattern in rule.excludes))
 
 
 def render_variables(content: str, variables: dict[str, str]) -> str:
@@ -66,6 +62,27 @@ def is_broken_symlink(path: Path) -> bool:
 
     """
     return path.is_symlink() and not path.exists()
+
+
+def repair_broken_links(paths: Iterable[Path], *, interactive: bool = False) -> None:
+    """Find and remove broken symlinks among a set of paths.
+
+    Args:
+        paths: Paths to check for broken symlinks (e.g. `work_root.rglob("*")`).
+        interactive: If True, prompt for confirmation before removing each broken
+            symlink; otherwise remove them all without asking.
+
+    """
+    for path in paths:
+        if not is_broken_symlink(path=path):
+            continue
+
+        if interactive:
+            answer = input(f"Broken symlink {path}. Rebuild it? [y/N] ")
+            if answer.lower() not in {"y", "yes"}:
+                continue
+
+        path.unlink()
 
 
 def link_source(source: Path, target: Path) -> None:
@@ -229,8 +246,7 @@ def setup_kbot_conf(work_root: Path) -> None:
         return
 
     path.write_text(
-        "# Kbot configuration file\n"
-        "\n# If possible, prefer saving in Site or Customer level configuation file"
+        "# Kbot configuration file\n\n# If possible, prefer saving in Site or Customer level configuation file"
     )
 
 
@@ -299,9 +315,31 @@ def setup_drf_yasg_static(work_root: Path) -> None:
     target.symlink_to(source)
 
 
-def cleanup_unused_tests_dir(
-    work_root: Path, products_root: Iterable[Path], *, interactive: bool
-) -> None:
+def setup_drf_spectacular_static(work_root: Path) -> None:
+    """Symlink the `drf_spectacular` package's static assets into the workarea.
+
+    Does nothing if the `drf_spectacular` static directory cannot be found, or if a
+    target already exists at `work_root / "ui" / "web" / "static"`.
+
+    Args:
+        work_root: Root directory of the workarea.
+
+    """
+    source = Path(str(files("drf_spectacular") / "static"))
+    target = work_root / "ui" / "web" / "static"
+
+    if not source.exists():
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if target.exists() or target.is_symlink():
+        return
+
+    target.symlink_to(source)
+
+
+def cleanup_unused_tests_dir(work_root: Path, products_root: Iterable[Path], *, interactive: bool) -> None:
     """Remove the workarea's `tests` directory if no product uses it.
 
     If any product root has its own `tests` directory, the workarea's

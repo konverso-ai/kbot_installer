@@ -62,6 +62,11 @@ class ProviderMixin(ProviderBase):
         self._versioner = versioner
         self.branches: list[str] = list(branches) if branches is not None else list(type(self).default_branches)
         self._branch_used: str | None = None
+        # Tracks, per repository name, the target path it was last cloned to,
+        # so that a repeated call for the same repository/path (e.g. trying
+        # several candidate branches in a fallback loop) checks out the
+        # requested branch locally instead of re-cloning from scratch.
+        self._cloned_targets: dict[str, str] = {}
 
     def _build_repository_url(self, repository_name: str) -> str:
         """Build the remote repository URL for the configured auth mode.
@@ -96,30 +101,46 @@ class ProviderMixin(ProviderBase):
     ) -> None:
         """Clone a repository to the specified path and optionally checkout a branch.
 
+        The repository is only cloned once per ``(repository_name, target_path)``
+        pair: cloning already fetches every remote branch, so a repeated call
+        for the same repository/path (as happens when a caller tries several
+        candidate branches in a fallback loop, e.g. :func:`branch_resolver
+        .clone_with_branch_fallback`) checks out ``branch`` locally instead of
+        cloning again.
+
         Args:
             repository_name: Name of the repository to clone; the URL is
                 built from the provider's account/base URL configuration.
             target_path: Local path where the repository should be cloned.
             branch: Specific branch to checkout after cloning. If None, no
-                checkout is performed.
+                checkout is performed (the default branch stays checked out).
             commit_id: Unused by plain git clones; commit pinning is not
                 supported for branch checkouts.
 
         Raises:
-            ProviderError: If the clone operation fails.
+            ProviderError: If the clone or checkout operation fails.
 
         """
         repository_url = self._build_repository_url(repository_name)
+        target_path_str = str(target_path)
+        already_cloned = self._cloned_targets.get(repository_name) == target_path_str
 
-        try:
-            if branch:
-                self._versioner.clone(repository_url, target_path, branch=branch, depth=1)
-            else:
+        if not already_cloned:
+            try:
                 self._versioner.clone(repository_url, target_path)
-            self._branch_used = branch
-        except VersionerError as e:
-            error_msg = f"Failed to clone repository '{repository_url}': {e}"
-            raise ProviderError(error_msg) from e
+            except VersionerError as e:
+                error_msg = f"Failed to clone repository '{repository_url}': {e}"
+                raise ProviderError(error_msg) from e
+            self._cloned_targets[repository_name] = target_path_str
+
+        if branch:
+            try:
+                self._versioner.checkout(target_path, branch)
+            except VersionerError as e:
+                error_msg = f"Failed to checkout branch '{branch}' in repository '{repository_url}': {e}"
+                raise ProviderError(error_msg) from e
+
+        self._branch_used = branch
 
     @override
     def remote_exists(self, repository_name: str) -> bool:

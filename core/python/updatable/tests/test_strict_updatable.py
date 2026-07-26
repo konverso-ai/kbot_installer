@@ -1,15 +1,15 @@
-"""Tests for installable.updater.strict_updater module."""
+"""Tests for updatable.strict_updatable module."""
 
 from unittest.mock import MagicMock, call
 
-from installable.updater.strict_updater import StrictUpdater
+from updatable.strict_updatable import StrictUpdatable
 
 
 def test_call_clears_before_reinstalling() -> None:
     workarea = MagicMock()
-    updater = StrictUpdater(workarea)
+    updatable = StrictUpdatable(workarea)
 
-    updater()
+    updatable()
 
     workarea.clear.assert_called_once_with()
     workarea.install.assert_called_once_with()

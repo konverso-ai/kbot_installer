@@ -1,11 +1,11 @@
-"""Interactive updater: ask before dropping each broken symlink."""
+"""Interactive updatable strategy: ask before dropping each broken symlink."""
 
 from typing_extensions import override
 
-from installable.updater.base import UpdaterBase
+from updatable.base import UpdatableBase
 
 
-class InteractiveUpdater(UpdaterBase):
+class InteractiveUpdatable(UpdatableBase):
     """Ask the user before removing each broken symlink, without reinstalling."""
 
     @override

@@ -1,7 +1,7 @@
 """Tests for Dulwich versioner module."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from dulwich.errors import GitProtocolError, NotGitRepository
@@ -104,11 +104,14 @@ class TestDulwichVersioner:
     def test_clone_success(self, versioner: DulwichVersioner) -> None:
         """Test successful clone operation."""
         with patch("git.versioner.dulwich_versioner.porcelain.clone") as mock_clone:
-            versioner.clone("https://github.com/test/repo.git", "/tmp/test")
+            mock_clone.return_value = "fake-repo"
+            result = versioner.clone("https://github.com/test/repo.git", "/tmp/test")
             mock_clone.assert_called_once_with(
                 "https://github.com/test/repo.git",
                 "/tmp/test",
+                errstream=ANY,
             )
+            assert result == "fake-repo"
 
     def test_clone_with_branch_and_depth(self, versioner: DulwichVersioner) -> None:
         """Test shallow clone of a specific branch."""
@@ -124,6 +127,7 @@ class TestDulwichVersioner:
                 "/tmp/test",
                 branch="main",
                 depth=1,
+                errstream=ANY,
             )
 
     def test_list_remote_branches(self, versioner: DulwichVersioner) -> None:
@@ -150,6 +154,7 @@ class TestDulwichVersioner:
                 "/tmp/test",
                 username="user",
                 password="pass",
+                errstream=ANY,
             )
 
     @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
@@ -173,6 +178,7 @@ class TestDulwichVersioner:
                 ssh_command=auth.remote_kwargs()["ssh_command"],
                 branch="main",
                 depth=1,
+                errstream=ANY,
             )
 
     @patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True)
@@ -255,6 +261,30 @@ class TestDulwichVersioner:
             with patch.object(versioner, "_checkout_local_branch") as mock_checkout:
                 versioner.checkout("/test/path", "main")
                 mock_checkout.assert_called_once_with(mock_repo, "main")
+
+    def test_checkout_prefers_local_branch_when_both_local_and_remote_exist(
+        self, versioner: DulwichVersioner
+    ) -> None:
+        """Test checkout uses the plain local checkout for a repo's default branch.
+
+        After a plain clone, the checked-out default branch has both a local
+        ref (created by the clone) and a remote-tracking ref. Checkout must
+        not try to (re)create the local branch from the remote ref in that
+        case, or Dulwich raises a "branch already exists" error.
+        """
+        mock_repo = MagicMock()
+        mock_repo.get_refs.return_value = {
+            b"refs/heads/master": b"sha",
+            b"refs/remotes/origin/master": b"sha",
+        }
+        with patch.object(versioner, "_get_repository", return_value=mock_repo):
+            with (
+                patch.object(versioner, "_checkout_local_branch") as mock_local,
+                patch.object(versioner, "_checkout_remote_branch") as mock_remote,
+            ):
+                versioner.checkout("/test/path", "master")
+                mock_local.assert_called_once_with(mock_repo, "master")
+                mock_remote.assert_not_called()
 
     def test_checkout_remote_branch(self, versioner: DulwichVersioner) -> None:
         """Test checkout of a remote branch."""

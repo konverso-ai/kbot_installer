@@ -1,11 +1,11 @@
-"""Repair updater: drop broken symlinks before reinstalling."""
+"""Repair updatable strategy: drop broken symlinks before reinstalling."""
 
 from typing_extensions import override
 
-from installable.updater.base import UpdaterBase
+from updatable.base import UpdatableBase
 
 
-class RepairUpdater(UpdaterBase):
+class RepairUpdatable(UpdatableBase):
     """Remove broken symlinks then reinstall the workarea."""
 
     @override

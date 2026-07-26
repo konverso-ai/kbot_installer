@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from installable.updater.factory import UpdaterName
 from installable.workarea_installable import WorkareaInstallable
+from updatable.factory import UpdatableName
 from workarea.rule_action import RuleAction
 from workarea.workarea import Workarea
 from workarea.workarea_rule import WorkareaRule
@@ -17,7 +17,7 @@ def _build(
     *,
     products: list[Path] | None = None,
     rules: list[WorkareaRule] | None = None,
-    update_mode: UpdaterName = UpdaterName.SMOOTH,
+    update_mode: UpdatableName = UpdatableName.SMOOTH,
 ) -> WorkareaInstallable:
     return WorkareaInstallable(
         workarea=Workarea(
@@ -84,20 +84,18 @@ class TestInstall:
 
 
 class TestUpdate:
-    def test_dispatches_to_updater_matching_update_mode(
+    def test_dispatches_to_updatable_matching_update_mode(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        wa = _build(tmp_path, update_mode=UpdaterName.STRICT)
-        updater = MagicMock()
-        add_updater = MagicMock(return_value=updater)
-        monkeypatch.setattr(
-            "installable.workarea_installable.add_updater", add_updater
-        )
+        wa = _build(tmp_path, update_mode=UpdatableName.STRICT)
+        updatable = MagicMock()
+        add_updatable = MagicMock(return_value=updatable)
+        monkeypatch.setattr("installable.workarea_installable.add_updatable", add_updatable)
 
         wa.update()
 
-        add_updater.assert_called_once_with(name=UpdaterName.STRICT.value, workarea=wa)
-        updater.assert_called_once_with()
+        add_updatable.assert_called_once_with(name=UpdatableName.STRICT.value, workarea=wa)
+        updatable.assert_called_once_with()
 
     def test_smooth_mode_reinstalls_without_clearing(self, tmp_path: Path) -> None:
         product_dir = tmp_path / "installer" / "productA"
@@ -108,7 +106,7 @@ class TestUpdate:
             tmp_path,
             products=[Path("productA")],
             rules=[rule],
-            update_mode=UpdaterName.SMOOTH,
+            update_mode=UpdatableName.SMOOTH,
         )
         wa.install()
         stray = tmp_path / "work" / "stray.txt"
@@ -119,9 +117,7 @@ class TestUpdate:
         assert stray.exists()
         assert (tmp_path / "work" / "core" / "file.py").is_symlink()
 
-    def test_strict_mode_clears_work_root_before_reinstalling(
-        self, tmp_path: Path
-    ) -> None:
+    def test_strict_mode_clears_work_root_before_reinstalling(self, tmp_path: Path) -> None:
         product_dir = tmp_path / "installer" / "productA"
         (product_dir / "core").mkdir(parents=True)
         (product_dir / "core" / "file.py").write_text("data")
@@ -130,7 +126,7 @@ class TestUpdate:
             tmp_path,
             products=[Path("productA")],
             rules=[rule],
-            update_mode=UpdaterName.STRICT,
+            update_mode=UpdatableName.STRICT,
         )
         wa.install()
         stray = tmp_path / "work" / "stray.txt"
@@ -143,20 +139,18 @@ class TestUpdate:
 
 
 class TestRepair:
-    def test_uses_repair_updater_regardless_of_update_mode(
+    def test_uses_repair_updatable_regardless_of_update_mode(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        wa = _build(tmp_path, update_mode=UpdaterName.SMOOTH)
-        updater = MagicMock()
-        add_updater = MagicMock(return_value=updater)
-        monkeypatch.setattr(
-            "installable.workarea_installable.add_updater", add_updater
-        )
+        wa = _build(tmp_path, update_mode=UpdatableName.SMOOTH)
+        updatable = MagicMock()
+        add_updatable = MagicMock(return_value=updatable)
+        monkeypatch.setattr("installable.workarea_installable.add_updatable", add_updatable)
 
         wa.repair()
 
-        add_updater.assert_called_once_with(name=UpdaterName.REPAIR.value, workarea=wa)
-        updater.assert_called_once_with()
+        add_updatable.assert_called_once_with(name=UpdatableName.REPAIR.value, workarea=wa)
+        updatable.assert_called_once_with()
 
     def test_removes_broken_links_then_reinstalls(self, tmp_path: Path) -> None:
         product_dir = tmp_path / "installer" / "productA"
@@ -217,9 +211,7 @@ class TestRepairBrokenLinks:
         assert valid_link.is_symlink()
         assert regular_file.exists()
 
-    def test_interactive_keeps_link_on_refusal(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_interactive_keeps_link_on_refusal(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         wa = _build(tmp_path)
         work_root = tmp_path / "work"
         work_root.mkdir()
@@ -231,9 +223,7 @@ class TestRepairBrokenLinks:
 
         assert broken_link.is_symlink()
 
-    def test_interactive_removes_link_on_confirmation(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_interactive_removes_link_on_confirmation(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         wa = _build(tmp_path)
         work_root = tmp_path / "work"
         work_root.mkdir()
@@ -258,17 +248,13 @@ class TestRuntimeEnvironment:
         )
         assert wa.pythonpath() == expected
 
-    def test_assert_runtime_ready_raises_when_paths_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_assert_runtime_ready_raises_when_paths_missing(self, tmp_path: Path) -> None:
         wa = _build(tmp_path)
 
         with pytest.raises(FileNotFoundError):
             wa.runtime_env()
 
-    def test_runtime_env_returns_environ_copy_with_pythonpath(
-        self, tmp_path: Path
-    ) -> None:
+    def test_runtime_env_returns_environ_copy_with_pythonpath(self, tmp_path: Path) -> None:
         wa = _build(tmp_path)
         (tmp_path / "work" / "core" / "python").mkdir(parents=True)
         (tmp_path / "work" / "rest").mkdir(parents=True)
@@ -296,4 +282,4 @@ def test_default_update_mode_is_smooth(tmp_path: Path) -> None:
         )
     )
 
-    assert wa.update_mode == UpdaterName.SMOOTH
+    assert wa.update_mode == UpdatableName.SMOOTH

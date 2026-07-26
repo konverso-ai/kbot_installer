@@ -34,15 +34,15 @@ class TestDownloadCommand:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @patch("cli.commands.add_provider")
+    @patch("cli.commands.add_selector_provider")
     @patch("cli.commands.ProductDownloadable")
     def test_download_product_success(
-        self, mock_downloadable_cls, mock_add_provider
+        self, mock_downloadable_cls, mock_add_selector_provider
     ) -> None:
         """A product download builds a ProductDownloadable and calls download()."""
         mock_instance = MagicMock()
         mock_downloadable_cls.return_value = mock_instance
-        mock_add_provider.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
 
         result = self.runner.invoke(
             cli,
@@ -61,18 +61,18 @@ class TestDownloadCommand:
         mock_downloadable_cls.assert_called_once()
         call_kwargs = mock_downloadable_cls.call_args.kwargs
         assert call_kwargs["product"].name == "jira"
-        assert call_kwargs["provider"] is mock_add_provider.return_value
+        assert call_kwargs["provider"] is mock_add_selector_provider.return_value
         assert call_kwargs["include_dependencies"] is True
         mock_instance.download.assert_called_once()
 
-    @patch("cli.commands.add_provider")
+    @patch("cli.commands.add_selector_provider")
     @patch("cli.commands.ProductDownloadable")
     def test_download_with_no_rec(
-        self, mock_downloadable_cls, mock_add_provider
+        self, mock_downloadable_cls, mock_add_selector_provider
     ) -> None:
         """--no-rec disables dependency download."""
         mock_downloadable_cls.return_value = MagicMock()
-        mock_add_provider.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
 
         result = self.runner.invoke(
             cli,
@@ -89,14 +89,14 @@ class TestDownloadCommand:
         assert result.exit_code == 0
         assert mock_downloadable_cls.call_args.kwargs["include_dependencies"] is False
 
-    @patch("cli.commands.add_provider")
+    @patch("cli.commands.add_selector_provider")
     @patch("cli.commands.ProductDownloadable")
     def test_download_forwards_selected_providers(
-        self, mock_downloadable_cls, mock_add_provider
+        self, mock_downloadable_cls, mock_add_selector_provider
     ) -> None:
         """Explicit --provider options are forwarded to the selector provider."""
         mock_downloadable_cls.return_value = MagicMock()
-        mock_add_provider.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
 
         result = self.runner.invoke(
             cli,
@@ -114,8 +114,8 @@ class TestDownloadCommand:
         )
 
         assert result.exit_code == 0
-        mock_add_provider.assert_called_once_with(
-            name="selector", providers=["github", "bitbucket"]
+        mock_add_selector_provider.assert_called_once_with(
+            provider_names=["github", "bitbucket"]
         )
 
     @patch("cli.commands.BundleDownloadable")
@@ -185,16 +185,16 @@ class TestDownloadCommand:
         )
         assert result.exit_code != 0
 
-    @patch("cli.commands.add_provider")
+    @patch("cli.commands.add_selector_provider")
     @patch("cli.commands.ProductDownloadable")
     def test_download_error_handling(
-        self, mock_downloadable_cls, mock_add_provider
+        self, mock_downloadable_cls, mock_add_selector_provider
     ) -> None:
         """Download failures are surfaced as an error and abort."""
         mock_instance = MagicMock()
         mock_instance.download.side_effect = Exception("Test error")
         mock_downloadable_cls.return_value = mock_instance
-        mock_add_provider.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
 
         result = self.runner.invoke(
             cli,

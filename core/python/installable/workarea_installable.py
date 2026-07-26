@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from installable.base import InstallableBase
-from installable.updater.factory import UpdaterName, add_updater
+from updatable.factory import UpdatableName, add_updatable
 from utils.Logger import logger
 from workarea.utils import (
     apply_rules,
     cleanup_unused_tests_dir,
-    is_broken_symlink,
+    repair_broken_links,
     setup_drf_yasg_static,
     setup_kbot_conf,
     setup_products,
@@ -33,18 +33,18 @@ class WorkareaInstallable(BaseModel, InstallableBase):
     Unlike `ProductInstallable`/`BundleInstallable`, this installable does not
     represent a single downloadable unit: it applies workarea rules for every
     product already present under `workarea.installer_root` and delegates
-    updates to the configured updater strategy (see `installable.updater`).
+    updates to the configured updatable strategy (see `updatable`).
 
     Attributes:
         workarea: The `Workarea` model describing installer root, work root, products, and rules.
-        update_mode: Updater strategy used by `update`.
+        update_mode: Updatable strategy used by `update`.
         runtime_pythonpath: Paths (relative to `work_root`) exposed on `PYTHONPATH` at runtime.
 
     """
 
     workarea: Workarea
 
-    update_mode: Annotated[UpdaterName, Field(default=UpdaterName.SMOOTH)]
+    update_mode: Annotated[UpdatableName, Field(default=UpdatableName.SMOOTH)]
 
     runtime_pythonpath: Annotated[
         list[Path],
@@ -98,22 +98,22 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         cleanup_unused_tests_dir(
             self.workarea.work_root,
             self.workarea.products,
-            interactive=self.update_mode == UpdaterName.INTERACTIVE,
+            interactive=self.update_mode == UpdatableName.INTERACTIVE,
         )
 
     def update(self) -> None:
-        """Update the workarea using the configured updater strategy.
+        """Update the workarea using the configured updatable strategy.
 
-        Resolves the updater named by `update_mode` (see `installable.updater.factory`)
+        Resolves the updatable strategy named by `update_mode` (see `updatable.factory`)
         and runs it against this workarea.
         """
-        updater = add_updater(name=self.update_mode.value, workarea=self)
-        updater()
+        updatable = add_updatable(name=self.update_mode.value, workarea=self)
+        updatable()
 
     def repair(self) -> None:
-        """Repair the workarea using the `repair` updater strategy, regardless of `update_mode`."""
-        updater = add_updater(name=UpdaterName.REPAIR.value, workarea=self)
-        updater()
+        """Repair the workarea using the `repair` updatable strategy, regardless of `update_mode`."""
+        updatable = add_updatable(name=UpdatableName.REPAIR.value, workarea=self)
+        updatable()
 
     def clear(self) -> None:
         """Remove every file, symlink, and directory directly under the work root."""
@@ -131,16 +131,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
                 symlink; otherwise remove them all without asking.
 
         """
-        for path in self.workarea.work_root.rglob("*"):
-            if not is_broken_symlink(path=path):
-                continue
-
-            if interactive:
-                answer: str = input(f"Broken symlink {path}. Rebuild it? [y/N] ")
-                if answer.lower() not in {"y", "yes"}:
-                    continue
-
-            path.unlink()
+        repair_broken_links(self.workarea.work_root.rglob("*"), interactive=interactive)
 
     def _iter_product_roots(self) -> Iterable[Path]:
         for product in self.workarea.products:
@@ -162,10 +153,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
             `runtime_pythonpath`, rooted at `workarea.work_root`.
 
         """
-        return os.pathsep.join(
-            str((self.workarea.work_root / path).resolve())
-            for path in self.runtime_pythonpath
-        )
+        return os.pathsep.join(str((self.workarea.work_root / path).resolve()) for path in self.runtime_pythonpath)
 
     def runtime_env(self) -> dict[str, str]:
         """Build the environment to run kbot processes against this workarea.

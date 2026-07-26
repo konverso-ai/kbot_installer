@@ -83,14 +83,25 @@ class VersionerBase(ABC):
         *,
         branch: str | None = None,
         depth: int | None = None,
-    ) -> None:
+    ) -> object:
         """Clone a repository to the specified path.
+
+        Implementations fetch every remote branch (not just ``branch``) so
+        that callers can later use :meth:`checkout` to switch to another
+        branch without cloning again; ``branch`` only selects which one is
+        checked out as HEAD.
 
         Args:
             repository_url: URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
-            branch: Optional branch to clone and check out.
+            branch: Optional branch to check out as HEAD after cloning. If
+                None, the repository's default branch is checked out.
             depth: Optional shallow clone depth.
+
+        Returns:
+            A backend-specific handle to the freshly cloned repository, so
+            callers can cache it and avoid re-cloning when trying alternate
+            branches.
 
         Raises:
             VersionerError: If the clone operation fails.

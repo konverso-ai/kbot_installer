@@ -3,8 +3,8 @@
 This module implements the DulwichVersioner class that handles full git
 operations using Dulwich for any git repository.
 """
-
 import shutil
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -367,14 +367,26 @@ class DulwichVersioner(StrReprMixin):
         *,
         branch: str | None = None,
         depth: int | None = None,
-    ) -> None:
+    ) -> Repo:
         """Clone a repository using Dulwich.
+
+        The remote's ``fetch`` refspec (``+refs/heads/*:refs/remotes/origin/*``)
+        is applied regardless of ``branch``, so every remote branch is fetched
+        into a local remote-tracking ref; ``branch`` only selects which one is
+        checked out as HEAD. This means a caller can later use :meth:`checkout`
+        to switch to any other remote branch without cloning again.
 
         Args:
             repository_url: URL of the repository to clone.
             target_path: Local path where the repository should be cloned.
-            branch: Optional branch to clone and check out.
+            branch: Optional branch to check out as HEAD after cloning. If
+                None, the repository's default branch is checked out.
             depth: Optional shallow clone depth.
+
+        Returns:
+            Repo: The freshly cloned Dulwich repository, so callers (e.g.
+            :class:`~git.provider.provider_mixin.ProviderMixin`) can cache it
+            and avoid re-cloning when trying alternate branches.
 
         Raises:
             VersionerError: If the clone operation fails.
@@ -392,7 +404,7 @@ class DulwichVersioner(StrReprMixin):
                 clone_kwargs["branch"] = branch
             if depth is not None:
                 clone_kwargs["depth"] = depth
-            porcelain.clone(repository_url, str(target_path), **clone_kwargs)
+            return porcelain.clone(repository_url, str(target_path), errstream=BytesIO(), **clone_kwargs)
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to clone repository from {repository_url}: {e}"
             raise VersionerError(error_msg) from e
@@ -527,10 +539,10 @@ class DulwichVersioner(StrReprMixin):
             local_ref = _LOCAL_BRANCH_PREFIX + branch.encode()
             remote_ref = _REMOTE_BRANCH_PREFIX + branch.encode()
 
-            if remote_ref in refs:
-                self._checkout_remote_branch(repo, branch)
-            elif local_ref in refs:
+            if local_ref in refs:
                 self._checkout_local_branch(repo, branch)
+            elif remote_ref in refs:
+                self._checkout_remote_branch(repo, branch)
             else:
                 available_branches = self._get_available_branches(repo)
                 raise self._create_branch_not_found_error(branch, available_branches)

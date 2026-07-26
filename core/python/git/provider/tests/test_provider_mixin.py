@@ -38,7 +38,7 @@ class TestProviderMixin:
         assert isinstance(provider, ProviderBase)
 
     def test_clone_and_checkout_calls_versioner(self) -> None:
-        """Test that clone_and_checkout calls the versioner with a branch."""
+        """Test that clone_and_checkout clones then checks out the branch."""
         mock_versioner = MagicMock()
         mock_versioner._get_auth.return_value = None
         provider = _make_provider(mock_versioner)
@@ -48,9 +48,8 @@ class TestProviderMixin:
         mock_versioner.clone.assert_called_once_with(
             "https://concrete.example.com/acme/test_repo.git",
             "/test/path",
-            branch="main",
-            depth=1,
         )
+        mock_versioner.checkout.assert_called_once_with("/test/path", "main")
         assert provider.get_branch() == "main"
 
     def test_clone_and_checkout_without_branch(self) -> None:
@@ -65,6 +64,7 @@ class TestProviderMixin:
             "https://concrete.example.com/acme/test_repo.git",
             "/test/path",
         )
+        mock_versioner.checkout.assert_not_called()
         assert provider.get_branch() == ""
 
     def test_clone_and_checkout_ignores_commit_id(self) -> None:
@@ -80,9 +80,38 @@ class TestProviderMixin:
         mock_versioner.clone.assert_called_once_with(
             "https://concrete.example.com/acme/test_repo.git",
             "/test/path",
-            branch="main",
-            depth=1,
         )
+        mock_versioner.checkout.assert_called_once_with("/test/path", "main")
+
+    def test_clone_and_checkout_reuses_existing_clone_for_second_branch(self) -> None:
+        """Test that a second call for the same repo/path only checks out, no re-clone."""
+        mock_versioner = MagicMock()
+        mock_versioner._get_auth.return_value = None
+        provider = _make_provider(mock_versioner)
+
+        provider.clone_and_checkout("test_repo", "/test/path", branch="master")
+        provider.clone_and_checkout("test_repo", "/test/path", branch="dev")
+
+        mock_versioner.clone.assert_called_once_with(
+            "https://concrete.example.com/acme/test_repo.git",
+            "/test/path",
+        )
+        assert mock_versioner.checkout.call_args_list == [
+            (("/test/path", "master"),),
+            (("/test/path", "dev"),),
+        ]
+        assert provider.get_branch() == "dev"
+
+    def test_clone_and_checkout_reclones_for_a_different_target_path(self) -> None:
+        """Test that a different target path for the same repo triggers a fresh clone."""
+        mock_versioner = MagicMock()
+        mock_versioner._get_auth.return_value = None
+        provider = _make_provider(mock_versioner)
+
+        provider.clone_and_checkout("test_repo", "/test/path-1", branch="main")
+        provider.clone_and_checkout("test_repo", "/test/path-2", branch="main")
+
+        assert mock_versioner.clone.call_count == 2
 
     def test_clone_and_checkout_handles_versioner_error(self) -> None:
         """Test that clone_and_checkout wraps VersionerError in ProviderError."""
@@ -98,7 +127,7 @@ class TestProviderMixin:
         """Test that the branch-not-found detail from the versioner is preserved."""
         mock_versioner = MagicMock()
         mock_versioner._get_auth.return_value = None
-        mock_versioner.clone.side_effect = VersionerError(
+        mock_versioner.checkout.side_effect = VersionerError(
             "Version 'release-2021.03-dev' not found. "
             "Available versions: dev, master, release-2025.03"
         )
@@ -110,7 +139,7 @@ class TestProviderMixin:
             )
 
         error_msg = str(exc_info.value)
-        assert "Failed to clone repository" in error_msg
+        assert "Failed to checkout branch" in error_msg
         assert "release-2021.03-dev" in error_msg
 
     def test_remote_exists_true(self) -> None:

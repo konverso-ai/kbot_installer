@@ -111,6 +111,7 @@ known_first_party = [
     "publisher",
     "service",
     "storage",
+    "updatable",
     "utils",
     "vault",
     "workarea",

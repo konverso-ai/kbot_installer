@@ -1,11 +1,11 @@
-"""Smooth updater: reinstall on top of the existing workarea."""
+"""Smooth updatable strategy: reinstall on top of the existing workarea."""
 
 from typing_extensions import override
 
-from installable.updater.base import UpdaterBase
+from updatable.base import UpdatableBase
 
 
-class SmoothUpdater(UpdaterBase):
+class SmoothUpdatable(UpdatableBase):
     """Reinstall the workarea, leaving existing files and links untouched."""
 
     @override

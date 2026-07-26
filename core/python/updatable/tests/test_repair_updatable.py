@@ -1,15 +1,15 @@
-"""Tests for installable.updater.repair_updater module."""
+"""Tests for updatable.repair_updatable module."""
 
 from unittest.mock import MagicMock, call
 
-from installable.updater.repair_updater import RepairUpdater
+from updatable.repair_updatable import RepairUpdatable
 
 
 def test_call_repairs_broken_links_before_reinstalling() -> None:
     workarea = MagicMock()
-    updater = RepairUpdater(workarea)
+    updatable = RepairUpdatable(workarea)
 
-    updater()
+    updatable()
 
     workarea.repair_broken_links.assert_called_once_with()
     workarea.install.assert_called_once_with()

@@ -44,9 +44,8 @@ class TestBitbucketProvider:
         mock_versioner.clone.assert_called_once_with(
             "git@bitbucket.org:test_account/test_repo.git",
             "/test/path",
-            branch="main",
-            depth=1,
         )
+        mock_versioner.checkout.assert_called_once_with("/test/path", "main")
 
     def test_clone_and_checkout_builds_https_url(self) -> None:
         """Test that clone_and_checkout builds the expected HTTPS URL."""
@@ -59,9 +58,8 @@ class TestBitbucketProvider:
         mock_versioner.clone.assert_called_once_with(
             "https://bitbucket.org/test_account/test_repo.git",
             "/test/path",
-            branch="main",
-            depth=1,
         )
+        mock_versioner.checkout.assert_called_once_with("/test/path", "main")
 
     def test_clone_and_checkout_without_branch(self) -> None:
         """Test that clone_and_checkout works without specifying a branch."""
