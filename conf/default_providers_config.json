@@ -36,8 +36,8 @@
       "env_vars": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
     },
     "azure": {
-      "account_url": "",
-      "container_name": "",
+      "account_url": "https://sakbotwed.blob.core.windows.net",
+      "container_name": "k-internal",
       "credential_type": "default_azure",
       "env_vars": ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
     },

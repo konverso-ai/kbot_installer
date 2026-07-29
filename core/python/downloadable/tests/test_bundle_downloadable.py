@@ -34,15 +34,16 @@ def _bundle_json(name: str = "acme-bundle", version: str = "1.0.0") -> dict:
 
 @pytest.fixture
 def mock_storages():
-    """Patch add_storage to return distinct mocks for bundles/artifacts containers."""
+    """Patch storage construction to return distinct mocks for the two areas."""
     bundle_storage = MagicMock()
     artifact_storage = MagicMock()
 
-    def _add_storage(*, name: str, container_name: str):  # noqa: ARG001
-        return bundle_storage if container_name == "bundles" else artifact_storage
+    def _build_storage(backend_name: str, area: str | None = None):  # noqa: ARG001
+        return bundle_storage if area == "bundles" else artifact_storage
 
     with patch(
-        "downloadable.bundle_downloadable.add_storage", side_effect=_add_storage
+        "downloadable.bundle_downloadable.build_configured_storage",
+        side_effect=_build_storage,
     ):
         yield bundle_storage, artifact_storage
 

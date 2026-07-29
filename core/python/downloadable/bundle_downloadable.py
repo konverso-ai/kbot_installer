@@ -9,9 +9,9 @@ from typing_extensions import override
 
 from downloadable.base import DownloadableBase
 from downloadable.product_downloadable import ProductDownloadable
+from git.provider.factory import build_configured_storage
 from git.provider.storage_provider import StorageProvider
 from installer_support.installation_table import InstallationTable
-from storage.factory import add_storage
 from utils.bundle import Bundle
 from utils.Logger import logger
 from writer.factory import add_writer
@@ -52,11 +52,11 @@ class BundleDownloadable(DownloadableBase):
 
         """
         self.__storage_backend = storage_name.value
-        self.__bundle_storage = add_storage(
-            name=storage_name.value, container_name="bundles"
+        self.__bundle_storage = build_configured_storage(
+            storage_name.value, area="bundles"
         )
-        self.__artifact_storage = add_storage(
-            name=storage_name.value, container_name="artifacts"
+        self.__artifact_storage = build_configured_storage(
+            storage_name.value, area="artifacts"
         )
         self.__table = InstallationTable(verbose=verbose)
         self.__bundle = self._get_bundle(name=name, path=installer_dir)

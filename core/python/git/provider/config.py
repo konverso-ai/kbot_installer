@@ -16,6 +16,7 @@ from credentials.bitbucket.basic_bitbucket_credentials import (
 from credentials.bitbucket.ssh_bitbucket_credentials import SshBitbucketCredentials
 from credentials.github.basic_github_credentials import BasicGithubCredentials
 from credentials.github.ssh_github_credentials import SshGithubCredentials
+from storage.factory import add_builtin_storage, add_storage
 
 if TYPE_CHECKING:
     import httpx
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
         CredentialsBase,
         StorageCredentialsBase,
     )
+    from storage.base import StorageBase
 
 _SSH_CREDENTIALS_BY_PROVIDER: dict[str, type[SshGithubCredentials | SshBitbucketCredentials]] = {
     "github": SshGithubCredentials,
@@ -84,6 +86,28 @@ class NexusStorageSettings(BaseModel):
             "auth": auth,
         }
 
+    def build_storage(
+        self, area: str | None = None, auth: httpx.Auth | None = None
+    ) -> StorageBase:
+        """Build a Nexus storage instance.
+
+        Args:
+            area: Logical area overriding the configured repository (e.g.
+                ``"bundles"`` / ``"artifacts"``). Falls back to
+                :attr:`repository` when not provided.
+            auth: Authentication forwarded to the Nexus storage.
+
+        Returns:
+            A ready-to-use Nexus storage instance.
+
+        """
+        return add_storage(
+            "nexus",
+            domain=self.domain,
+            repository=area or self.repository,
+            auth=auth,
+        )
+
 
 class S3StorageSettings(BaseModel):
     """S3-specific storage backend settings."""
@@ -104,6 +128,27 @@ class S3StorageSettings(BaseModel):
             "region_name": self.region_name,
             **credentials.storage_kwargs(),
         }
+
+    def build_storage(
+        self, area: str | None = None, _auth: httpx.Auth | None = None
+    ) -> StorageBase:
+        """Build an S3 storage instance with a freshly built backend.
+
+        Args:
+            area: Logical area overriding the configured bucket (e.g.
+                ``"bundles"`` / ``"artifacts"``). Falls back to
+                :attr:`bucket_name` when not provided.
+            _auth: Unused; S3 credentials come from the default boto3 chain.
+
+        Returns:
+            A ready-to-use S3 storage instance.
+
+        """
+        return add_builtin_storage(
+            "s3",
+            bucket_name=area or self.bucket_name,
+            cluster_name=self.cluster_name or None,
+        )
 
 
 class AzureStorageSettings(BaseModel):
@@ -138,6 +183,27 @@ class AzureStorageSettings(BaseModel):
             )
         return kwargs
 
+    def build_storage(
+        self, area: str | None = None, _auth: httpx.Auth | None = None
+    ) -> StorageBase:
+        """Build an Azure storage instance with a freshly built backend.
+
+        Args:
+            area: Logical area overriding the configured container (e.g.
+                ``"bundles"`` / ``"artifacts"``). Falls back to
+                :attr:`container_name` when not provided.
+            _auth: Unused; Azure credentials come from the default credential chain.
+
+        Returns:
+            A ready-to-use Azure storage instance.
+
+        """
+        return add_builtin_storage(
+            "azure",
+            account_url=self.account_url,
+            container_name=area or self.container_name,
+        )
+
 
 class OciStorageSettings(BaseModel):
     """OCI Object Storage-specific storage backend settings."""
@@ -166,6 +232,27 @@ class OciStorageSettings(BaseModel):
             **credentials.storage_kwargs(),
         }
 
+    def build_storage(
+        self, area: str | None = None, _auth: httpx.Auth | None = None
+    ) -> StorageBase:
+        """Build an OCI storage instance with a freshly built backend.
+
+        Args:
+            area: Logical area overriding the configured bucket (e.g.
+                ``"bundles"`` / ``"artifacts"``). Falls back to
+                :attr:`bucket_name` when not provided.
+            _auth: Unused; OCI credentials come from the default OCI config file.
+
+        Returns:
+            A ready-to-use OCI storage instance.
+
+        """
+        return add_builtin_storage(
+            "oci",
+            bucket_name=area or self.bucket_name,
+            namespace_name=self.namespace_name,
+        )
+
 
 class StorageSectionConfig(BaseModel):
     """Storage backend selection and per-backend settings."""
@@ -182,6 +269,25 @@ class StorageSectionConfig(BaseModel):
         """Return kwargs for ``add_storage`` for the active backend."""
         settings = getattr(self, self.backend)
         return settings.storage_kwargs(auth)
+
+    def build_storage(
+        self, area: str | None = None, auth: httpx.Auth | None = None
+    ) -> StorageBase:
+        """Build a fully-wired storage instance for the active backend.
+
+        Args:
+            area: Logical area overriding the backend's configured
+                container/bucket/repository (e.g. ``"bundles"`` /
+                ``"artifacts"``). Falls back to the configured value when
+                not provided.
+            auth: Authentication forwarded to backends that need it (Nexus).
+
+        Returns:
+            A ready-to-use storage instance for the active backend.
+
+        """
+        settings = getattr(self, self.backend)
+        return settings.build_storage(area, auth)
 
 
 class ProvidersConfig(BaseModel):

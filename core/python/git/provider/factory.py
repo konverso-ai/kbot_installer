@@ -15,7 +15,7 @@ from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
 from git.versioner import add_versioner
-from storage.factory import add_builtin_storage, add_storage
+from storage.factory import add_builtin_storage
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
 from utils.Logger import logger
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from credentials.base import AuthCredentialsBase
     from git.auth_protocol import GitAuthProtocol
+    from storage.base import StorageBase
 
 log = logger.get_package_logger("git.provider")
 
@@ -137,6 +138,34 @@ def add_storage_provider(name: str, **kwargs) -> ProviderBase:
     """
     storage = add_builtin_storage(name=name, **kwargs)
     return add_provider(name="storage", storage=storage)
+
+
+def build_configured_storage(
+    backend_name: str,
+    area: str | None = None,
+    config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,
+) -> "StorageBase":
+    """Build a fully-wired storage for a backend and logical area.
+
+    Sources connection settings (account URL, bucket/container/repository,
+    namespace, ...) from the providers configuration and credentials from the
+    environment, building the underlying backend when required. Unlike the
+    low-level ``add_storage``, the returned storage is ready to use.
+
+    Args:
+        backend_name: Storage backend to build (e.g. ``"nexus"``, ``"s3"``,
+            ``"azure"``, ``"oci"``).
+        area: Logical area overriding the backend's configured
+            container/bucket/repository (e.g. ``"bundles"`` / ``"artifacts"``).
+        config: Providers configuration to read connection settings from.
+
+    Returns:
+        A ready-to-use storage instance for the requested backend.
+
+    """
+    auth = _resolve_auth("storage", config) if backend_name == "nexus" else None
+    settings = getattr(config.storage, backend_name)
+    return cast("StorageBase", settings.build_storage(area, cast("httpx.Auth | None", auth)))
 
 
 def _has_credentials(provider_name: str, config: ProvidersConfig) -> bool:
@@ -252,11 +281,10 @@ def _build_provider(
     if provider_name == "storage":
         # All GitAuthProtocol implementations (auth.http, auth.ssh) also
         # subclass httpx.Auth at runtime; the storage backend kwargs only
-        # need the httpx.Auth-compatible surface.
-        storage = add_storage(
-            config.storage.backend,
-            **config.storage.get_backend_kwargs(cast("httpx.Auth | None", auth)),
-        )
+        # need the httpx.Auth-compatible surface. build_storage builds the
+        # backend for non-nexus stores instead of instantiating the storage
+        # class with a missing backend argument.
+        storage = config.storage.build_storage(auth=cast("httpx.Auth | None", auth))
         params["storage"] = storage
         params["branches"] = provider_config.branches
     else:
