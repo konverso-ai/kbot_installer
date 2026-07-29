@@ -72,11 +72,11 @@ def cli(ctx: click.Context) -> None:
 @click.option(
     "-v",
     "--version",
-    required=True,
     type=str,
+    default=None,
     help=(
-        "Version to install. Product version in product mode, bundle version "
-        "in bundle mode (e.g., '2025.03')."
+        "Product version to download (e.g., '2025.03-dev'). Required unless "
+        "'-b/--bundle' is used, since a bundle already pins each product's version."
     ),
 )
 @click.option(
@@ -118,7 +118,7 @@ def cli(ctx: click.Context) -> None:
 )
 def download(
     installer_dir: str,
-    version: str,
+    version: str | None,
     product: str | None,
     bundle: str | None,
     *,
@@ -141,8 +141,8 @@ def download(
         kbot-installer download -i /custom/path -v master -p ithd
         kbot-installer download -v 2025.03 -p jira --provider github --provider bitbucket
         kbot-installer download -v dev -p kbot-latest-dev --provider storage --storage s3
-        kbot-installer download -b ev-basic-2025.03.0016 -v 2025.03 -p kbot -i ~/dev/installer
-        kbot-installer download -b ev-basic-2025.03.0016 -v 2025.03 -p kbot --storage s3
+        kbot-installer download -b ev-basic-2025.03.0016 -p kbot -i ~/dev/installer
+        kbot-installer download -b ev-basic-2025.03.0016 -p kbot --storage s3
 
     """
     if not product:
@@ -151,6 +151,10 @@ def download(
             if bundle
             else "Option '-p/--product' is required when installing a product."
         )
+        raise click.UsageError(msg)
+
+    if not bundle and not version:
+        msg = "Option '-v/--version' is required when downloading a product without '-b/--bundle'."
         raise click.UsageError(msg)
 
     try:

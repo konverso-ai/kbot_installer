@@ -120,7 +120,7 @@ class TestDownloadCommand:
 
     @patch("cli.commands.BundleDownloadable")
     def test_download_bundle_success(self, mock_bundle_cls) -> None:
-        """Bundle mode builds a BundleDownloadable with the storage backend."""
+        """Bundle mode builds a BundleDownloadable without requiring --version."""
         mock_instance = MagicMock()
         mock_bundle_cls.return_value = mock_instance
 
@@ -130,8 +130,6 @@ class TestDownloadCommand:
                 "download",
                 "--bundle",
                 "ev-basic",
-                "--version",
-                "2025.03",
                 "--product",
                 "kbot",
                 "--storage",
@@ -144,6 +142,15 @@ class TestDownloadCommand:
         assert call_kwargs["storage_name"] == StorageBackendEnum.S3
         assert call_kwargs["name"] == "ev-basic"
         mock_instance.download.assert_called_once()
+
+    def test_download_product_requires_version(self) -> None:
+        """The version option is required in product mode (without --bundle)."""
+        result = self.runner.invoke(
+            cli,
+            ["download", "--product", "kbot"],
+        )
+        assert result.exit_code != 0
+        assert "'-v/--version' is required" in result.output
 
     def test_download_requires_product(self) -> None:
         """The product option is required."""

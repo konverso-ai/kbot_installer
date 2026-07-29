@@ -91,7 +91,7 @@ def extract_tar_member(
         tar.extract(rewritten, path=target_dir, filter="data")
 
 
-def version_to_branch(version: str, env: Literal["dev", "prod"] = "dev") -> str:
+def version_to_branch(version: str | None, env: Literal["dev", "prod"] = "dev") -> str:
     """Convert a version string to a Git branch name.
 
     Args:
@@ -101,6 +101,9 @@ def version_to_branch(version: str, env: Literal["dev", "prod"] = "dev") -> str:
 
     Returns:
         Git branch name corresponding to the version.
+
+    Raises:
+        ValueError: If version is None.
 
     Examples:
         >>> version_to_branch("dev", "dev")
@@ -115,6 +118,9 @@ def version_to_branch(version: str, env: Literal["dev", "prod"] = "dev") -> str:
         "release-2025.03-dev"
 
     """
+    if version is None:
+        msg = "version must not be None."
+        raise ValueError(msg)
     if version == "dev":
         return "dev"
     if version == "master":
