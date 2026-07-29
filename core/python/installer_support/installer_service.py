@@ -53,7 +53,7 @@ class InstallerService:
         """
         log.info("Listing installed products (tree: %s)", as_tree)
 
-        products = self._load_products_from_disk()
+        products = self.load_products_from_disk()
         if not products:
             return "No products installed."
 
@@ -78,7 +78,7 @@ class InstallerService:
         """
         return self.installation_table
 
-    def _load_products_from_disk(self) -> list[Product]:
+    def load_products_from_disk(self) -> list[Product]:
         """Load Product objects from the installer directory.
 
         Each immediate subdirectory holding a ``description.xml`` is loaded as a

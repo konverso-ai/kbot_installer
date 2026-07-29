@@ -38,7 +38,7 @@ class TestInstallerServiceInit:
 
 
 class TestListProducts:
-    """Tests for list_products / _load_products_from_disk."""
+    """Tests for list_products / load_products_from_disk."""
 
     def test_no_products_when_directory_missing(self, tmp_path: Path) -> None:
         """Listing a directory without products returns a friendly message."""
@@ -93,7 +93,7 @@ class TestListProducts:
             '{"name": "prod", "type": "customer"}', encoding="utf-8"
         )
 
-        products = InstallerService(tmp_path)._load_products_from_disk()
+        products = InstallerService(tmp_path).load_products_from_disk()
 
         assert len(products) == 1
         assert products[0].name == "prod"

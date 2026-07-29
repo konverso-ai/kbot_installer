@@ -82,6 +82,30 @@ class TestInstall:
         link = tmp_path / "work" / "products" / "productA"
         assert link.is_symlink()
 
+    def test_passes_resolved_product_roots_to_tests_dir_cleanup(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: cleanup_unused_tests_dir must receive full product roots.
+
+        Passing bare product names (relative to the CWD, not to installer_root)
+        makes the "is the tests dir used by a product" check always negative and
+        can lead to attempting to remove a non-existent directory.
+        """
+        product_dir = tmp_path / "installer" / "productA"
+        (product_dir / "tests").mkdir(parents=True)
+        wa = _build(tmp_path, products=[Path("productA")])
+
+        cleanup_mock = MagicMock()
+        monkeypatch.setattr(
+            "installable.workarea_installable.cleanup_unused_tests_dir", cleanup_mock
+        )
+
+        wa.install()
+
+        cleanup_mock.assert_called_once_with(
+            tmp_path / "work", [product_dir], interactive=False
+        )
+
 
 class TestUpdate:
     def test_dispatches_to_updatable_matching_update_mode(

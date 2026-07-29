@@ -356,6 +356,9 @@ def cleanup_unused_tests_dir(work_root: Path, products_root: Iterable[Path], *, 
     """
     tests_dir = work_root / "tests"
 
+    if not tests_dir.exists():
+        return
+
     if any((product_root / "tests").exists() for product_root in products_root):
         return
 

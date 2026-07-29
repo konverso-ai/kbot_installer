@@ -381,6 +381,12 @@ class TestCleanupUnusedTestsDir:
 
         assert not tests_dir.exists()
 
+    def test_does_nothing_when_tests_dir_does_not_exist(self, tmp_path: Path) -> None:
+        """No-op (and no crash) when the workarea never had a 'tests' directory."""
+        cleanup_unused_tests_dir(tmp_path, [tmp_path / "product"], interactive=False)
+
+        assert not (tmp_path / "tests").exists()
+
     def test_keeps_tests_dir_when_a_product_uses_it(self, tmp_path: Path) -> None:
         tests_dir = tmp_path / "tests"
         tests_dir.mkdir()

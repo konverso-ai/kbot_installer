@@ -21,10 +21,10 @@ class TestCLI:
         options = [option.name for option in cli.params]
         assert "version" in options
 
-    def test_only_download_and_list_commands(self) -> None:
-        """Only the download and list commands should be exposed."""
+    def test_only_download_list_and_install_commands(self) -> None:
+        """Only the download, list, and install commands should be exposed."""
         commands = {cmd.name for cmd in cli.commands.values()}
-        assert commands == {"download", "list"}
+        assert commands == {"download", "list", "install"}
 
 
 class TestDownloadCommand:
@@ -297,6 +297,293 @@ class TestListCommand:
         assert "Error listing products" in result.output
 
 
+class TestInstallCommand:
+    """Test cases for the 'install' command."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        self.runner = CliRunner()
+
+    @staticmethod
+    def _mock_installer_service(mock_service_class, product_names: list[str]) -> None:
+        products = []
+        for name in product_names:
+            product = MagicMock()
+            product.name = name
+            products.append(product)
+        mock_service_class.return_value.load_products_from_disk.return_value = products
+
+    @patch("cli.commands.add_db")
+    @patch("cli.commands.WorkareaInstallable")
+    @patch("cli.commands.InstallerService")
+    @patch("cli.commands.add_selector_provider")
+    @patch("cli.commands.ProductDownloadable")
+    def test_install_product_success(
+        self,
+        mock_downloadable_cls,
+        mock_add_selector_provider,
+        mock_service_class,
+        mock_workarea_cls,
+        mock_add_db,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        """Installing a product downloads it with dependencies, then builds workarea and db."""
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
+        mock_downloadable_cls.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
+        self._mock_installer_service(mock_service_class, ["jira"])
+        mock_workarea_cls.return_value = MagicMock()
+        mock_add_db.return_value = MagicMock()
+
+        installer_dir = tmp_path / "installer"
+        workarea_dir = tmp_path / "work"
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--secret",
+                "K0nversOK!",
+                "--installer-dir",
+                str(installer_dir),
+                "--workarea-dir",
+                str(workarea_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert mock_downloadable_cls.call_args.kwargs["include_dependencies"] is True
+        mock_workarea_cls.return_value.install.assert_called_once()
+        mock_add_db.assert_called_once()
+        assert mock_add_db.call_args.kwargs["mode"] == "internal"
+        mock_add_db.return_value.prepare.assert_called_once()
+        mock_add_db.return_value.initialize.assert_called_once()
+
+    @patch("cli.commands.add_db")
+    @patch("cli.commands.WorkareaInstallable")
+    @patch("cli.commands.InstallerService")
+    @patch("cli.commands.BundleDownloadable")
+    def test_install_bundle_success_without_version(
+        self,
+        mock_bundle_cls,
+        mock_service_class,
+        mock_workarea_cls,
+        mock_add_db,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        """Bundle mode does not require -v/--version."""
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
+        mock_bundle_cls.return_value = MagicMock()
+        self._mock_installer_service(mock_service_class, ["site-konverso"])
+        mock_workarea_cls.return_value = MagicMock()
+        mock_add_db.return_value = MagicMock()
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--bundle",
+                "ev-basic-00018",
+                "--product",
+                "site-konverso",
+                "--secret",
+                "K0nversOK!",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        mock_bundle_cls.assert_called_once()
+        assert mock_bundle_cls.call_args.kwargs["name"] == "ev-basic-00018"
+        mock_bundle_cls.return_value.download.assert_called_once()
+
+    def test_install_requires_version_without_bundle(self, tmp_path) -> None:
+        """-v/--version is required when installing a product without --bundle."""
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--secret",
+                "secret",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Option '-v/--version' is required" in result.output
+
+    @patch("cli.commands.ProductDownloadable")
+    def test_install_aborts_when_workarea_already_exists(
+        self, mock_downloadable_cls, tmp_path
+    ) -> None:
+        """Installation is cancelled without downloading anything when the workarea exists."""
+        workarea_dir = tmp_path / "work"
+        workarea_dir.mkdir()
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--secret",
+                "secret",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(workarea_dir),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "already exists" in result.output
+        mock_downloadable_cls.assert_not_called()
+
+    @patch("cli.commands.add_db")
+    @patch("cli.commands.WorkareaInstallable")
+    @patch("cli.commands.InstallerService")
+    @patch("cli.commands.add_selector_provider")
+    @patch("cli.commands.ProductDownloadable")
+    def test_install_no_password_generates_random_password(
+        self,
+        mock_downloadable_cls,
+        mock_add_selector_provider,
+        mock_service_class,
+        mock_workarea_cls,
+        mock_add_db,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        """--no-password generates and displays a random database password."""
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
+        mock_downloadable_cls.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
+        self._mock_installer_service(mock_service_class, ["jira"])
+        mock_workarea_cls.return_value = MagicMock()
+        mock_add_db.return_value = MagicMock()
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--secret",
+                "secret",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+                "--no-password",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        generated_password = mock_add_db.call_args.kwargs["password"]
+        assert generated_password
+        assert generated_password != "kbot_db_pwd"
+        assert generated_password in result.output
+
+    @patch("cli.commands.add_db")
+    @patch("cli.commands.WorkareaInstallable")
+    @patch("cli.commands.InstallerService")
+    @patch("cli.commands.add_selector_provider")
+    @patch("cli.commands.ProductDownloadable")
+    def test_install_external_db_when_db_host_provided(
+        self,
+        mock_downloadable_cls,
+        mock_add_selector_provider,
+        mock_service_class,
+        mock_workarea_cls,
+        mock_add_db,
+        tmp_path,
+    ) -> None:
+        """Providing --db-host selects the external database backend."""
+        mock_downloadable_cls.return_value = MagicMock()
+        mock_add_selector_provider.return_value = MagicMock()
+        self._mock_installer_service(mock_service_class, ["jira"])
+        mock_workarea_cls.return_value = MagicMock()
+        mock_add_db.return_value = MagicMock()
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--secret",
+                "secret",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+                "--db-host",
+                "external-db.example.com",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert mock_add_db.call_args.kwargs["mode"] == "external"
+        assert mock_add_db.call_args.kwargs["host"] == "external-db.example.com"
+
+    def test_install_requires_pg_dir_env_for_internal_db(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Internal database mode requires the PG_DIR environment variable."""
+        monkeypatch.delenv("PG_DIR", raising=False)
+
+        with (
+            patch("cli.commands.ProductDownloadable") as mock_downloadable_cls,
+            patch("cli.commands.add_selector_provider") as mock_add_selector_provider,
+            patch("cli.commands.InstallerService") as mock_service_class,
+            patch("cli.commands.WorkareaInstallable") as mock_workarea_cls,
+        ):
+            mock_downloadable_cls.return_value = MagicMock()
+            mock_add_selector_provider.return_value = MagicMock()
+            self._mock_installer_service(mock_service_class, ["jira"])
+            mock_workarea_cls.return_value = MagicMock()
+
+            result = self.runner.invoke(
+                cli,
+                [
+                    "install",
+                    "--product",
+                    "jira",
+                    "--version",
+                    "2025.03-dev",
+                    "--secret",
+                    "secret",
+                    "--installer-dir",
+                    str(tmp_path / "installer"),
+                    "--workarea-dir",
+                    str(tmp_path / "work"),
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "PG_DIR" in result.output
+
+
 class TestCommandIntegration:
     """Integration tests for CLI commands."""
 
@@ -311,6 +598,7 @@ class TestCommandIntegration:
         assert "Kbot Installer" in result.output
         assert "download" in result.output
         assert "list" in result.output
+        assert "install" in result.output
 
     def test_download_help(self) -> None:
         """Test download command help."""
@@ -326,3 +614,9 @@ class TestCommandIntegration:
         result = self.runner.invoke(cli, ["list", "--help"])
         assert result.exit_code == 0
         assert "List installed kbot products" in result.output
+
+    def test_install_help(self) -> None:
+        """Test install command help."""
+        result = self.runner.invoke(cli, ["install", "--help"])
+        assert result.exit_code == 0
+        assert "Install a kbot product or bundle" in result.output

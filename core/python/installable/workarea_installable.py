@@ -82,8 +82,9 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
         runtime_variables = self._runtime_variables()
+        product_roots = list(self._iter_product_roots())
 
-        for product_root in self._iter_product_roots():
+        for product_root in product_roots:
             apply_rules(
                 product_root=product_root,
                 work_root=self.workarea.work_root,
@@ -97,7 +98,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         setup_drf_yasg_static(self.workarea.work_root)
         cleanup_unused_tests_dir(
             self.workarea.work_root,
-            self.workarea.products,
+            product_roots,
             interactive=self.update_mode == UpdatableName.INTERACTIVE,
         )
 
