@@ -1,16 +1,18 @@
 """Tests for updatable.repair_updatable module."""
 
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
+import pytest
 from updatable.repair_updatable import RepairUpdatable
 
 
-def test_call_repairs_broken_links_before_reinstalling() -> None:
+def test_call_repairs_broken_links_without_reinstalling(monkeypatch: pytest.MonkeyPatch) -> None:
     workarea = MagicMock()
+    repair_mock = MagicMock()
+    monkeypatch.setattr("updatable.repair_updatable.repair_broken_links", repair_mock)
     updatable = RepairUpdatable(workarea)
 
     updatable()
 
-    workarea.repair_broken_links.assert_called_once_with()
-    workarea.install.assert_called_once_with()
-    assert workarea.method_calls == [call.repair_broken_links(), call.install()]
+    repair_mock.assert_called_once_with(workarea.work_root.rglob.return_value)
+    workarea.work_root.rglob.assert_called_once_with("*")

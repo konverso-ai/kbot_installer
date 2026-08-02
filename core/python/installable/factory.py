@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Literal, cast
 
-from installable.base import InstallableBase
 from installable.workarea_installable import WorkareaInstallable
 from utils.factory.loader import factory_class
 from workarea.rules_config import load_default_rules
@@ -13,7 +12,7 @@ from workarea.workarea import Workarea
 def create_installable(
     installable_name: Literal["workarea"],
     **kwargs: object,
-) -> InstallableBase:
+) -> WorkareaInstallable:
     """Create an installable instance by name.
 
     Naming convention:
@@ -29,7 +28,7 @@ def create_installable(
 
     """
     cls = factory_class(installable_name, "installable")
-    return cast("InstallableBase", cls(**kwargs))
+    return cast("WorkareaInstallable", cls(**kwargs))
 
 
 def build_workarea(installer_path: Path, workarea_path: Path) -> WorkareaInstallable:

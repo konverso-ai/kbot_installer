@@ -3,6 +3,7 @@
 from typing_extensions import override
 
 from updatable.base import UpdatableBase
+from workarea.utils import repair_broken_links
 
 
 class InteractiveUpdatable(UpdatableBase):
@@ -10,4 +11,4 @@ class InteractiveUpdatable(UpdatableBase):
 
     @override
     def __call__(self) -> None:
-        self.workarea.repair_broken_links(interactive=True)
+        repair_broken_links(self.workarea.work_root.rglob("*"), interactive=True)

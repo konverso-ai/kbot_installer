@@ -1,20 +1,20 @@
-"""Base interface for WorkareaInstallable updatable strategies."""
+"""Base interface for Workarea updatable strategies."""
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from installable.workarea_installable import WorkareaInstallable
+    from workarea.workarea import Workarea
 
 
 class UpdatableBase(ABC):
-    """Base interface for updatable strategies applied to a WorkareaInstallable."""
+    """Base interface for updatable strategies applied to a Workarea."""
 
-    def __init__(self, workarea: "WorkareaInstallable") -> None:
+    def __init__(self, workarea: "Workarea") -> None:
         """Bind the updater to the workarea it will update.
 
         Args:
-            workarea: The workarea installable this updater strategy operates on.
+            workarea: The `Workarea` model this updater strategy operates on.
 
         """
         self.workarea = workarea

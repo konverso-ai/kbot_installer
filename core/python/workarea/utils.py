@@ -1,5 +1,6 @@
 """Filesystem helpers for laying out and maintaining a product workarea."""
 
+import getpass
 import shutil
 from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
@@ -418,3 +419,34 @@ def cleanup_unused_tests_dir(work_root: Path, products_root: Iterable[Path], *, 
             return
 
     shutil.rmtree(tests_dir)
+
+
+def runtime_variables(work_root: Path) -> dict[str, str]:
+    """Build the runtime placeholder variables available when laying out a workarea.
+
+    Args:
+        work_root: Root directory of the workarea.
+
+    Returns:
+        Mapping of placeholder key (e.g. `__KBOT_HOME__`) to its resolved value,
+        available for rules whose `placeholders` reference them.
+
+    """
+    return {
+        "__KBOT_HOME__": str(work_root.resolve()),
+        "__KBOT_USER__": getpass.getuser(),
+    }
+
+
+def clear_workarea(work_root: Path) -> None:
+    """Remove every file, symlink, and directory directly under the work root.
+
+    Args:
+        work_root: Root directory of the workarea.
+
+    """
+    for child in work_root.iterdir():
+        if child.is_symlink() or child.is_file():
+            child.unlink()
+        else:
+            shutil.rmtree(child)

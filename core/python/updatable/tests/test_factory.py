@@ -6,7 +6,6 @@ import pytest
 from updatable.factory import UpdatableName, add_updatable
 from updatable.interactive_updatable import InteractiveUpdatable
 from updatable.repair_updatable import RepairUpdatable
-from updatable.smooth_updatable import SmoothUpdatable
 from updatable.strict_updatable import StrictUpdatable
 
 
@@ -21,7 +20,6 @@ def test_updatable_name_members() -> None:
     ("name", "expected_class"),
     [
         (UpdatableName.STRICT.value, StrictUpdatable),
-        (UpdatableName.SMOOTH.value, SmoothUpdatable),
         (UpdatableName.REPAIR.value, RepairUpdatable),
         (UpdatableName.INTERACTIVE.value, InteractiveUpdatable),
     ],

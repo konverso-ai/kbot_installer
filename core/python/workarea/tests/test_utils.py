@@ -8,12 +8,14 @@ from workarea.utils import (
     apply_rule,
     apply_rules,
     cleanup_unused_tests_dir,
+    clear_workarea,
     copy_source,
     is_broken_symlink,
     iter_sources,
     link_source,
     matches_pattern,
     render_variables,
+    repair_broken_links,
     setup_drf_yasg_static,
     setup_kbot_conf,
     setup_products,
@@ -482,3 +484,63 @@ class TestCleanupUnusedTestsDir:
         cleanup_unused_tests_dir(tmp_path, [], interactive=True)
 
         assert tests_dir.exists()
+
+
+class TestClearWorkarea:
+    def test_removes_files_symlinks_and_directories(self, tmp_path: Path) -> None:
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        (work_root / "file.txt").write_text("data")
+        (work_root / "a_dir").mkdir()
+        (work_root / "a_dir" / "nested.txt").write_text("nested")
+        target = tmp_path / "link_target.txt"
+        target.write_text("target")
+        (work_root / "link").symlink_to(target)
+
+        clear_workarea(work_root)
+
+        assert work_root.exists()
+        assert list(work_root.iterdir()) == []
+        assert target.exists()  # symlink target itself is untouched
+
+
+class TestRepairBrokenLinks:
+    def test_removes_only_broken_symlinks(self, tmp_path: Path) -> None:
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        valid_target = work_root / "target.txt"
+        valid_target.write_text("data")
+        valid_link = work_root / "valid_link"
+        valid_link.symlink_to(valid_target)
+        broken_link = work_root / "broken_link"
+        broken_link.symlink_to(work_root / "missing")
+        regular_file = work_root / "regular.txt"
+        regular_file.write_text("data")
+
+        repair_broken_links(work_root.rglob("*"))
+
+        assert not broken_link.exists()
+        assert valid_link.is_symlink()
+        assert regular_file.exists()
+
+    def test_interactive_keeps_link_on_refusal(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        broken_link = work_root / "broken_link"
+        broken_link.symlink_to(work_root / "missing")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+        repair_broken_links(work_root.rglob("*"), interactive=True)
+
+        assert broken_link.is_symlink()
+
+    def test_interactive_removes_link_on_confirmation(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        broken_link = work_root / "broken_link"
+        broken_link.symlink_to(work_root / "missing")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+
+        repair_broken_links(work_root.rglob("*"), interactive=True)
+
+        assert not broken_link.exists()

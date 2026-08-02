@@ -1,22 +1,18 @@
 """WorkareaInstallable class for managing workarea installations."""
 
-import getpass
 import os
-import shutil
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, Field
-from typing_extensions import override
 
-from installable.base import InstallableBase
-from updatable.factory import UpdatableName, add_updatable
 from utils.Logger import logger
 from workarea.utils import (
     apply_rules,
     cleanup_unused_tests_dir,
-    repair_broken_links,
+    clear_workarea,
+    runtime_variables,
     setup_drf_yasg_static,
     setup_kbot_conf,
     setup_products,
@@ -27,24 +23,25 @@ from workarea.workarea import Workarea
 log = logger.get_package_logger("installable")
 
 
-class WorkareaInstallable(BaseModel, InstallableBase):
+class WorkareaInstallable(BaseModel):
     """Installable that lays out and maintains a whole workarea on disk.
 
     Unlike `ProductInstallable`/`BundleInstallable`, this installable does not
     represent a single downloadable unit: it applies workarea rules for every
-    product already present under `workarea.installer_root` and delegates
-    updates to the configured updatable strategy (see `updatable`).
+    product already present under `workarea.installer_root`. Updating or
+    repairing a workarea is done by instantiating `updatable.workarea_updatable.WorkareaUpdatable`
+    directly with this installable's `workarea` and the desired strategy.
 
     Attributes:
         workarea: The `Workarea` model describing installer root, work root, products, and rules.
-        update_mode: Updatable strategy used by `update`.
+        update_mode: Whether `install` should remove unused test directories interactively.
         runtime_pythonpath: Paths (relative to `work_root`) exposed on `PYTHONPATH` at runtime.
 
     """
 
     workarea: Workarea
 
-    update_mode: Annotated[UpdatableName, Field(default=UpdatableName.SMOOTH)]
+    update_mode: Annotated[bool, Field(default=False)]
 
     runtime_pythonpath: Annotated[
         list[Path],
@@ -56,21 +53,6 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         ),
     ]
 
-    @override
-    def download(self, path: Path) -> None:
-        """Raise: a workarea is not a downloadable unit.
-
-        Args:
-            path: Unused; present to satisfy the ``InstallableBase`` contract.
-
-        Raises:
-            NotImplementedError: Always; workareas are laid out from products
-                already present under ``installer_root``, not downloaded.
-
-        """
-        msg = "WorkareaInstallable does not support download()"
-        raise NotImplementedError(msg)
-
     def install(self) -> None:
         """Build the workarea from scratch.
 
@@ -81,7 +63,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         """
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
-        runtime_variables = self._runtime_variables()
+        variables = runtime_variables(self.workarea.work_root)
         product_roots = list(self._iter_product_roots())
 
         for product_root in product_roots:
@@ -89,7 +71,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
                 product_root=product_root,
                 work_root=self.workarea.work_root,
                 rules=self.workarea.rules,
-                runtime_variables=runtime_variables,
+                runtime_variables=variables,
             )
 
         setup_kbot_conf(self.workarea.work_root)
@@ -99,52 +81,18 @@ class WorkareaInstallable(BaseModel, InstallableBase):
         cleanup_unused_tests_dir(
             self.workarea.work_root,
             product_roots,
-            interactive=self.update_mode == UpdatableName.INTERACTIVE,
+            interactive=self.update_mode,
         )
-
-    def update(self) -> None:
-        """Update the workarea using the configured updatable strategy.
-
-        Resolves the updatable strategy named by `update_mode` (see `updatable.factory`)
-        and runs it against this workarea.
-        """
-        updatable = add_updatable(name=self.update_mode.value, workarea=self)
-        updatable()
-
-    def repair(self) -> None:
-        """Repair the workarea using the `repair` updatable strategy, regardless of `update_mode`."""
-        updatable = add_updatable(name=UpdatableName.REPAIR.value, workarea=self)
-        updatable()
 
     def clear(self) -> None:
         """Remove every file, symlink, and directory directly under the work root."""
-        for child in self.workarea.work_root.iterdir():
-            if child.is_symlink() or child.is_file():
-                child.unlink()
-            else:
-                shutil.rmtree(child)
-
-    def repair_broken_links(self, *, interactive: bool = False) -> None:
-        """Find and remove broken symlinks under the work root.
-
-        Args:
-            interactive: If True, prompt for confirmation before removing each broken
-                symlink; otherwise remove them all without asking.
-
-        """
-        repair_broken_links(self.workarea.work_root.rglob("*"), interactive=interactive)
+        clear_workarea(self.workarea.work_root)
 
     def _iter_product_roots(self) -> Iterable[Path]:
         for product in self.workarea.products:
             product_root = self.workarea.installer_root / product
             if product_root.exists():
                 yield product_root
-
-    def _runtime_variables(self) -> dict[str, str]:
-        return {
-            "__KBOT_HOME__": str(self.workarea.work_root.resolve()),
-            "__KBOT_USER__": getpass.getuser(),
-        }
 
     def pythonpath(self) -> str:
         """Build the runtime `PYTHONPATH` value for this workarea.

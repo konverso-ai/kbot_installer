@@ -2,14 +2,19 @@
 
 from unittest.mock import MagicMock
 
+import pytest
 from updatable.interactive_updatable import InteractiveUpdatable
 
 
-def test_call_repairs_broken_links_interactively_without_reinstalling() -> None:
+def test_call_repairs_broken_links_interactively_without_reinstalling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     workarea = MagicMock()
+    repair_mock = MagicMock()
+    monkeypatch.setattr("updatable.interactive_updatable.repair_broken_links", repair_mock)
     updatable = InteractiveUpdatable(workarea)
 
     updatable()
 
-    workarea.repair_broken_links.assert_called_once_with(interactive=True)
-    workarea.install.assert_not_called()
+    repair_mock.assert_called_once_with(workarea.work_root.rglob.return_value, interactive=True)
+    workarea.work_root.rglob.assert_called_once_with("*")

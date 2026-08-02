@@ -1,4 +1,4 @@
-"""Factory functions for WorkareaInstallable updatable instances."""
+"""Factory functions for Workarea updatable instances."""
 
 from enum import Enum
 from typing import cast
@@ -8,7 +8,7 @@ from utils.factory.loader import factory_method
 
 
 class UpdatableName(str, Enum):
-    """Names of the available WorkareaInstallable updatable strategies."""
+    """Names of the available Workarea updatable strategies."""
 
     STRICT = "strict"
     SMOOTH = "smooth"
