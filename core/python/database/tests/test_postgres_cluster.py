@@ -17,7 +17,7 @@ def settings(tmp_path: Path) -> InternalDbSettings:
         database="db",
         user="user",
         password="password",
-        schema_path=tmp_path / "schema.sql",
+        schema_paths=[tmp_path / "schema.sql"],
         pg_dir=tmp_path / "pg",
         pg_data=tmp_path / "pg" / "data",
         log_path=tmp_path / "pg" / "logs" / "postgres.log",
@@ -57,6 +57,30 @@ class TestInitdb:
             assert compare("in", str(settings.pg_bin / "pg_ctl"), called_args)
             assert compare("in", f"-E {settings.encoding}", called_args)
             assert compare("in", f"--locale={settings.locale}", called_args)
+            assert compare("in", f"--username={settings.admin_user}", called_args)
+
+    def test_initdb_valid_bootstraps_superuser_matching_admin_user(
+        self, tmp_path: Path
+    ) -> None:
+        settings = InternalDbSettings(
+            database="db",
+            user="user",
+            password="pwd",  # noqa: S106
+            schema_paths=[tmp_path / "schema.sql"],
+            pg_dir=tmp_path / "pg",
+            pg_data=tmp_path / "pg" / "data",
+            log_path=tmp_path / "pg" / "logs" / "postgres.log",
+            admin_password="admin",  # noqa: S106
+            admin_user="custom_admin",
+        )
+
+        with patch("database.postgres_cluster.subprocess.run") as mock_run:
+            mock_run.return_value = CompletedProcess(args=[], returncode=0)
+
+            postgres_cluster.initdb(settings)
+
+            called_args = mock_run.call_args.args[0]
+            assert compare("in", "--username=custom_admin", called_args)
 
     def test_initdb_invalid_raises_when_pgctl_fails(
         self, settings: InternalDbSettings
@@ -103,6 +127,24 @@ class TestStart:
             mock_run.return_value = CompletedProcess(args=[], returncode=1)
 
             with pytest.raises(postgres_cluster.PostgresClusterError):
+                postgres_cluster.start(settings)
+
+    def test_start_invalid_includes_log_tail_in_error(
+        self, settings: InternalDbSettings
+    ) -> None:
+        settings.log_path.parent.mkdir(parents=True)
+        settings.log_path.write_text("FATAL:  lock file already exists\n")
+
+        with (
+            patch("database.postgres_cluster.subprocess.run") as mock_run,
+            patch("database.postgres_cluster.is_running", return_value=False),
+        ):
+            mock_run.return_value = CompletedProcess(args=[], returncode=1)
+
+            with pytest.raises(
+                postgres_cluster.PostgresClusterError,
+                match="lock file already exists",
+            ):
                 postgres_cluster.start(settings)
 
     def test_start_valid_succeeds_when_running_afterward(

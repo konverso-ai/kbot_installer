@@ -1,63 +1,20 @@
 #!/bin/bash
 
-# Wrapper around the `kbot-installer` CLI.
+# Thin wrapper around the `kbot-installer` CLI.
 #
-# All arguments are forwarded as-is to `kbot-installer`. The installer path is
-# read from the `-i` / `--installer` option (when present) and used to locate
-# the kbot installation whose `bin/env.sh` must be sourced before running.
+# All arguments are forwarded as-is to `kbot-installer`. Unlike the previous
+# version, this wrapper does NOT source any kbot script (`kbot/bin/env.sh`):
+# `kbot-installer` is installed in its own isolated interpreter (via
+# `uv tool install`) with its own dependencies, and everything it needs from
+# the 3rdparty tree (PG_DIR, LD_LIBRARY_PATH) is resolved in Python *after*
+# the product has been downloaded. Sourcing `env.sh` here used to run before
+# kbot was even downloaded and leaked kbot's PYTHONPATH into this interpreter,
+# causing package collisions (e.g. `utils` -> `ModuleNotFoundError: magic`).
+#
+# Advanced override: exporting `PG_DIR` before calling this script still takes
+# precedence over the automatic resolution from `3rdparty/versions.env`.
 
 set -euo pipefail
-
-# Extract the installer path from the -i / --installer option without
-# consuming the arguments (they are all forwarded to kbot-installer).
-INSTALLER_HOME=""
-prev=""
-for arg in "$@"; do
-    case "$prev" in
-        -i|--installer)
-            INSTALLER_HOME="$arg"
-            break
-            ;;
-    esac
-    case "$arg" in
-        -i=*|--installer=*)
-            INSTALLER_HOME="${arg#*=}"
-            break
-            ;;
-    esac
-    prev="$arg"
-done
-
-export KBOT_INSTALLER="$INSTALLER_HOME"
-
-if [[ -z "$INSTALLER_HOME" ]]; then
-    echo "Using standard installation path"
-    KBOT_HOME="$HOME/dev/installer/kbot"
-else
-    echo "Using custom installation path"
-    KBOT_HOME="$INSTALLER_HOME/kbot"
-fi
-
-echo "$KBOT_HOME/bin/env.sh"
-set +u
-source "$KBOT_HOME/bin/env.sh"
-set -u
-
-# prevent the running script from git directory
-if [ -f "$KBOT_HOME/Definitions.make" ]; then
-    echo "Error: $KBOT_HOME is not a Kbot installation directory."
-    exit 1
-fi
-
-# If no readline6 installed then use binaries from readline7
-manage_os
-
-export PYTHON_MAJOR_VERSION
-export PYTHON_DIR
-export PG_VERSION
-export PG_DIR
-
-export PYTHONPATH="${PYTHONPATH:-}:$KBOT_HOME/rest"
 
 kbot-installer "$@" 2>&1 | tee /tmp/install.log
 exit "${PIPESTATUS[0]}"

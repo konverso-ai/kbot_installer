@@ -13,7 +13,7 @@ def _base_kwargs(**overrides: object) -> dict:
         "database": "db",
         "user": "user",
         "password": "password",
-        "schema_path": Path("/schema.sql"),
+        "schema_paths": [Path("/schema.sql")],
     }
     kwargs.update(overrides)
     return kwargs

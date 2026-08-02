@@ -192,7 +192,6 @@ class InstallationTable:
         if self._progress_product is None:
             return
         self.console.print(" " * self._progress_line_width, end="\r", highlight=False)
-        self.console.print("", highlight=False)
         self._progress_product = None
         self._progress_line_width = 0
 

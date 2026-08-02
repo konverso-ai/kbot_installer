@@ -75,12 +75,15 @@ class TestInstall:
         assert not (tmp_path / "work" / "core").exists()
 
     def test_symlinks_declared_products(self, tmp_path: Path) -> None:
+        product_dir = tmp_path / "installer" / "productA"
+        product_dir.mkdir(parents=True)
         wa = _build(tmp_path, products=[Path("productA")])
 
         wa.install()
 
         link = tmp_path / "work" / "products" / "productA"
         assert link.is_symlink()
+        assert link.resolve() == product_dir.resolve()
 
     def test_passes_resolved_product_roots_to_tests_dir_cleanup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -175,6 +178,30 @@ class TestRepair:
 
         add_updatable.assert_called_once_with(name=UpdatableName.REPAIR.value, workarea=wa)
         updatable.assert_called_once_with()
+
+    def test_heals_preexisting_self_referencing_products_symlink(self, tmp_path: Path) -> None:
+        """Regression: repair() must heal workareas built by the old buggy setup_products().
+
+        Before the fix, `setup_products()` was called with raw relative product
+        names instead of resolved product roots, producing self-referencing
+        symlinks like `work/products/productA -> productA`. Such links are
+        broken (`is_symlink()` True, `exists()` False due to ELOOP) and must be
+        detected and removed by `repair_broken_links()`, then recreated
+        correctly by the subsequent `install()`.
+        """
+        product_dir = tmp_path / "installer" / "productA"
+        product_dir.mkdir(parents=True)
+        wa = _build(tmp_path, products=[Path("productA")])
+
+        products_root = tmp_path / "work" / "products"
+        products_root.mkdir(parents=True)
+        stale_link = products_root / "productA"
+        stale_link.symlink_to(Path("productA"))  # simulate the old buggy, self-referencing link
+
+        wa.repair()
+
+        assert stale_link.is_symlink()
+        assert stale_link.resolve() == product_dir.resolve()
 
     def test_removes_broken_links_then_reinstalls(self, tmp_path: Path) -> None:
         product_dir = tmp_path / "installer" / "productA"

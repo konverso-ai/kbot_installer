@@ -22,7 +22,7 @@ class DbSettings(BaseModel):
     user: str
     password: str
 
-    schema_path: Path
+    schema_paths: list[Path]
     upgrades_dir: Path | None = None
     target_version: str | None = None
 

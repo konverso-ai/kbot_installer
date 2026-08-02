@@ -12,6 +12,7 @@ from workarea.utils import (
     is_broken_symlink,
     iter_sources,
     link_source,
+    matches_pattern,
     render_variables,
     setup_drf_yasg_static,
     setup_kbot_conf,
@@ -54,6 +55,44 @@ class TestShouldKeep:
         path = tmp_path / "sub" / "b.py"
         rule = _rule(includes=["sub/*.py"], excludes=["*.pyc"])
         assert should_keep(path, tmp_path, rule) is True
+
+    def test_double_star_pattern_matches_top_level_file(self, tmp_path: Path) -> None:
+        """Regression: `**/*.py` must also match files directly under root.
+
+        Plain `fnmatch` (unlike shell/gitignore globs) requires a literal `/`
+        before `*.py` for a `**/*.py` pattern, so a top-level file like
+        `core/python/Bot.py` (relative path `Bot.py`, no `/`) was silently
+        excluded from every rule using `**/...` includes.
+        """
+        path = tmp_path / "Bot.py"
+        rule = _rule(includes=["**/*.py"])
+        assert should_keep(path, tmp_path, rule) is True
+
+    def test_double_star_pattern_still_matches_nested_file(self, tmp_path: Path) -> None:
+        path = tmp_path / "sub" / "Bot.py"
+        rule = _rule(includes=["**/*.py"])
+        assert should_keep(path, tmp_path, rule) is True
+
+
+class TestMatchesPattern:
+    def test_double_star_matches_zero_directories(self) -> None:
+        assert matches_pattern("Bot.py", "**/*.py") is True
+
+    def test_double_star_matches_one_directory(self) -> None:
+        assert matches_pattern("sub/Bot.py", "**/*.py") is True
+
+    def test_double_star_matches_several_directories(self) -> None:
+        assert matches_pattern("a/b/c/Bot.py", "**/*.py") is True
+
+    def test_double_star_suffix_matches_nested_paths(self) -> None:
+        assert matches_pattern("web/images/sub/foo.png", "web/images/**") is True
+
+    def test_rejects_non_matching_extension(self) -> None:
+        assert matches_pattern("Bot.txt", "**/*.py") is False
+
+    def test_literal_pattern_matches_exact_name_only(self) -> None:
+        assert matches_pattern("RunBot.py", "RunBot.py") is True
+        assert matches_pattern("sub/RunBot.py", "RunBot.py") is False
 
 
 def test_render_variables_replaces_all_occurrences() -> None:
@@ -199,6 +238,31 @@ class TestApplyRule:
 
         target = work_root / "core" / "a.py"
         assert target.is_symlink()
+
+    def test_links_top_level_file_matched_by_double_star_includes(
+        self, tmp_path: Path
+    ) -> None:
+        """Regression: rules like conf/rules.json's `core/python` -> `**/*.py`.
+
+        must also link top-level product files (e.g. `core/python/Bot.py`),
+        not just files nested in subdirectories.
+        """
+        product_root = tmp_path / "product"
+        (product_root / "core" / "python").mkdir(parents=True)
+        source_file = product_root / "core" / "python" / "Bot.py"
+        source_file.write_text("data")
+        work_root = tmp_path / "work"
+
+        rule = _rule(
+            source=Path("core/python"),
+            action=RuleAction.LINK,
+            includes=["**/*.py", "**/*.so"],
+        )
+        apply_rule(product_root, work_root, rule, runtime_variables={})
+
+        target = work_root / "core" / "python" / "Bot.py"
+        assert target.is_symlink()
+        assert target.resolve() == source_file.resolve()
 
     def test_copies_matching_files_with_placeholders(self, tmp_path: Path) -> None:
         product_root = tmp_path / "product"

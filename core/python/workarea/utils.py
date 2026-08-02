@@ -14,6 +14,56 @@ if TYPE_CHECKING:
     from workarea.workarea_rule import WorkAreaRule
 
 
+def _matches_glob(relative_parts: tuple[str, ...], pattern_parts: tuple[str, ...]) -> bool:
+    """Recursively match path segments against glob pattern segments.
+
+    Unlike `fnmatch`, a `**` pattern segment matches zero or more whole path
+    segments (as in `.gitignore`/glob conventions), so `**/*.py` matches both
+    top-level files (e.g. `Bot.py`) and nested ones (e.g. `sub/Bot.py`). Every
+    other pattern segment is matched against a single path segment via
+    `fnmatch` (so `*`, `?`, and `[...]` still apply within a segment, but
+    never cross a `/`).
+
+    Args:
+        relative_parts: Path segments (as returned by splitting a POSIX
+            relative path on `/`) to match.
+        pattern_parts: Glob pattern segments to match against.
+
+    Returns:
+        True if `relative_parts` fully matches `pattern_parts`.
+
+    """
+    if not pattern_parts:
+        return not relative_parts
+
+    head, *rest_pattern = pattern_parts
+
+    if head == "**":
+        return _matches_glob(relative_parts, tuple(rest_pattern)) or (
+            bool(relative_parts) and _matches_glob(relative_parts[1:], pattern_parts)
+        )
+
+    if not relative_parts:
+        return False
+
+    return fnmatch(relative_parts[0], head) and _matches_glob(relative_parts[1:], tuple(rest_pattern))
+
+
+def matches_pattern(relative: str, pattern: str) -> bool:
+    """Check whether a POSIX relative path matches a glob pattern.
+
+    Args:
+        relative: POSIX-style relative path (e.g. `"core/python/Bot.py"`).
+        pattern: Glob pattern, where `**` matches zero or more whole path
+            segments (e.g. `"**/*.py"`), unlike plain `fnmatch` patterns.
+
+    Returns:
+        True if `relative` matches `pattern`.
+
+    """
+    return _matches_glob(tuple(relative.split("/")), tuple(pattern.split("/")))
+
+
 def should_keep(path: Path, root: Path, rule: "WorkAreaRule") -> bool:
     """Determine whether a path matches a rule's include/exclude patterns.
 
@@ -29,10 +79,10 @@ def should_keep(path: Path, root: Path, rule: "WorkAreaRule") -> bool:
     """
     relative = path.relative_to(root).as_posix()
 
-    if rule.includes and not any(fnmatch(relative, pattern) for pattern in rule.includes):
+    if rule.includes and not any(matches_pattern(relative, pattern) for pattern in rule.includes):
         return False
 
-    return not (rule.excludes and any(fnmatch(relative, pattern) for pattern in rule.excludes))
+    return not (rule.excludes and any(matches_pattern(relative, pattern) for pattern in rule.excludes))
 
 
 def render_variables(content: str, variables: dict[str, str]) -> str:

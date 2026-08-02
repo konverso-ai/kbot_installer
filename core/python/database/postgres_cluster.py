@@ -2,11 +2,12 @@
 
 This module owns the OS-process side of running a local, internal PostgreSQL
 server: creating the data directory and starting/stopping the server binary.
-It is kept separate from `database.internal_db`, which only ever talks SQL
+It is kept separate from `database.internal_database`, which only ever talks SQL
 over a live connection via psycopg.
 """
 
 import subprocess
+from pathlib import Path
 
 from database.base import InternalDbSettings
 from utils.Logger import logger
@@ -53,6 +54,8 @@ def initdb(settings: InternalDbSettings) -> None:
             f"-E {settings.encoding}",
             "-o",
             f"--locale={settings.locale}",
+            "-o",
+            f"--username={settings.admin_user}",
             "initdb",
         ],
         check=False,
@@ -123,8 +126,32 @@ def start(settings: InternalDbSettings) -> None:
     )
 
     if not is_running(settings):
-        msg = "PostgreSQL server failed to start."
+        msg = f"PostgreSQL server failed to start.\n{_tail_log(settings.log_path)}"
         raise PostgresClusterError(msg)
+
+
+def _tail_log(log_path: Path, *, max_lines: int = 20) -> str:
+    """Return the last lines of the PostgreSQL server log, for error reporting.
+
+    Args:
+        log_path: Path to the `pg_ctl`/`postgres` server log file.
+        max_lines: Maximum number of trailing lines to return.
+
+    Returns:
+        The last `max_lines` lines of `log_path`, prefixed with a short
+        header, or a note indicating the log file could not be read.
+
+    """
+    if not log_path.exists():
+        return f"(no log file found at {log_path})"
+
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return f"(could not read log file {log_path}: {exc})"
+
+    tail = "\n".join(lines[-max_lines:])
+    return f"--- last {min(len(lines), max_lines)} line(s) of {log_path} ---\n{tail}"
 
 
 def stop(settings: InternalDbSettings) -> None:

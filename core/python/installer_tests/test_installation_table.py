@@ -383,6 +383,25 @@ class TestInstallationTable:
         assert len(installation_table.results) == 1
 
     @patch("installer_support.installation_table.Console")
+    def test_begin_and_complete_installation_skipped_clears_without_blank_line(
+        self, mock_console_class
+    ) -> None:
+        """Test that clearing an in-progress line doesn't print a blank line."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=False)
+
+        installation_table.begin_installation("prod1")
+        installation_table.complete_installation("prod1", "storage (cached)", "skipped")
+
+        # Only the "in progress" line and its \r overwrite should be printed;
+        # no extra blank line should be emitted.
+        assert mock_console.print.call_count == 2
+        clear_call = mock_console.print.call_args_list[1]
+        assert clear_call[0][0].strip() == ""
+        assert clear_call[1]["end"] == "\r"
+
+    @patch("installer_support.installation_table.Console")
     def test_begin_and_complete_installation(self, mock_console_class) -> None:
         """Test in-progress line is replaced by the final result."""
         mock_console = MagicMock()

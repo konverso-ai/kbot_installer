@@ -1,31 +1,25 @@
 """Commandes CLI pour kbot-installer."""
 
 import os
-import secrets
 from pathlib import Path
 
 import click
 
-from database.factory import add_db
-from downloadable.bundle_downloadable import BundleDownloadable
-from downloadable.product_downloadable import ProductDownloadable
+from database.factory import build_database
+from database.utils import resolve_db_password
+from downloadable.factory import build_downloadable
 from git.models import GitProvider
-from git.provider.factory import add_selector_provider
-from installable.workarea_installable import WorkareaInstallable
-from installer_support.installation_table import InstallationTable
+from installable.dependency_graph import DependencyGraph
+from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
-from installer_support.installer_utils import version_to_branch
 from installer_support.logging_config import setup_logging
+from installer_support.python_requirements import install_product_python_requirements
+from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
 from storage.base import StorageBackendEnum
-from utils.product.build import Build
-from utils.product.product import Product
-from workarea.workarea import Workarea
-
-# Default database password used when neither --db-password nor --no-password is given.
-_DEFAULT_DB_PASSWORD = "kbot_db_pwd"  # noqa: S105
 
 # Setup logging from configuration file
 setup_logging()
+
 
 _PROVIDER_CHOICES = click.Choice(
     [provider.value for provider in GitProvider],
@@ -64,10 +58,7 @@ def cli(ctx: click.Context) -> None:
     "--product",
     type=str,
     default=None,
-    help=(
-        "Product name. Required in product mode. In bundle mode, defines the "
-        "highest product level to install."
-    ),
+    help=("Product name. Required in product mode. In bundle mode, defines the highest product level to install."),
 )
 @click.option(
     "-v",
@@ -97,10 +88,7 @@ def cli(ctx: click.Context) -> None:
     "--provider",
     type=_PROVIDER_CHOICES,
     multiple=True,
-    help=(
-        "Specify which providers to use for installation. "
-        "If not specified, all providers will be tried in order."
-    ),
+    help=("Specify which providers to use for installation. If not specified, all providers will be tried in order."),
 )
 @click.option(
     "--storage",
@@ -161,34 +149,16 @@ def download(
         storage_backend = StorageBackendEnum(storage)
         installer_path = Path(installer_dir)
 
-        if bundle:
-            downloadable = BundleDownloadable(
-                storage_name=storage_backend,
-                name=bundle,
-                installer_dir=installer_path,
-                verbose=verbose,
-            )
-        else:
-            product_obj = Product(
-                name=product, build=Build(branch=version_to_branch(version))
-            )
-            selected_providers = (
-                list(provider)
-                if provider
-                else [
-                    "storage",
-                    "github",
-                    "bitbucket",
-                ]
-            )
-            selector = add_selector_provider(provider_names=selected_providers)
-            downloadable = ProductDownloadable(
-                product=product_obj,
-                provider=selector,
-                table=InstallationTable(verbose=verbose),
-                include_dependencies=not no_rec,
-            )
-
+        downloadable = build_downloadable(
+            product=product,
+            version=version,
+            bundle=bundle,
+            installer_path=installer_path,
+            provider=provider,
+            storage_backend=storage_backend,
+            include_dependencies=not no_rec,
+            verbose=verbose,
+        )
         downloadable.download(installer_path)
 
     except click.UsageError:
@@ -196,6 +166,54 @@ def download(
     except Exception as e:
         click.echo(f"Error installing product: {e}", err=True)
         raise click.Abort from e
+
+
+def _resolve_internal_pg_dir(installer_path: Path) -> Path:
+    """Resolve PG_DIR for an internal database cluster, or raise a usage error.
+
+    Args:
+        installer_path: Installer directory holding the downloaded products.
+
+    Returns:
+        The resolved PG_DIR path.
+
+    Raises:
+        click.UsageError: If PG_DIR cannot be resolved from the environment
+            or the downloaded 3rdparty product.
+
+    """
+    pg_dir_str = os.environ.get("PG_DIR") or resolve_pg_dir_str(installer_path)
+    if not pg_dir_str:
+        msg = (
+            "Unable to locate PostgreSQL: set the 'PG_DIR' environment variable, "
+            f"or ensure '{installer_path / '3rdparty' / 'versions.env'}' exists and "
+            "defines 'PG_DIR'."
+        )
+        raise click.UsageError(msg)
+    return Path(pg_dir_str)
+
+
+def _build_schema_paths(installer_path: Path) -> list[Path]:
+    """Build the ordered list of product schema files to apply.
+
+    Every product downloaded alongside the top level product (i.e. every
+    subdirectory of ``installer_path`` holding a ``description.xml``) may ship
+    its own ``db/init/db_schema.sql``. They are returned in dependency order
+    (a product's dependencies before the product itself) so that a schema
+    referencing tables defined by a dependency can be applied safely.
+
+    Args:
+        installer_path: Installer directory holding the downloaded products.
+
+    Returns:
+        Ordered list of ``db/init/db_schema.sql`` paths, one per discovered
+        product. Products without a schema file are still listed;
+        ``build_database`` skips missing files.
+
+    """
+    products = InstallerService(installer_dir=installer_path).load_products_from_disk()
+    graph = DependencyGraph(products)
+    return [installer_path / name / "db" / "init" / "db_schema.sql" for name in graph.get_topological_order()]
 
 
 @cli.command(name="install")
@@ -247,10 +265,7 @@ def download(
     "--provider",
     type=_PROVIDER_CHOICES,
     multiple=True,
-    help=(
-        "Specify which providers to use for installation. "
-        "If not specified, all providers will be tried in order."
-    ),
+    help=("Specify which providers to use for installation. If not specified, all providers will be tried in order."),
 )
 @click.option(
     "--storage",
@@ -299,6 +314,15 @@ def download(
     help="Generate a random database password instead of using --db-password.",
 )
 @click.option(
+    "--skip-python-requirements",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip installing each solution/customer product's requirements.txt "
+        "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
+    ),
+)
+@click.option(
     "-V",
     "--verbose",
     is_flag=True,
@@ -321,17 +345,19 @@ def install(
     db_password: str | None = None,
     db_name: str = "kbot_db",
     no_password: bool = False,
+    skip_python_requirements: bool = False,
     verbose: bool = False,
 ) -> None:
     r"""Install a kbot product or bundle: build the installer, workarea, and database.
 
     Without ``-b``, installs the given product at ``-v/--version`` together with
     all of its dependencies. With ``-b``, installs every product pinned by the
-    bundle descriptor; ``-p`` then defines the top level product used to locate
-    the database schema.
+    bundle descriptor; ``-p`` then defines the top level product.
 
     The installer directory is built first (download), then the workarea is
-    laid out from it, then the database is prepared and initialized. If
+    laid out from it, then the database is prepared and initialized: every
+    downloaded product's ``db/init/db_schema.sql`` is applied, in dependency
+    order (dependencies before the products that depend on them). If
     ``--workarea-dir`` already exists, the installation is cancelled before
     anything is downloaded or built.
 
@@ -361,28 +387,41 @@ def install(
 
     try:
         storage_backend = StorageBackendEnum(storage)
-        _fetch_installer(
-            installer_path=installer_path,
+        downloadable = build_downloadable(
             product=product,
             version=version,
             bundle=bundle,
+            installer_path=installer_path,
             provider=provider,
             storage_backend=storage_backend,
+            include_dependencies=True,
             verbose=verbose,
         )
+        downloadable.download(installer_path)
 
-        _build_workarea(installer_path=installer_path, workarea_path=workarea_path)
+        build_workarea(installer_path=installer_path, workarea_path=workarea_path).install()
 
-        generated_password = _build_database(
-            installer_path=installer_path,
-            workarea_path=workarea_path,
-            product=product,
+        if not skip_python_requirements:
+            install_product_python_requirements(installer_path)
+
+        password, generated_password = resolve_db_password(db_password, no_password=no_password)
+        schema_paths = _build_schema_paths(installer_path)
+
+        pg_dir: Path | None = None
+        if not db_host:
+            pg_dir = _resolve_internal_pg_dir(installer_path)
+            prepend_thirdparty_ld_library_path(installer_path)
+
+        build_database(
+            schema_paths=schema_paths,
             db_host=db_host,
             db_port=db_port,
             db_user=db_user,
-            db_password=db_password,
+            password=password,
             db_name=db_name,
-            no_password=no_password,
+            workarea_path=workarea_path,
+            pg_dir=pg_dir,
+            admin_password=os.environ.get("PG_ADMIN_PASSWORD", "postgres"),
         )
         if generated_password is not None:
             click.echo(f"Generated database password for '{db_user}': {generated_password}")
@@ -396,168 +435,6 @@ def install(
     except Exception as e:
         click.echo(f"Error installing product: {e}", err=True)
         raise click.Abort from e
-
-
-def _fetch_installer(
-    installer_path: Path,
-    product: str,
-    version: str | None,
-    bundle: str | None,
-    provider: tuple[str, ...],
-    storage_backend: StorageBackendEnum,
-    *,
-    verbose: bool,
-) -> None:
-    """Download the product (with dependencies) or bundle into the installer directory.
-
-    Args:
-        installer_path: Directory the products are downloaded into.
-        product: Product name (top level product in bundle mode).
-        version: Product version, required unless installing a bundle.
-        bundle: Bundle name, or None to install a single product.
-        provider: Providers to use for product mode; empty to try all in order.
-        storage_backend: Storage backend used for bundle descriptors/artifacts,
-            and for the "storage" provider in product mode.
-        verbose: Whether to enable verbose logging.
-
-    """
-    if bundle:
-        downloadable = BundleDownloadable(
-            storage_name=storage_backend,
-            name=bundle,
-            installer_dir=installer_path,
-            verbose=verbose,
-        )
-    else:
-        if version is None:
-            msg = "Option '-v/--version' is required when installing a product without '-b/--bundle'."
-            raise click.UsageError(msg)
-        product_obj = Product(name=product, build=Build(branch=version_to_branch(version)))
-        selected_providers = list(provider) if provider else ["storage", "github", "bitbucket"]
-        selector = add_selector_provider(provider_names=selected_providers)
-        downloadable = ProductDownloadable(
-            product=product_obj,
-            provider=selector,
-            table=InstallationTable(verbose=verbose),
-            include_dependencies=True,
-        )
-
-    downloadable.download(installer_path)
-
-
-def _build_workarea(installer_path: Path, workarea_path: Path) -> None:
-    """Lay out the workarea from the products already present in the installer directory.
-
-    Args:
-        installer_path: Installer directory holding the downloaded products.
-        workarea_path: Workarea directory to build.
-
-    """
-    service = InstallerService(installer_path)
-    products = [Path(product.name) for product in service.load_products_from_disk()]
-
-    workarea = Workarea(
-        installer_root=installer_path,
-        work_root=workarea_path,
-        products=products,
-    )
-    WorkareaInstallable(workarea=workarea).install()
-
-
-def _resolve_db_password(
-    db_password: str | None, *, no_password: bool
-) -> tuple[str, str | None]:
-    """Resolve the database password to use, generating one if requested.
-
-    Args:
-        db_password: Password explicitly provided on the command line, if any.
-        no_password: Whether a random password should be generated when
-            ``db_password`` is not set.
-
-    Returns:
-        A tuple of ``(password, generated_password)``, where ``generated_password``
-        is set only when a random password was generated (so it can be shown
-        to the user).
-
-    """
-    if db_password:
-        return db_password, None
-    if no_password:
-        generated = secrets.token_urlsafe(16)
-        return generated, generated
-    return _DEFAULT_DB_PASSWORD, None
-
-
-def _build_database(
-    installer_path: Path,
-    workarea_path: Path,
-    product: str,
-    db_host: str | None,
-    db_port: int,
-    db_user: str,
-    db_password: str | None,
-    db_name: str,
-    *,
-    no_password: bool,
-) -> str | None:
-    """Prepare and initialize the product database.
-
-    Uses an externally managed database when ``db_host`` is set, otherwise
-    bootstraps a local, installer-owned PostgreSQL cluster under the workarea.
-
-    Args:
-        installer_path: Installer directory, used to locate the schema file.
-        workarea_path: Workarea directory, used for the internal cluster's data/log paths.
-        product: Top level product name, used to locate its ``db/init/db_schema.sql``.
-        db_host: External Postgres host, or None to use an internal cluster.
-        db_port: Postgres port.
-        db_user: Postgres application user.
-        db_password: Postgres application password, if explicitly provided.
-        db_name: Postgres database name.
-        no_password: Whether to generate a random password when db_password is unset.
-
-    Returns:
-        The randomly generated password, or None if no password was generated.
-
-    """
-    password, generated_password = _resolve_db_password(db_password, no_password=no_password)
-    schema_path = installer_path / product / "db" / "init" / "db_schema.sql"
-
-    if db_host:
-        db = add_db(
-            mode="external",
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=password,
-            schema_path=schema_path,
-            allow_schema_creation=True,
-        )
-    else:
-        pg_dir = os.environ.get("PG_DIR")
-        if not pg_dir:
-            msg = "The 'PG_DIR' environment variable must be set to install a local database."
-            raise click.UsageError(msg)
-
-        db = add_db(
-            mode="internal",
-            host="localhost",
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=password,
-            schema_path=schema_path,
-            pg_dir=Path(pg_dir),
-            pg_data=workarea_path / "var" / "db",
-            log_path=workarea_path / "logs" / "postgres.log",
-            admin_user="postgres",
-            admin_password=os.environ.get("PG_ADMIN_PASSWORD", "postgres"),
-        )
-
-    db.prepare()
-    db.initialize()
-    return generated_password
 
 
 @cli.command(name="list")
@@ -579,9 +456,7 @@ def _build_database(
     is_flag=True,
     help="Show all subtrees even if already displayed (default: hide redundant subtrees)",
 )
-def list_products(
-    *, tree: bool = False, installer_dir: str, verbose: bool = False
-) -> None:
+def list_products(*, tree: bool = False, installer_dir: str, verbose: bool = False) -> None:
     """List installed kbot products.
 
     This command displays a list of all products that are currently installed

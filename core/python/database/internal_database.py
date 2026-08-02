@@ -1,5 +1,7 @@
 """Internal PostgreSQL database backend, bootstrapping its own cluster."""
 
+from typing import ClassVar
+
 import psycopg
 from psycopg import Connection, sql
 
@@ -13,8 +15,10 @@ from database.utils import (
 )
 
 
-class InternalDb:
+class InternalDatabase:
     """Database backend that owns and bootstraps a local PostgreSQL cluster."""
+
+    settings_cls: ClassVar[type[InternalDbSettings]] = InternalDbSettings
 
     def __init__(self, settings: InternalDbSettings) -> None:
         """Initialize the backend with its internal database settings.
@@ -85,11 +89,14 @@ class InternalDb:
             if cur.fetchone() is not None:
                 return
 
+            # PostgreSQL utility statements (CREATE ROLE, ALTER ROLE, etc.) do
+            # not accept bind parameters (e.g. "$1"), so the password must be
+            # inlined as a SQL literal rather than passed as a query parameter.
             cur.execute(
-                sql.SQL("CREATE ROLE {} LOGIN PASSWORD %s").format(
-                    sql.Identifier(settings.user)
-                ),
-                (settings.password,),
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                    sql.Identifier(settings.user),
+                    sql.Literal(settings.password),
+                )
             )
 
     def _create_database_if_missing(self) -> None:
@@ -134,7 +141,10 @@ class InternalDb:
             )
 
             if settings.max_connections is not None:
+                # ALTER SYSTEM SET is a utility statement and does not accept
+                # bind parameters either; inline the value as a literal.
                 cur.execute(
-                    "ALTER SYSTEM SET max_connections = %s",
-                    (str(settings.max_connections),),
+                    sql.SQL("ALTER SYSTEM SET max_connections = {}").format(
+                        sql.Literal(str(settings.max_connections))
+                    )
                 )

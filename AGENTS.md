@@ -163,7 +163,7 @@ package alongside it.
 - **`backend`** / **`storage`** — object storage abstraction (S3, Azure Blob, Nexus) for storing/fetching
   bundled product archives; `storage/download_utils.py` and `service/nexus_*` implement the actual
   transfer logic.
-- **`database`** — internal vs. external DB backend selection (`internal_db.py`, `external_db.py`) for
+- **`database`** — internal vs. external DB backend selection (`internal_database.py`, `external_database.py`) for
   wherever the installer needs persistent state.
 - **`installable`** — the core domain model. `InstallableBase` defines the lifecycle
   (`load_from_installer_folder`, `to_xml`/`to_json`, `download`, `get_dependencies`, `install`,

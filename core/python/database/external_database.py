@@ -1,5 +1,7 @@
 """Database backend for externally managed PostgreSQL instances."""
 
+from typing import ClassVar
+
 from database.base import ExternalDbSettings
 from database.utils import (
     apply_missing_upgrades,
@@ -9,8 +11,10 @@ from database.utils import (
 )
 
 
-class ExternalDb:
+class ExternalDatabase:
     """Database backend that connects to a database managed outside the installer."""
+
+    settings_cls: ClassVar[type[ExternalDbSettings]] = ExternalDbSettings
 
     def __init__(self, settings: ExternalDbSettings) -> None:
         """Initialize the backend with its connection and schema settings.

@@ -1,17 +1,45 @@
 """Shared PostgreSQL helpers for schema application and versioning."""
 
+import secrets
 from pathlib import Path
 
 import psycopg
 
 from database.base import DbSettings
+from utils.Logger import logger
 
 SCHEMA_VERSION_TABLE = "__schema_version"
 
+# Default database password used when neither an explicit password nor a
+# random one is requested.
+DEFAULT_DB_PASSWORD = "kbot_db_pwd"  # noqa: S105
 
-def connect(
-    settings: DbSettings, *, database: str | None = None
-) -> psycopg.Connection:
+log = logger.get_package_logger("database")
+
+
+def resolve_db_password(db_password: str | None, *, no_password: bool) -> tuple[str, str | None]:
+    """Resolve the database password to use, generating one if requested.
+
+    Args:
+        db_password: Password explicitly provided by the caller, if any.
+        no_password: Whether a random password should be generated when
+            ``db_password`` is not set.
+
+    Returns:
+        A tuple of ``(password, generated_password)``, where ``generated_password``
+        is set only when a random password was generated (so it can be shown
+        to the user).
+
+    """
+    if db_password:
+        return db_password, None
+    if no_password:
+        generated = secrets.token_urlsafe(16)
+        return generated, generated
+    return DEFAULT_DB_PASSWORD, None
+
+
+def connect(settings: DbSettings, *, database: str | None = None) -> psycopg.Connection:
     """Open a psycopg connection using the given settings.
 
     Args:
@@ -124,13 +152,35 @@ def is_database_empty(settings: DbSettings) -> bool:
 
 
 def apply_schema(settings: DbSettings) -> None:
-    """Apply the initial schema file and record the target version if set.
+    """Apply every product schema file and record the target version if set.
+
+    ``settings.schema_paths`` is expected to be ordered dependencies-first, so
+    that a top level product's schema (which may reference tables defined by
+    its dependencies) is applied last. Some products (e.g. customer products)
+    do not ship their own ``db/init/db_schema.sql``, relying instead on a
+    dependency's schema; missing files are skipped rather than treated as an
+    error.
 
     Args:
         settings: Connection and schema settings.
 
     """
-    execute_sql_file(settings=settings, path=settings.schema_path)
+    applied_any = False
+
+    for schema_path in settings.schema_paths:
+        if not schema_path.is_file():
+            log.info(
+                "No schema file found at %s, skipping schema initialization.",
+                schema_path,
+            )
+            continue
+
+        execute_sql_file(settings=settings, path=schema_path)
+        applied_any = True
+
+    if not applied_any:
+        return
+
     ensure_version_table(settings=settings)
 
     if settings.target_version:

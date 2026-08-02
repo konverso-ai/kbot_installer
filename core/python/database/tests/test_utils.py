@@ -7,6 +7,7 @@ import pytest
 
 from database.base import DbSettings
 from database.utils import (
+    DEFAULT_DB_PASSWORD,
     SCHEMA_VERSION_TABLE,
     apply_missing_upgrades,
     apply_schema,
@@ -16,6 +17,7 @@ from database.utils import (
     get_applied_version,
     is_database_empty,
     mark_version_applied,
+    resolve_db_password,
     upgrade_files,
     version_from_upgrade_file,
 )
@@ -28,7 +30,7 @@ def settings(tmp_path: Path) -> DbSettings:
         database="db",
         user="user",
         password="password",
-        schema_path=tmp_path / "schema.sql",
+        schema_paths=[tmp_path / "schema.sql"],
         pg_dir=tmp_path / "pg",
     )
 
@@ -176,8 +178,9 @@ class TestApplySchema:
         settings: DbSettings,
         mock_conn: MagicMock,
     ) -> None:
-        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
-        settings.schema_path.write_text("CREATE TABLE foo();", encoding="utf-8")
+        schema_path = settings.schema_paths[0]
+        schema_path.parent.mkdir(parents=True, exist_ok=True)
+        schema_path.write_text("CREATE TABLE foo();", encoding="utf-8")
         settings.target_version = "1.0.0"
 
         apply_schema(settings)
@@ -196,14 +199,69 @@ class TestApplySchema:
         settings: DbSettings,
         mock_conn: MagicMock,
     ) -> None:
-        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
-        settings.schema_path.write_text("CREATE TABLE foo();", encoding="utf-8")
+        schema_path = settings.schema_paths[0]
+        schema_path.parent.mkdir(parents=True, exist_ok=True)
+        schema_path.write_text("CREATE TABLE foo();", encoding="utf-8")
 
         apply_schema(settings)
 
         cur = mock_conn.cursor.return_value.__enter__.return_value
         for call in cur.execute.call_args_list:
             assert compare("eq", len(call.args), 1)
+
+    def test_applyschema_valid_noop_when_schema_file_missing(
+        self,
+        settings: DbSettings,
+        mock_conn: MagicMock,
+    ) -> None:
+        assert compare("eq", settings.schema_paths[0].exists(), False)
+
+        apply_schema(settings)
+
+        mock_conn.cursor.assert_not_called()
+
+    def test_applyschema_valid_applies_multiple_files_in_order(
+        self,
+        settings: DbSettings,
+        mock_conn: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        dependency_schema = tmp_path / "dependency.sql"
+        dependency_schema.write_text("CREATE TABLE dependency();", encoding="utf-8")
+        top_schema = tmp_path / "top.sql"
+        top_schema.write_text("CREATE TABLE top();", encoding="utf-8")
+        settings.schema_paths = [dependency_schema, top_schema]
+
+        apply_schema(settings)
+
+        cur = mock_conn.cursor.return_value.__enter__.return_value
+        executed_sql = [
+            call.args[0] for call in cur.execute.call_args_list if isinstance(call.args[0], bytes)
+        ]
+        assert compare(
+            "eq",
+            executed_sql,
+            [b"CREATE TABLE dependency();", b"CREATE TABLE top();"],
+        )
+
+    def test_applyschema_valid_skips_missing_files_among_several(
+        self,
+        settings: DbSettings,
+        mock_conn: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        missing_schema = tmp_path / "missing.sql"
+        existing_schema = tmp_path / "existing.sql"
+        existing_schema.write_text("CREATE TABLE existing();", encoding="utf-8")
+        settings.schema_paths = [missing_schema, existing_schema]
+
+        apply_schema(settings)
+
+        cur = mock_conn.cursor.return_value.__enter__.return_value
+        executed_sql = [
+            call.args[0] for call in cur.execute.call_args_list if isinstance(call.args[0], bytes)
+        ]
+        assert compare("eq", executed_sql, [b"CREATE TABLE existing();"])
 
 
 class TestUpgradeFiles:
@@ -285,3 +343,32 @@ class TestApplyMissingUpgrades:
 
             mock_execute.assert_not_called()
             mock_mark.assert_not_called()
+
+
+class TestResolveDbPassword:
+    """Tests for resolve_db_password."""
+
+    def test_resolvedbpassword_valid_returns_explicit_password_unchanged(self) -> None:
+        password, generated = resolve_db_password("explicit-pwd", no_password=False)
+
+        assert password == "explicit-pwd"
+        assert generated is None
+
+    def test_resolvedbpassword_valid_prefers_explicit_password_over_no_password(self) -> None:
+        password, generated = resolve_db_password("explicit-pwd", no_password=True)
+
+        assert password == "explicit-pwd"
+        assert generated is None
+
+    def test_resolvedbpassword_valid_generates_random_password_when_no_password(self) -> None:
+        password, generated = resolve_db_password(None, no_password=True)
+
+        assert password == generated
+        assert generated is not None
+        assert len(generated) > 0
+
+    def test_resolvedbpassword_valid_falls_back_to_default_password(self) -> None:
+        password, generated = resolve_db_password(None, no_password=False)
+
+        assert password == DEFAULT_DB_PASSWORD
+        assert generated is None

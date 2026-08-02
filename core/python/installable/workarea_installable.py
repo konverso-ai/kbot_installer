@@ -94,7 +94,7 @@ class WorkareaInstallable(BaseModel, InstallableBase):
 
         setup_kbot_conf(self.workarea.work_root)
         setup_runtime_dirs(self.workarea.work_root)
-        setup_products(self.workarea.work_root, self.workarea.products)
+        setup_products(self.workarea.work_root, product_roots)
         setup_drf_yasg_static(self.workarea.work_root)
         cleanup_unused_tests_dir(
             self.workarea.work_root,
