@@ -15,6 +15,7 @@ def settings(tmp_path: Path) -> ExternalDbSettings:
         database="db",
         user="user",
         password="password",
+        psql_path=tmp_path / "bin" / "psql",
         schema_paths=[tmp_path / "schema.sql"],
     )
 

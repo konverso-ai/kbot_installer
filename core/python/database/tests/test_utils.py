@@ -9,6 +9,7 @@ from database.base import DbSettings
 from database.utils import (
     DEFAULT_DB_PASSWORD,
     SCHEMA_VERSION_TABLE,
+    SqlFileError,
     apply_missing_upgrades,
     apply_schema,
     connect,
@@ -30,6 +31,7 @@ def settings(tmp_path: Path) -> DbSettings:
         database="db",
         user="user",
         password="password",
+        psql_path=tmp_path / "bin" / "psql",
         schema_paths=[tmp_path / "schema.sql"],
         pg_dir=tmp_path / "pg",
     )
@@ -48,6 +50,13 @@ def mock_conn(mock_connect: MagicMock) -> MagicMock:
     conn.cursor.return_value.__enter__.return_value = cur
     mock_connect.return_value.__enter__.return_value = conn
     return conn
+
+
+@pytest.fixture
+def mock_subprocess_run() -> MagicMock:
+    with patch("database.utils.subprocess.run") as mock:
+        mock.return_value = MagicMock(returncode=0, stderr="")
+        yield mock
 
 
 class TestConnect:
@@ -83,10 +92,10 @@ class TestConnect:
 class TestExecuteSqlFile:
     """Test cases for execute_sql_file."""
 
-    def test_executesqlfile_valid_executes_file_content(
+    def test_executesqlfile_valid_invokes_psql_with_expected_arguments(
         self,
         settings: DbSettings,
-        mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
         tmp_path: Path,
     ) -> None:
         sql_path = tmp_path / "script.sql"
@@ -94,8 +103,43 @@ class TestExecuteSqlFile:
 
         execute_sql_file(settings, sql_path)
 
-        cur = mock_conn.cursor.return_value.__enter__.return_value
-        cur.execute.assert_called_once_with(b"SELECT 1;")
+        mock_subprocess_run.assert_called_once()
+        command = mock_subprocess_run.call_args.args[0]
+        assert compare(
+            "eq",
+            command,
+            [
+                str(settings.psql_path),
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-q",
+                "-h",
+                settings.host,
+                "-p",
+                str(settings.port),
+                "-U",
+                settings.user,
+                "-d",
+                settings.database,
+                "-f",
+                str(sql_path),
+            ],
+        )
+        env = mock_subprocess_run.call_args.kwargs["env"]
+        assert compare("eq", env["PGPASSWORD"], settings.password)
+
+    def test_executesqlfile_invalid_raises_when_psql_fails(
+        self,
+        settings: DbSettings,
+        mock_subprocess_run: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        sql_path = tmp_path / "script.sql"
+        sql_path.write_text("SELECT 1;", encoding="utf-8")
+        mock_subprocess_run.return_value = MagicMock(returncode=1, stderr="boom")
+
+        with pytest.raises(SqlFileError, match="boom"):
+            execute_sql_file(settings, sql_path)
 
 
 class TestEnsureVersionTable:
@@ -177,6 +221,7 @@ class TestApplySchema:
         self,
         settings: DbSettings,
         mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
     ) -> None:
         schema_path = settings.schema_paths[0]
         schema_path.parent.mkdir(parents=True, exist_ok=True)
@@ -185,9 +230,10 @@ class TestApplySchema:
 
         apply_schema(settings)
 
+        mock_subprocess_run.assert_called_once()
+        assert compare("in", str(schema_path), mock_subprocess_run.call_args.args[0])
+
         cur = mock_conn.cursor.return_value.__enter__.return_value
-        executed_sql = [call.args[0] for call in cur.execute.call_args_list]
-        assert compare("in", b"CREATE TABLE foo();", executed_sql)
         assert compare(
             "in",
             ("1.0.0",),
@@ -198,6 +244,7 @@ class TestApplySchema:
         self,
         settings: DbSettings,
         mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
     ) -> None:
         schema_path = settings.schema_paths[0]
         schema_path.parent.mkdir(parents=True, exist_ok=True)
@@ -213,17 +260,20 @@ class TestApplySchema:
         self,
         settings: DbSettings,
         mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
     ) -> None:
         assert compare("eq", settings.schema_paths[0].exists(), False)
 
         apply_schema(settings)
 
+        mock_subprocess_run.assert_not_called()
         mock_conn.cursor.assert_not_called()
 
     def test_applyschema_valid_applies_multiple_files_in_order(
         self,
         settings: DbSettings,
         mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
         tmp_path: Path,
     ) -> None:
         dependency_schema = tmp_path / "dependency.sql"
@@ -234,20 +284,18 @@ class TestApplySchema:
 
         apply_schema(settings)
 
-        cur = mock_conn.cursor.return_value.__enter__.return_value
-        executed_sql = [
-            call.args[0] for call in cur.execute.call_args_list if isinstance(call.args[0], bytes)
-        ]
+        applied_files = [call.args[0][-1] for call in mock_subprocess_run.call_args_list]
         assert compare(
             "eq",
-            executed_sql,
-            [b"CREATE TABLE dependency();", b"CREATE TABLE top();"],
+            applied_files,
+            [str(dependency_schema), str(top_schema)],
         )
 
     def test_applyschema_valid_skips_missing_files_among_several(
         self,
         settings: DbSettings,
         mock_conn: MagicMock,
+        mock_subprocess_run: MagicMock,
         tmp_path: Path,
     ) -> None:
         missing_schema = tmp_path / "missing.sql"
@@ -257,11 +305,8 @@ class TestApplySchema:
 
         apply_schema(settings)
 
-        cur = mock_conn.cursor.return_value.__enter__.return_value
-        executed_sql = [
-            call.args[0] for call in cur.execute.call_args_list if isinstance(call.args[0], bytes)
-        ]
-        assert compare("eq", executed_sql, [b"CREATE TABLE existing();"])
+        applied_files = [call.args[0][-1] for call in mock_subprocess_run.call_args_list]
+        assert compare("eq", applied_files, [str(existing_schema)])
 
 
 class TestUpgradeFiles:

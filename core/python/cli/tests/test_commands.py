@@ -552,8 +552,15 @@ class TestInstallCommand:
         mock_build_workarea,
         mock_build_database,
         tmp_path,
+        monkeypatch,
     ) -> None:
-        """Providing --db-host selects the external database backend (no pg_dir needed)."""
+        """Providing --db-host selects the external database backend.
+
+        PG_DIR is still resolved (and passed through to build_database) even in
+        external mode, since a ``psql`` client is needed to apply schema files
+        regardless of where the database itself is hosted.
+        """
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
         mock_build_downloadable.return_value = MagicMock()
         mock_build_workarea.return_value = MagicMock()
 
@@ -578,14 +585,18 @@ class TestInstallCommand:
 
         assert result.exit_code == 0, result.output
         assert mock_build_database.call_args.kwargs["db_host"] == "external-db.example.com"
-        assert mock_build_database.call_args.kwargs["pg_dir"] is None
+        assert mock_build_database.call_args.kwargs["pg_dir"] == tmp_path / "pg"
 
     @patch("cli.commands.build_workarea")
     @patch("cli.commands.build_downloadable")
-    def test_install_requires_pg_dir_env_for_internal_db(
+    def test_install_requires_pg_dir_env(
         self, mock_build_downloadable, mock_build_workarea, tmp_path, monkeypatch
     ) -> None:
-        """Internal DB mode fails when neither PG_DIR nor 3rdparty/versions.env is available."""
+        """Install fails when neither PG_DIR nor 3rdparty/versions.env is available.
+
+        This applies regardless of database mode, since a ``psql`` client
+        (resolved from PG_DIR) is required in every case to apply schema files.
+        """
         monkeypatch.delenv("PG_DIR", raising=False)
         mock_build_downloadable.return_value = MagicMock()
         mock_build_workarea.return_value = MagicMock()

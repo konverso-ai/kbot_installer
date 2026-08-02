@@ -168,8 +168,12 @@ def download(
         raise click.Abort from e
 
 
-def _resolve_internal_pg_dir(installer_path: Path) -> Path:
-    """Resolve PG_DIR for an internal database cluster, or raise a usage error.
+def _resolve_pg_dir(installer_path: Path) -> Path:
+    """Resolve PG_DIR, or raise a usage error.
+
+    Used to locate the ``psql`` client needed to apply schema/upgrade files
+    (and, for an internal cluster, the ``pg_ctl``/``initdb`` binaries too),
+    regardless of whether the target database is internal or external.
 
     Args:
         installer_path: Installer directory holding the downloaded products.
@@ -407,10 +411,10 @@ def install(
         password, generated_password = resolve_db_password(db_password, no_password=no_password)
         schema_paths = _build_schema_paths(installer_path)
 
-        pg_dir: Path | None = None
-        if not db_host:
-            pg_dir = _resolve_internal_pg_dir(installer_path)
-            prepend_thirdparty_ld_library_path(installer_path)
+        # A 'psql' client (from the same 3rdparty PG_DIR) is required in every
+        # mode to apply schema/upgrade files, even against an external database.
+        pg_dir = _resolve_pg_dir(installer_path)
+        prepend_thirdparty_ld_library_path(installer_path)
 
         build_database(
             schema_paths=schema_paths,

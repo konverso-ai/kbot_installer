@@ -1,6 +1,8 @@
 """Shared PostgreSQL helpers for schema application and versioning."""
 
+import os
 import secrets
+import subprocess
 from pathlib import Path
 
 import psycopg
@@ -59,20 +61,56 @@ def connect(settings: DbSettings, *, database: str | None = None) -> psycopg.Con
     )
 
 
+class SqlFileError(RuntimeError):
+    """Raised when applying a SQL file via `psql` fails."""
+
+
 def execute_sql_file(settings: DbSettings, path: Path) -> None:
-    """Read and execute a SQL file against the database.
+    r"""Apply a SQL file against the database using the `psql` client.
+
+    Schema and upgrade files are shipped as `psql` scripts, not plain SQL:
+    they may use client-side meta-commands (e.g. `\\set schema_version 192`
+    followed by `:schema_version`), which a pure SQL connector like psycopg
+    cannot parse. Shelling out to the real `psql` binary mirrors the legacy
+    installer's behavior and supports this syntax natively.
 
     Args:
-        settings: Connection settings.
+        settings: Connection settings, including the `psql` binary to use.
         path: Path to the SQL file to execute.
 
-    """
-    sql = path.read_text(encoding="utf-8")
+    Raises:
+        SqlFileError: If `psql` exits with a non-zero status.
 
-    with connect(settings) as conn, conn.cursor() as cur:
-        # SQL comes from a trusted schema file; pass it as bytes since the
-        # execute overloads only accept LiteralString, not a runtime str.
-        cur.execute(sql.encode("utf-8"))
+    """
+    command = [
+        str(settings.psql_path),
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-q",
+        "-h",
+        settings.host,
+        "-p",
+        str(settings.port),
+        "-U",
+        settings.user,
+        "-d",
+        settings.database,
+        "-f",
+        str(path),
+    ]
+    env = {**os.environ, "PGPASSWORD": settings.password}
+
+    result = subprocess.run(  # noqa: S603
+        command,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode:
+        msg = f"Failed to apply SQL file {path}: {result.stderr.strip()}"
+        raise SqlFileError(msg)
 
 
 def ensure_version_table(settings: DbSettings) -> None:

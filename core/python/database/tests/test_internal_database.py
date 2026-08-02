@@ -16,6 +16,7 @@ def settings(tmp_path: Path) -> InternalDbSettings:
         database="db",
         user="user",
         password="password",
+        psql_path=tmp_path / "pg" / "bin" / "psql",
         schema_paths=[tmp_path / "schema.sql"],
         pg_dir=tmp_path / "pg",
         pg_data=tmp_path / "pg" / "data",

@@ -48,10 +48,13 @@ def build_database(
     admin_user: str = "postgres",
     admin_password: str = "postgres",  # noqa: S107
 ) -> DatabaseBackend:
-    """Build, prepare and initialize the product database backend.
+    r"""Build, prepare and initialize the product database backend.
 
     Uses an externally managed database when ``db_host`` is set, otherwise
     bootstraps a local, installer-owned PostgreSQL cluster under the workarea.
+    Either way, a ``psql`` client (resolved from ``pg_dir``) is required to
+    apply schema/upgrade files, since they may use ``psql``-only syntax (e.g.
+    ``\\set``) unsupported by a plain SQL connector.
 
     Args:
         schema_paths: Ordered list of ``db/init/db_schema.sql`` paths to apply, one per
@@ -62,7 +65,8 @@ def build_database(
         password: Postgres application password.
         db_name: Postgres database name.
         workarea_path: Workarea directory, used for the internal cluster's data/log paths.
-        pg_dir: PostgreSQL installation directory, required when ``db_host`` is None.
+        pg_dir: PostgreSQL installation directory, required in every mode to
+            locate the ``psql`` client used to apply schema files.
         admin_user: Postgres admin user, used only for the internal cluster.
         admin_password: Postgres admin password, used only for the internal cluster.
 
@@ -70,9 +74,15 @@ def build_database(
         The prepared and initialized database backend instance.
 
     Raises:
-        ValueError: If ``db_host`` is None and ``pg_dir`` was not provided.
+        ValueError: If ``pg_dir`` was not provided.
 
     """
+    if pg_dir is None:
+        msg = "'pg_dir' is required to locate the 'psql' client used to apply schema files."
+        raise ValueError(msg)
+
+    psql_path = pg_dir / "bin" / "psql"
+
     if db_host:
         db = add_database(
             mode="external",
@@ -81,14 +91,11 @@ def build_database(
             database=db_name,
             user=db_user,
             password=password,
+            psql_path=psql_path,
             schema_paths=schema_paths,
             allow_schema_creation=True,
         )
     else:
-        if pg_dir is None:
-            msg = "'pg_dir' is required to build an internal database backend."
-            raise ValueError(msg)
-
         db = add_database(
             mode="internal",
             host="localhost",
@@ -96,6 +103,7 @@ def build_database(
             database=db_name,
             user=db_user,
             password=password,
+            psql_path=psql_path,
             schema_paths=schema_paths,
             pg_dir=pg_dir,
             pg_data=workarea_path / "var" / "db",

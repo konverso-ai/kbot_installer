@@ -22,6 +22,10 @@ class DbSettings(BaseModel):
     user: str
     password: str
 
+    # Path to the `psql` client binary, used to apply schema/upgrade SQL files
+    # (they may contain psql-only meta-commands such as `\set`, unsupported by
+    # a plain SQL connector like psycopg).
+    psql_path: Path
     schema_paths: list[Path]
     upgrades_dir: Path | None = None
     target_version: str | None = None
