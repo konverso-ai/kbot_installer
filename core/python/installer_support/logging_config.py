@@ -113,6 +113,21 @@ class DetailedFormatter(logging.Formatter):
         return "/logging/__init__.py" in filename
 
 
+_NOISY_THIRD_PARTY_LOGGERS = ("azure",)
+
+
+def _quiet_noisy_third_party_loggers() -> None:
+    """Cap known chatty third-party loggers at WARNING.
+
+    Some SDKs (e.g. azure-identity, azure-core) log every credential-chain
+    step and every HTTP request/response at INFO, which drowns out the
+    installer's own log output. Their sub-loggers have no level of their
+    own, so capping the top-level logger is enough for the whole subtree.
+    """
+    for name in _NOISY_THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def setup_logging(config_path: Path | None = None) -> None:
     """Set up logging configuration from file.
 
@@ -134,6 +149,7 @@ def setup_logging(config_path: Path | None = None) -> None:
             level=logging.INFO,
             handlers=[handler],
         )
+        _quiet_noisy_third_party_loggers()
         return
 
     # Load configuration from file
@@ -149,3 +165,5 @@ def setup_logging(config_path: Path | None = None) -> None:
     ]:
         for handler in logger.handlers:
             handler.setFormatter(detailed_formatter)
+
+    _quiet_noisy_third_party_loggers()
