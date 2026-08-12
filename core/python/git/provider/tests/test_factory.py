@@ -318,45 +318,53 @@ class TestAddStorageProvider:
 class TestBuildConfiguredStorage:
     """Test cases for build_configured_storage function."""
 
-    def test_delegates_to_backend_settings_with_area(self) -> None:
+    def test_delegates_to_add_storage_from_config_with_area(self) -> None:
         """It resolves the backend settings and forwards the area."""
         mock_storage = MagicMock()
-        settings = MagicMock()
-        settings.build_storage.return_value = mock_storage
         config = MagicMock()
-        config.storage.azure = settings
 
-        result = build_configured_storage("azure", area="bundles", config=config)
+        with patch(
+            "git.provider.factory.add_storage_from_config", return_value=mock_storage
+        ) as mock_add_storage_from_config:
+            result = build_configured_storage("azure", area="bundles", config=config)
 
-        settings.build_storage.assert_called_once_with("bundles", None)
+        mock_add_storage_from_config.assert_called_once_with(
+            config.storage, "azure", "bundles", None
+        )
         assert result is mock_storage
 
     def test_resolves_auth_only_for_nexus(self) -> None:
         """Auth is resolved and forwarded for nexus, and skipped for others."""
         mock_auth = MagicMock()
-        settings = MagicMock()
         config = MagicMock()
-        config.storage.nexus = settings
 
-        with patch(
-            "git.provider.factory._resolve_auth", return_value=mock_auth
-        ) as mock_resolve_auth:
+        with (
+            patch(
+                "git.provider.factory._resolve_auth", return_value=mock_auth
+            ) as mock_resolve_auth,
+            patch("git.provider.factory.add_storage_from_config") as mock_add_storage_from_config,
+        ):
             build_configured_storage("nexus", area="artifacts", config=config)
 
         mock_resolve_auth.assert_called_once_with("storage", config)
-        settings.build_storage.assert_called_once_with("artifacts", mock_auth)
+        mock_add_storage_from_config.assert_called_once_with(
+            config.storage, "nexus", "artifacts", mock_auth
+        )
 
     def test_does_not_resolve_auth_for_non_nexus(self) -> None:
         """Non-nexus backends must not attempt to resolve nexus auth."""
-        settings = MagicMock()
         config = MagicMock()
-        config.storage.s3 = settings
 
-        with patch("git.provider.factory._resolve_auth") as mock_resolve_auth:
+        with (
+            patch("git.provider.factory._resolve_auth") as mock_resolve_auth,
+            patch("git.provider.factory.add_storage_from_config") as mock_add_storage_from_config,
+        ):
             build_configured_storage("s3", area="bundles", config=config)
 
         mock_resolve_auth.assert_not_called()
-        settings.build_storage.assert_called_once_with("bundles", None)
+        mock_add_storage_from_config.assert_called_once_with(
+            config.storage, "s3", "bundles", None
+        )
 
 
 class TestResolveAuth:
@@ -495,18 +503,21 @@ class TestBuildProvider:
         provider_config = MagicMock(kwargs={}, branches=["master", "dev"])
         config = self._config_with(storage=provider_config)
         mock_storage = MagicMock()
-        config.storage.backend = "nexus"
-        config.storage.build_storage.return_value = mock_storage
 
         with (
             patch("git.provider.factory._has_credentials", return_value=True),
             patch("git.provider.factory._resolve_auth", return_value=None),
             patch("git.provider.factory.add_provider") as mock_create,
+            patch(
+                "git.provider.factory.add_storage_from_config", return_value=mock_storage
+            ) as mock_add_storage_from_config,
         ):
             mock_create.return_value = MagicMock()
             _build_provider("storage", config, quiet=True)
 
-        config.storage.build_storage.assert_called_once_with(auth=None)
+        mock_add_storage_from_config.assert_called_once_with(
+            config.storage, "nexus", auth=None
+        )
         mock_create.assert_called_once_with(
             name="storage", storage=mock_storage, branches=["master", "dev"]
         )
@@ -517,18 +528,21 @@ class TestBuildProvider:
         config = self._config_with(storage=provider_config)
         mock_auth = MagicMock()
         mock_storage = MagicMock()
-        config.storage.backend = "nexus"
-        config.storage.build_storage.return_value = mock_storage
 
         with (
             patch("git.provider.factory._has_credentials", return_value=True),
             patch("git.provider.factory._resolve_auth", return_value=mock_auth),
             patch("git.provider.factory.add_provider") as mock_create,
+            patch(
+                "git.provider.factory.add_storage_from_config", return_value=mock_storage
+            ) as mock_add_storage_from_config,
         ):
             mock_create.return_value = MagicMock()
             _build_provider("storage", config)
 
-        config.storage.build_storage.assert_called_once_with(auth=mock_auth)
+        mock_add_storage_from_config.assert_called_once_with(
+            config.storage, "nexus", auth=mock_auth
+        )
         mock_create.assert_called_once_with(
             name="storage", storage=mock_storage, branches=["master", "dev"]
         )

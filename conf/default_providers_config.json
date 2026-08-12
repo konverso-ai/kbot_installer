@@ -2,7 +2,6 @@
   "provider": {
     "storage": {
       "kwargs": {},
-      "env_vars": ["NEXUS_USERNAME", "NEXUS_PASSWORD"],
       "auth_type": "basic",
       "branches": ["master", "dev"]
     },
@@ -10,7 +9,6 @@
       "kwargs": {
         "account_name": "konverso-ai"
       },
-      "env_vars": [],
       "auth_type": "ssh",
       "branches": ["main", "dev"]
     },
@@ -18,13 +16,11 @@
       "kwargs": {
         "account_name": "konversoai"
       },
-      "env_vars": [],
       "auth_type": "ssh",
       "branches": ["master", "dev"]
     }
   },
   "storage": {
-    "backend": "nexus",
     "nexus": {
       "domain": "nexus.konverso.ai",
       "repository": "kbot_raw"
@@ -32,25 +28,17 @@
     "s3": {
       "bucket_name": "",
       "cluster_name": "",
-      "region_name": "eu-west-1",
-      "env_vars": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+      "region_name": "eu-west-1"
     },
     "azure": {
       "account_url": "https://sakbotreleasefcp.blob.core.windows.net",
       "container_name": "sakbotreleasefcp",
-      "credential_type": "default_azure",
-      "env_vars": ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
+      "credential_type": "default_azure"
     },
     "oci": {
       "bucket_name": "",
       "namespace_name": "",
-      "region": "eu-frankfurt-1",
-      "env_vars": [
-        "OCI_USER_OCID",
-        "OCI_TENANCY_OCID",
-        "OCI_FINGERPRINT",
-        "OCI_PRIVATE_KEY_PATH"
-      ]
+      "region": "eu-frankfurt-1"
     }
   }
 }

@@ -15,7 +15,7 @@ from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
 from git.versioner import add_versioner
-from storage.factory import add_builtin_storage
+from storage.factory import add_builtin_storage, add_storage_from_config
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
 from utils.Logger import logger
@@ -126,7 +126,14 @@ def add_transport_provider(transport: str, provider: str) -> ProviderBase:
 
 
 def add_storage_provider(name: str, **kwargs) -> ProviderBase:
-    """Create a storage-backed provider by building the named storage backend.
+    """Create a storage-backed provider from explicit, caller-supplied kwargs.
+
+    Unlike :func:`build_configured_storage`, this does not read
+    ``ProvidersConfig``/environment and has no ``area`` concept: the caller
+    must already know the exact storage constructor arguments (e.g.
+    ``bucket_name=...``). Prefer :func:`build_configured_storage` for
+    production code that should resolve connection settings and credentials
+    from configuration instead.
 
     Args:
         name: Name of the storage backend to build (e.g. "s3", "azure").
@@ -150,13 +157,19 @@ def build_configured_storage(
     Sources connection settings (account URL, bucket/container/repository,
     namespace, ...) from the providers configuration and credentials from the
     environment, building the underlying backend when required. Unlike the
-    low-level ``add_storage``, the returned storage is ready to use.
+    low-level ``add_storage`` and unlike :func:`add_storage_provider` (which
+    takes explicit kwargs and has no config/area resolution), the returned
+    storage is ready to use and returned as a raw ``StorageBase`` rather than
+    wrapped in a ``ProviderBase``.
 
     Args:
         backend_name: Storage backend to build (e.g. ``"nexus"``, ``"s3"``,
             ``"azure"``, ``"oci"``).
-        area: Logical area overriding the backend's configured
-            container/bucket/repository (e.g. ``"bundles"`` / ``"artifacts"``).
+        area: Logical area scoping the backend's storage (e.g.
+            ``"bundles"`` / ``"artifacts"``). For S3 this is a folder prefix
+            appended under the configured bucket/cluster; for
+            Nexus/Azure/OCI it replaces the configured
+            repository/container/bucket outright.
         config: Providers configuration to read connection settings from.
 
     Returns:
@@ -164,8 +177,9 @@ def build_configured_storage(
 
     """
     auth = _resolve_auth("storage", config) if backend_name == "nexus" else None
-    settings = getattr(config.storage, backend_name)
-    return cast("StorageBase", settings.build_storage(area, cast("httpx.Auth | None", auth)))
+    return add_storage_from_config(
+        config.storage, backend_name, area, cast("httpx.Auth | None", auth)
+    )
 
 
 def _has_credentials(provider_name: str, config: ProvidersConfig) -> bool:
@@ -284,7 +298,9 @@ def _build_provider(
         # need the httpx.Auth-compatible surface. build_storage builds the
         # backend for non-nexus stores instead of instantiating the storage
         # class with a missing backend argument.
-        storage = config.storage.build_storage(auth=cast("httpx.Auth | None", auth))
+        storage = add_storage_from_config(
+            config.storage, "nexus", auth=cast("httpx.Auth | None", auth)
+        )
         params["storage"] = storage
         params["branches"] = provider_config.branches
     else:

@@ -10,6 +10,10 @@ from utils.factory.loader import factory_method
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import httpx
+
+    from storage.config import StorageSectionConfig
+
 
 def add_storage(name: str, **kwargs: object) -> StorageBase:
     """Create a bucket storage instance by name.
@@ -79,6 +83,65 @@ def add_oci_storage(bucket_name: str, namespace_name: str) -> StorageBase:
         bucket_name=bucket_name,
         namespace_name=namespace_name,
     )
+
+
+def add_storage_from_config(
+    config: "StorageSectionConfig",
+    backend_name: str,
+    area: str | None = None,
+    auth: "httpx.Auth | None" = None,
+) -> StorageBase:
+    """Build a fully-wired storage instance for a named backend from configuration.
+
+    Args:
+        config: Settings for every storage backend (nexus/s3/azure/oci).
+        backend_name: Backend to build (``"nexus"``, ``"s3"``, ``"azure"`` or ``"oci"``).
+        area: Logical area scoping the backend's storage (e.g. ``"bundles"`` /
+            ``"artifacts"``). For S3 this is a folder prefix appended under the
+            configured bucket/cluster; for Nexus/Azure/OCI it replaces the
+            configured repository/container/bucket outright.
+        auth: Authentication forwarded to backends that need it (Nexus).
+
+    Returns:
+        A ready-to-use storage instance for the requested backend.
+
+    Raises:
+        ValueError: If ``backend_name`` is not one of the known backends.
+
+    """
+    if backend_name == "nexus":
+        settings = config.nexus
+        return add_storage(
+            "nexus",
+            domain=settings.domain,
+            repository=area or settings.repository,
+            auth=auth,
+        )
+    if backend_name == "s3":
+        settings = config.s3
+        prefix = "/".join(segment for segment in (settings.cluster_name, area) if segment)
+        return add_builtin_storage(
+            "s3",
+            bucket_name=settings.bucket_name,
+            cluster_name=prefix or None,
+        )
+    if backend_name == "azure":
+        settings = config.azure
+        return add_builtin_storage(
+            "azure",
+            account_url=settings.account_url,
+            container_name=area or settings.container_name,
+        )
+    if backend_name == "oci":
+        settings = config.oci
+        return add_builtin_storage(
+            "oci",
+            bucket_name=area or settings.bucket_name,
+            namespace_name=settings.namespace_name,
+        )
+
+    msg = f"Unknown storage backend: {backend_name}"
+    raise ValueError(msg)
 
 
 def add_builtin_storage(name: str, **kwargs: object) -> StorageBase:
