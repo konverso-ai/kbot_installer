@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 
 log = logger.get_package_logger("installable")
 
+# Fixed name the bundle descriptor is cached under locally, mirroring the
+# product convention of a fixed "description.xml"/"description.json" name
+# per install location rather than a name+version-derived one.
+LOCAL_BUNDLE_FILE_NAME = "bundle.json"
+
 
 class BundleDownloadable(DownloadableBase):
     """Orchestrate downloading every product declared by a Bundle from storage."""
@@ -81,9 +86,7 @@ class BundleDownloadable(DownloadableBase):
             msg = f"Bundle {name} was not found"
             raise ValueError(msg)
         bundle = Bundle.from_json(json.loads(bundle_content))
-        add_writer("text").write(
-            bundle_content, path / Bundle.file_name(bundle.name, bundle.version)
-        )
+        add_writer("text").write(bundle_content, path / LOCAL_BUNDLE_FILE_NAME)
         return bundle
 
     @override

@@ -62,7 +62,7 @@ class DetailedFormatter(logging.Formatter):
             if frame and "self" in frame.f_locals:
                 instance = frame.f_locals["self"]
                 if hasattr(instance, "__class__"):
-                    return instance.__class__.__name__
+                    return str(instance.__class__.__name__)
         except Exception as e:
             # Silently ignore exceptions during class name extraction
             # to avoid breaking logging functionality

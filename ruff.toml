@@ -63,6 +63,7 @@ ignore = [
     "ANN003",    # type annotation missing on function return
     "BLE001",    # blind except (justified for download error handling)
     "COM812",    # trailing comma (conflicts with formatter)
+    "CPY",       # copyright mentions
     "D203",      # incorrect blank line before class
     "D213",      # multi-line summary second line
     "E501",      # line too long, handled by ruff formatter

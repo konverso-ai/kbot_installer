@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from downloadable.bundle_downloadable import BundleDownloadable
+from downloadable.bundle_downloadable import LOCAL_BUNDLE_FILE_NAME, BundleDownloadable
 from storage.base import StorageBackendEnum
 from utils.bundle import Bundle
 from utils.product.build import Build
@@ -75,7 +75,9 @@ class TestBundleDownloadableInit:
         bundle_storage.get.assert_called_once_with(
             str(Bundle.file_name("acme-bundle"))
         )
-        mock_writer.write.assert_called_once()
+        mock_writer.write.assert_called_once_with(
+            bundle_storage.get.return_value, tmp_path / LOCAL_BUNDLE_FILE_NAME
+        )
         assert downloadable is not None
 
     def test_init_raises_when_bundle_not_found(
