@@ -1,0 +1,406 @@
+"""Product model and serialization helpers."""
+
+# Pydantic model fields are validated at runtime; pylint infers FieldInfo on access.
+# pylint: disable=no-member
+
+import json
+from pathlib import Path
+from typing import Any, Literal, cast
+
+import tomlkit
+import xmltodict
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_serializer,
+    field_validator,
+)
+
+from utils.product.build import Build
+from utils.product.categories import Categories
+from utils.product.loc_display_mapper import LocDisplayMapper
+from utils.product.parents import Parents
+from utils.version import Version
+from writer.factory import add_writer
+
+
+class Product(BaseModel):
+    """Product model."""
+
+    model_config = ConfigDict(
+        populate_by_name=True, extra="ignore", arbitrary_types_allowed=True
+    )
+
+    name: str = Field(
+        validation_alias=AliasChoices("@name", "name"),
+        serialization_alias="@name",
+    )
+    version: Version = Field(
+        default_factory=Version.empty,
+        validation_alias=AliasChoices("@version", "version"),
+        serialization_alias="@version",
+    )
+    doc: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("@doc", "doc"),
+        serialization_alias="@doc",
+    )
+    build: Build | None = Field(
+        default=None,
+        validation_alias=AliasChoices("build", "@build"),
+        serialization_alias="@build",
+    )
+    date: str = Field(
+        default="",
+        validation_alias=AliasChoices("@date", "date"),
+        serialization_alias="@date",
+    )
+    type: str = Field(
+        default="solution",
+        validation_alias=AliasChoices("@type", "type"),
+        serialization_alias="@type",
+    )
+    parents: Parents | None = None
+    categories: Categories | None = None
+    license: str | None = None
+    display: LocDisplayMapper | None = None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def _validate_version(cls, value: object) -> Version:
+        return Version.parse(cast("str | Version | None", value))
+
+    @field_validator("build", mode="before")
+    @classmethod
+    def _validate_build(cls, value: object) -> object:
+        if isinstance(value, str):
+            return Build(timestamp=value, branch="", commit="").model_dump()
+        return value
+
+    @field_validator("parents", mode="before")
+    @classmethod
+    def _validate_parents(cls, value: object) -> object:
+        if isinstance(value, list):
+            return {"parent": [{"@name": name} for name in value]}
+        return value
+
+    @field_validator("categories", mode="before")
+    @classmethod
+    def _validate_categories(cls, value: object) -> object:
+        if isinstance(value, list):
+            return {"category": [{"@name": name} for name in value]}
+        return value
+
+    @field_serializer("version")
+    def _serialize_version(self, version: Version) -> str:
+        return version.to_json_str()
+
+    @property
+    def parent_names(self) -> list[str]:
+        """Return parent product names as a flat list."""
+        if self.parents and self.parents.parent:
+            return [parent.name for parent in self.parents.parent]
+        return []
+
+    @property
+    def category_names(self) -> list[str]:
+        """Return category names as a flat list."""
+        if self.categories and self.categories.category:
+            return [category.name for category in self.categories.category]
+        return []
+
+    @property
+    def docs_list(self) -> list[str]:
+        """Return documentation references parsed from the doc attribute."""
+        if not self.doc:
+            return []
+        return [item.strip() for item in self.doc.split(",") if item.strip()]
+
+    @property
+    def build_timestamp(self) -> str | None:
+        """Return the build timestamp when available."""
+        if self.build and self.build.timestamp:
+            return self.build.timestamp
+        return None
+
+    @property
+    def file_path(self) -> Path:
+        """Return the file path for this product."""
+        if not self.build:
+            msg = "Build information is required to determine file path."
+            raise ValueError(msg)
+        return Path(
+            f"{self.build.branch}/{self.name}/{self.name}_{self.build.commit}.json"
+        )
+
+    @classmethod
+    def from_xml(cls, xml_content: str) -> "Product":
+        """Create Product from XML content.
+
+        Args:
+            xml_content: XML string describing a product.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            ValueError: If XML is invalid or missing required fields.
+
+        """
+        try:
+            parsed = xmltodict.parse(xml_content)
+        except Exception as exc:
+            msg = f"Invalid XML content: {exc}"
+            raise ValueError(msg) from exc
+        if "product" not in parsed:
+            msg = "Root element must be 'product'"
+            raise ValueError(msg)
+        try:
+            return cls.model_validate(parsed["product"])
+        except ValidationError as exc:
+            if any(error["loc"] in (("name",), ("@name",)) for error in exc.errors()):
+                msg = "Product name is required"
+                raise ValueError(msg) from exc
+            raise
+
+    @classmethod
+    def from_xml_file(cls, xml_path: str | Path) -> "Product":
+        """Create Product from an XML file.
+
+        Args:
+            xml_path: Path to the XML file.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            FileNotFoundError: If the XML file does not exist.
+            ValueError: If XML is invalid or missing required fields.
+
+        """
+        path = Path(xml_path)
+        if not path.exists():
+            msg = f"XML file not found: {path.name}"
+            raise FileNotFoundError(msg)
+        return cls.from_xml(path.read_text(encoding="utf-8"))
+
+    @classmethod
+    def _normalize_dict(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Normalize legacy and factory keyword aliases before validation.
+
+        Args:
+            data: Raw product dictionary, possibly with legacy field names.
+
+        Returns:
+            Dictionary with canonical Product field names.
+
+        """
+        normalized = dict(data)
+
+        product_type = normalized.pop("product_type", "solution")
+        product_kind = normalized.pop("type", None)
+        normalized["type"] = product_kind if product_kind is not None else product_type
+
+        license_info = normalized.pop("license_info", None)
+        license_value = normalized.pop("license", None)
+        if license_value is not None:
+            normalized["license"] = license_value
+        elif license_info is not None:
+            normalized["license"] = license_info
+
+        docs = normalized.pop("docs", None)
+        if docs:
+            normalized["doc"] = ",".join(docs)
+
+        build_details = normalized.pop("build_details", None)
+        if build_details and "build" not in normalized:
+            normalized["build"] = {
+                "timestamp": build_details.get("timestamp", ""),
+                "branch": build_details.get("branch", ""),
+                "commit": build_details.get("commit", ""),
+            }
+
+        return normalized
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Product":
+        """Create Product from a dictionary with optional legacy field aliases.
+
+        Args:
+            data: Product dictionary. Supports legacy keys such as ``product_type``,
+                ``license_info``, ``docs``, and ``build_details``.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            ValueError: If the product name is missing.
+
+        """
+        if "name" not in data:
+            msg = "Product name is required"
+            raise ValueError(msg)
+        return cls.model_validate(cls._normalize_dict(data))
+
+    @classmethod
+    def from_json(cls, json_content: str | dict[str, Any]) -> "Product":
+        """Create Product from JSON content.
+
+        Args:
+            json_content: JSON string or already-parsed dictionary.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            ValueError: If JSON is invalid or missing required fields.
+            TypeError: If the decoded JSON content is not an object.
+
+        """
+        try:
+            data = (
+                json.loads(json_content)
+                if isinstance(json_content, str)
+                else json_content
+            )
+        except json.JSONDecodeError as exc:
+            msg = f"Invalid JSON content: {exc}"
+            raise ValueError(msg) from exc
+        if not isinstance(data, dict):
+            msg = f"Expected a JSON object, got {type(data).__name__}"
+            raise TypeError(msg)
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_json_file(cls, json_path: str | Path) -> "Product":
+        """Create Product from a JSON file.
+
+        Args:
+            json_path: Path to the JSON file.
+
+        Returns:
+            Validated Product instance.
+
+        Raises:
+            FileNotFoundError: If the JSON file does not exist.
+            ValueError: If JSON is invalid or missing required fields.
+
+        """
+        path = Path(json_path)
+        if not path.exists():
+            msg = f"JSON file not found: {path.name}"
+            raise FileNotFoundError(msg)
+        return cls.from_json(path.read_text(encoding="utf-8"))
+
+    @classmethod
+    def merge(cls, xml_product: "Product", json_product: "Product") -> "Product":
+        """Merge XML and JSON products, with JSON taking precedence.
+
+        Args:
+            xml_product: Product parsed from XML.
+            json_product: Product parsed from JSON.
+
+        Returns:
+            Merged Product instance.
+
+        Raises:
+            ValueError: If product names do not match.
+
+        """
+        if xml_product.name != json_product.name:
+            msg = (
+                f"Product names don't match: {xml_product.name} != {json_product.name}"
+            )
+            raise ValueError(msg)
+
+        build = json_product.build or xml_product.build
+        parents = (
+            json_product.parents if json_product.parent_names else xml_product.parents
+        )
+        categories = (
+            json_product.categories
+            if json_product.category_names
+            else xml_product.categories
+        )
+        return cls(
+            name=xml_product.name,
+            version=json_product.version or xml_product.version,
+            doc=json_product.doc or xml_product.doc,
+            build=build,
+            date=json_product.date or xml_product.date,
+            type=json_product.type or xml_product.type,
+            parents=parents,
+            categories=categories,
+            license=json_product.license or xml_product.license,
+            display=json_product.display or xml_product.display,
+        )
+
+    def to_xml(self) -> str:
+        """Convert Product to XML string.
+
+        Returns:
+            XML representation of the product.
+
+        """
+        product: dict[str, Any] = {
+            "@name": self.name,
+            "@version": self.version.to_str(),
+            "@date": self.date,
+            "@type": self.type,
+        }
+        if self.doc is not None:
+            product["@doc"] = self.doc
+        if self.build is not None:
+            product["@build"] = self.build.timestamp
+        if self.parents and self.parents.parent:
+            product["parents"] = {
+                "parent": [{"@name": parent.name} for parent in self.parents.parent]
+            }
+        if self.categories and self.categories.category:
+            product["categories"] = {
+                "category": [
+                    {"@name": category.name} for category in self.categories.category
+                ]
+            }
+        return xmltodict.unparse({"product": product}, pretty=True)
+
+    def to_json(self) -> dict[str, Any]:
+        """Convert Product to a JSON-serializable dictionary."""
+        data: dict[str, Any] = {
+            "name": self.name,
+            "version": self.version.to_json_str(),
+            "date": self.date,
+            "type": self.type,
+            "parents": self.parent_names,
+            "categories": self.category_names,
+        }
+        if self.build is not None:
+            data["build"] = self.build.model_dump()
+        if self.license is not None:
+            data["license"] = self.license
+        if self.display is not None:
+            data["display"] = self.display.model_dump(exclude_none=True)
+        if self.doc is not None:
+            data["doc"] = self.doc
+        return data
+
+    def to_toml(self) -> str:
+        """Convert Product to a TOML string."""
+        return tomlkit.dumps(self.model_dump(mode="python", exclude_none=True))
+
+    def export(self, mode: Literal["xml", "toml"], path: str | Path) -> None:
+        """Export the product to a file in the given format.
+
+        Args:
+            mode: Serialization format (``xml`` or ``toml``).
+            path: Destination file path.
+
+        Raises:
+            AttributeError: If no ``to_{mode}`` method exists on the product.
+
+        """
+        content = getattr(self, f"to_{mode}")()
+        add_writer("text").write(content, path)

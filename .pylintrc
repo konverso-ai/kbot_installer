@@ -1,12 +1,22 @@
 [MASTER]
+py-version=3.12
 ignore=
     .venv,
     migrations,
-    tests
+    tests,
+    installer_tests,
+    setup_workarea.py,
+    kbot.py,
+    deps.py,
+    examples.py,
+    simple_examples.py,
+    nexus.py
+ignore-paths =
+    .*/core/python/tools/tries\.py
 jobs=1
 load-plugins=
 unsafe-load-any-extension=no
-extension-pkg-whitelist=
+extension-pkg-whitelist=pydantic
 
 [MESSAGES CONTROL]
 # Désactive les règles couvertes par Ruff
@@ -36,7 +46,7 @@ ignored-classes=
 
 [FORMAT]
 # Déjà géré par Ruff
-max-line-length=88
+max-line-length=120
 
 [REPORTS]
 output-format=colorized

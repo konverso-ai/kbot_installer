@@ -1,0 +1,150 @@
+"""Nexus files collection model."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias
+
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from typing_extensions import Self, override
+
+from service.nexus_file import NexusFile
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from service.nexus_service import NexusService
+
+NexusFileItems: TypeAlias = Annotated[list[NexusFile], Field(default_factory=list)]
+ContinuationToken: TypeAlias = Annotated[
+    str | None, Field(default=None, alias="continuationToken")
+]
+
+
+class NexusFiles(BaseModel):
+    """Paginated collection of Nexus files with filtering utilities."""
+
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
+
+    files: NexusFileItems
+    continuation_token: ContinuationToken = None
+    _service: NexusService | None = PrivateAttr(default=None)
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any], *, service: NexusService) -> Self:
+        """Build a NexusFiles collection from a Nexus API payload.
+
+        Args:
+            data: Raw search/list response from the Nexus API.
+            service: Service instance bound to the files for later downloads.
+
+        Returns:
+            A NexusFiles instance populated from data.
+
+        """
+        instance = cls(
+            files=[
+                NexusFile.from_json(item, service=service)
+                for item in data.get("items", [])
+            ],
+            continuation_token=data.get("continuationToken"),
+        )
+        instance._service = service
+        return instance
+
+    @classmethod
+    def empty(cls, *, service: NexusService) -> Self:
+        """Create an empty NexusFiles collection bound to a service.
+
+        Args:
+            service: Service instance to bind to the empty collection.
+
+        Returns:
+            A NexusFiles instance with no files.
+
+        """
+        instance = cls()
+        instance._service = service
+        return instance
+
+    def extend_from_json(self, data: dict[str, Any]) -> None:
+        """Append files parsed from a Nexus API page to this collection.
+
+        Args:
+            data: Raw list/search response page from the Nexus API.
+
+        Raises:
+            RuntimeError: If this collection is not bound to a service.
+
+        """
+        if self._service is None:
+            _msg = "Cannot extend a NexusFiles collection with no bound service"
+            raise RuntimeError(_msg)
+
+        self.files.extend(
+            NexusFile.from_json(item, service=self._service)
+            for item in data.get("items", [])
+        )
+        self.continuation_token = data.get("continuationToken")
+
+    def filter(
+        self,
+        folder_name: str | None = None,
+        name: str | None = None,
+        ends_with: str | None = None,
+        not_ends_with: str | None = None,
+        folder_starts_with: str | None = None,
+        contains: str | None = None,
+    ) -> NexusFiles:
+        """Filter files and return a new NexusFiles list."""
+        files = list(self.files)
+
+        if folder_name:
+            files = [item for item in files if item.folder_name == folder_name]
+
+        if folder_starts_with:
+            files = [
+                item
+                for item in files
+                if item.folder_name and item.folder_name.startswith(folder_starts_with)
+            ]
+
+        if name:
+            files = [item for item in files if item.file_name == name]
+
+        if ends_with:
+            files = [
+                item
+                for item in files
+                if item.file_name and item.file_name.endswith(ends_with)
+            ]
+
+        if not_ends_with:
+            files = [
+                item
+                for item in files
+                if item.file_name and not item.file_name.endswith(not_ends_with)
+            ]
+
+        if contains:
+            files = [item for item in files if item.path and contains in item.path]
+
+        filtered = NexusFiles(files=files)
+        filtered._service = self._service
+        return filtered
+
+    def latest(self) -> NexusFile | None:
+        """Return the most recently modified file, if any."""
+        if not self.files:
+            return None
+        return sorted(
+            self.files, key=lambda item: item.last_modified or "", reverse=True
+        )[0]
+
+    @override
+    def __iter__(self) -> Iterator[NexusFile]:
+        """Iterate over the files in this collection."""
+        return iter(self.files)
+
+    def __len__(self) -> int:
+        """Return the number of files in this collection."""
+        return len(self.files)

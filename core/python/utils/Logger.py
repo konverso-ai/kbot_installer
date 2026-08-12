@@ -1,16 +1,20 @@
-""" KBot logger."""
-import sys
-import os
+"""KBot logger."""  # noqa: N999
+
 import datetime
-import time
-import warnings
 import io
-import traceback
 import logging
+import os
+import sys
+import time
+import traceback
+import warnings
+from collections.abc import KeysView
 from logging.handlers import RotatingFileHandler
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 from pythonjsonlogger.json import JsonFormatter
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from errors import ErrorCode
@@ -25,11 +29,11 @@ FINEST = 8
 
 levels = {
     0: logging.CRITICAL,
-    1: logging.WARN,
+    1: logging.WARNING,
     2: logging.INFO,
     3: logging.DEBUG,
     4: FINE,
-    5: FINEST
+    5: FINEST,
 }
 
 name_to_level = {
@@ -42,200 +46,175 @@ name_to_level = {
 }
 
 
-def NormalizeLevel(level: int) -> int:
-    """Normalize level value"""
+MAX_LEVEL = max(levels)
+
+
+def normalize_level(level: int) -> int:
+    """Normalize level value."""
     if level < 0:
         level = 0
-    elif level > 5:
-        level = 5
+    elif level > MAX_LEVEL:
+        level = MAX_LEVEL
     return level
 
 
-glevel = NormalizeLevel(glevel)
+glevel = normalize_level(glevel)
 
-_srcfile = os.path.normcase(NormalizeLevel.__code__.co_filename)
-
-
-class KbotLogRecord(logging.LogRecord):
-    def __init__(
-        self,
-        name,
-        level,
-        pathname,
-        lineno,
-        msg,
-        args,
-        exc_info,
-        func=None,
-        sinfo=None,
-        package='',
-        **kwargs,
-    ) -> None:
-        super().__init__(
-            name,
-            level,
-            pathname,
-            lineno,
-            msg,
-            args,
-            exc_info,
-            func,
-            sinfo,
-            **kwargs,
-        )
-        self.package = package
+# Any stack frame living in this file is a logging wrapper, not a real call
+# site: findCaller() below skips them so records always report the actual
+# caller regardless of how many KbotLogger/KbotPackageLogger layers are crossed.       vv v v v v v v vvvvvvvvvvvvvvvvvvvvvvvv
+_srcfile = os.path.normcase(normalize_level.__code__.co_filename)
 
 
 class KbotLogger(logging.Logger):
-    """Logger for Kbot"""
-    def __init__(self, name, level=logging.NOTSET):
+    """Logger for Kbot."""
+
+    def __init__(self, name: str, level: int = logging.NOTSET) -> None:
+        """Initialize the logger with empty package filters and registries.
+
+        Args:
+            name: Logger name, forwarded to ``logging.Logger``.
+            level: Initial logging level, forwarded to ``logging.Logger``.
+
+        """
         super().__init__(name, level)
 
         # key: a package name
-        # value: a KbotPackage object
+        # value: a KbotPackageLogger object
         self.__packages = {}
 
-        # Will filter based on the debug add/rm options
-        self.__filters = {}
+        # key: a package name ('all' is the catch-all bucket)
+        # value: the minimum level enabled for that package
+        self.__filters: dict[str, int] = {}
 
     @property
-    def packages(self):
-        """Returns an iterator that contains all the registered package names"""
+    def packages(self) -> KeysView[str]:
+        """Return an iterator over all the registered package names."""
         return self.__packages.keys()
 
-    def setLevel(self, level):
-        self.addPackage("all", level)
+    @override
+    def setLevel(self, level: int) -> None:
+        self.add_package("all", level)
 
-    def fine(self, msg, *args, **kwargs):
-        """FINE debug level"""
-        if self.isEnabledFor(FINE, **kwargs):
-            self._log(FINE, msg, args, **kwargs)
+    def fine(self, msg: str, *args, **kwargs) -> None:
+        """FINE debug level."""
+        self._log(FINE, msg, args, **kwargs)
 
-    def finest(self, msg, *args, **kwargs):
-        """FINEST debug level"""
-        if self.isEnabledFor(FINEST, **kwargs):
-            self._log(FINEST, msg, args, **kwargs)
+    def finest(self, msg: str, *args, **kwargs) -> None:
+        """FINEST debug level."""
+        self._log(FINEST, msg, args, **kwargs)
 
-    def debug(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.DEBUG, **kwargs):
-            self._log(logging.DEBUG, msg, args, **kwargs)
+    @override
+    def debug(self, msg: str, *args, **kwargs) -> None:
+        self._log(logging.DEBUG, msg, args, **kwargs)
 
-    def info(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.INFO, **kwargs):
-            self._log(logging.INFO, msg, args, **kwargs)
+    @override
+    def info(self, msg: str, *args, **kwargs) -> None:
+        self._log(logging.INFO, msg, args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.WARNING, **kwargs):
-            self._log(logging.WARNING, msg, args, **kwargs)
+    @override
+    def warning(self, msg: str, *args, **kwargs) -> None:
+        self._log(logging.WARNING, msg, args, **kwargs)
 
-    def warn(self, msg, *args, **kwargs):
-        warnings.warn("The 'warn' method is deprecated, "
-                      "use 'warning' instead", DeprecationWarning, 2)
+    @override
+    def warn(self, msg: str, *args, **kwargs) -> None:
+        warnings.warn(
+            "The 'warn' method is deprecated, use 'warning' instead",
+            DeprecationWarning,
+            2,
+        )
         self.warning(msg, *args, **kwargs)
 
-    def error(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.ERROR, **kwargs):
-            self._log(logging.ERROR, msg, args, **kwargs)
+    @override
+    def error(self, msg: str, *args, **kwargs) -> None:
+        self._log(logging.ERROR, msg, args, **kwargs)
 
-    def exception(self, msg, *args, exc_info=True, **kwargs):
+    @override
+    def exception(self, msg: str, *args, exc_info: bool = True, **kwargs) -> None:
         self.error(msg, *args, exc_info=exc_info, **kwargs)
 
-    def critical(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.CRITICAL, **kwargs):
-            self._log(logging.CRITICAL, msg, args, **kwargs)
+    @override
+    def critical(self, msg: str, *args, **kwargs) -> None:
+        self._log(logging.CRITICAL, msg, args, **kwargs)
 
-    def isEnabledFor(self, level, **kwargs):
-        package = kwargs.get('package', 'all')
+    @override
+    def isEnabledFor(self, level: int, package: str = "all") -> bool:
         if package not in self.__filters:
-            package = 'all'
-        return level >= self.__filters[package].level
+            package = "all"
+        return level >= self.__filters[package]
 
-    def _log(self, level, msg, args, exc_info=None, extra=None, stack_info=False, package=''):
-        #if self.isPackageSupported(package):
-        #    super()._log(level, msg, args, exc_info, extra, stack_info)
+    @override
+    def _log(
+        self,
+        level: int,
+        msg: str,
+        args: tuple[object, ...],
+        exc_info: bool | None = None,
+        extra: dict[str, object] | None = None,
+        stack_info: bool = False,
+        stacklevel: int = 1,
+        package: str = "",
+    ) -> None:
+        if not self.isEnabledFor(level, package or "all"):
+            return
 
-        sinfo = None
-        if _srcfile:
-            #IronPython doesn't track Python frames, so findCaller raises an
-            #exception on some versions of IronPython. We trap it here so that
-            #IronPython can use logging.
-            try:
-                fn, lno, func, sinfo = self.findCaller(stack_info, package)
-            except ValueError: # pragma: no cover
-                fn, lno, func = "(unknown file)", 0, "(unknown function)"
-        else: # pragma: no cover
-            fn, lno, func = "(unknown srcfile)", 0, "(unknown srcfunction)"
-        if exc_info:
-            if isinstance(exc_info, BaseException):
-                exc_info = (type(exc_info), exc_info, exc_info.__traceback__)
-            elif not isinstance(exc_info, tuple):
-                exc_info = sys.exc_info()
-        record = self.makeRecord(self.name, level, fn, lno, msg, args,
-                                 exc_info, func, extra, sinfo, package)
-        self.handle(record)
+        merged_extra = dict(extra or {})
+        merged_extra["package"] = package
+        super()._log(
+            level,
+            msg,
+            args,
+            exc_info=exc_info,
+            extra=merged_extra,
+            stack_info=stack_info,
+            stacklevel=stacklevel,
+        )
 
-    def findCaller(self, stack_info=False, package=''):
-        if package:
-            f = sys._getframe(4)
-        else:
-            f = sys._getframe(2)
-        #On some versions of IronPython, currentframe() returns None if
-        #IronPython isn't run with -X:Frames.
-        if f is not None:
-            f = f.f_back
-        rv = "(unknown file)", 0, "(unknown function)", None
+    @override
+    def findCaller(
+        self, stack_info: bool = False, stacklevel: int = 1
+    ) -> tuple[str, int, str, str | None]:
+        # stdlib's Logger._log() already traps the ValueError this raises when
+        # the stack isn't deep enough (e.g. some IronPython versions). Same
+        # private API stdlib's own Logger.findCaller() relies on.
+        f = sys._getframe(4)  # noqa: SLF001
+        # f's frame and everything below it up to here belongs to this module
+        # (KbotLogger/KbotPackageLogger wrapper layers), regardless of how many
+        # of them were crossed: skip them all to reach the real call site.
         while hasattr(f, "f_code"):
             co = f.f_code
-
-            filename = os.path.normcase(co.co_filename)
-            if filename == _srcfile:
+            if os.path.normcase(co.co_filename) == _srcfile:
                 f = f.f_back
                 continue
             sinfo = None
             if stack_info:
                 sio = io.StringIO()
-                sio.write('Stack (most recent call last):\n')
+                sio.write("Stack (most recent call last):\n")
                 traceback.print_stack(f, file=sio)
                 sinfo = sio.getvalue()
-                if sinfo[-1] == '\n':
+                if sinfo[-1] == "\n":
                     sinfo = sinfo[:-1]
                 sio.close()
-            rv = (co.co_filename, f.f_lineno, co.co_name, sinfo)
-            break
-        return rv
+            return co.co_filename, f.f_lineno, co.co_name, sinfo
+        return "(unknown file)", 0, "(unknown function)", None
 
-    def makeRecord(self, name, level, fn, lno, msg, args, exc_info,
-                   func=None, extra=None, sinfo=None, package=''):
-        rv = KbotLogRecord(name, level, fn, lno, msg, args, exc_info, func,
-                           sinfo, package)
-        if extra is not None:
-            for key in extra:
-                if (key in ["message", "asctime"]) or (key in rv.__dict__):
-                    raise KeyError("Attempt to overwrite %r in LogRecord" % key)
-                rv.__dict__[key] = extra[key]
-        return rv
-
-    def getPackageLogger(self, name):
-        """Get package logger"""
+    def get_package_logger(self, name: str) -> "KbotPackageLogger":
+        """Get package logger."""
         if name not in self.__packages:
             self.__packages[name] = KbotPackageLogger(name, self)
         return self.__packages[name]
 
-    def addPackage(self, name, level):
-        """Log this package"""
-        if name not in self.__filters:
-            self.__filters[name] = KbotPackageFilter(name, level)
-        else:
-            self.__filters[name].level = level
+    def add_package(self, name: str, level: int) -> None:
+        """Log this package."""
+        self.__filters[name] = level
 
-    def remPackage(self, name):
-        """Remove this package from logging"""
-        if name == 'all':
+    def rem_package(self, name: str) -> None:
+        """Remove this package from logging."""
+        if name == "all":
             return
-        if name in self.__filters:
-            del self.__filters[name]
+        self.__filters.pop(name, None)
 
-    def buildHandler(self, level, path=None):
+    def build_handler(self, level: int, _path: str | None = None) -> None:
         """Build handlers according the entry point.
 
         GetProducts generates a side effect, the logs are deactivated
@@ -247,30 +226,66 @@ class KbotLogger(logging.Logger):
 
         In any other cases a simple streamer is done
         """
-        if os.path.basename(sys.argv[0]).startswith('GetProduct'):
+        if Path(sys.argv[0]).name.startswith("GetProduct"):
             self.addHandler(logging.NullHandler())
-        elif os.path.basename(sys.argv[0]).startswith('RunBot'):
-            self.addHandler(DataDogHandler(level, path))
-            self.addHandler(KbotHandler(level, path))
-        else:
-            handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(KbotFormatter())
-            self.addHandler(handler)
+            return
+
+        if Path(sys.argv[0]).name.startswith("RunBot"):
+            datadog_handler = RotatingFileHandler(
+                Path(os.environ["KBOT_HOME"]) / "logs" / "core.json",
+                maxBytes=5 * 1024 * 1024,
+                backupCount=1,
+            )
+            datadog_handler.setFormatter(DataDogFormatter())
+            datadog_handler.setLevel(level)
+            self.addHandler(datadog_handler)
+
+            kbot_handler = RotatingFileHandler(
+                Path(os.environ["KBOT_HOME"]) / "logs" / "core.log",
+                maxBytes=5 * 1024 * 1024,
+                backupCount=10,
+            )
+            kbot_handler.setFormatter(KbotFormatter())
+            kbot_handler.setLevel(level)
+            self.addHandler(kbot_handler)
+            return
+
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(KbotFormatter())
+        handler.setLevel(level)
+        self.addHandler(handler)
 
 
 class KbotLogEntry:
-    def __init__(self, message):
+    """Track a one-time log message and how many times it has recurred."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize the entry with a first occurrence at the current time.
+
+        Args:
+            message: The expanded log message being tracked.
+
+        """
         self.message = message
         self.ts = time.time()
         self.count = 1
 
-    def Increase(self):
+    def increase(self) -> None:
+        """Increment the number of times this message has recurred."""
         self.count += 1
 
 
 class KbotPackageLogger:
+    """Per-package logging façade delegating to the shared `KbotLogger`."""
 
-    def __init__(self, name, klogger):
+    def __init__(self, name: str, klogger: "KbotLogger") -> None:
+        """Initialize the package logger.
+
+        Args:
+            name: Name of the package this logger reports on behalf of.
+            klogger: Shared `KbotLogger` instance to delegate log calls to.
+
+        """
         self.name = name
         self.logger = klogger
 
@@ -278,59 +293,116 @@ class KbotPackageLogger:
         # value: Instance of KbotLogEntry
         self.ONE_TIME_MESSAGES = {}
 
-        #for func in ('fine', 'finest', 'debug', 'info', 'warning', 'warn', 'error', 'exception', 'critical'):
-        #    setattr(self, func, getattr(self.logger, func))
+    def fine(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the FINE debug level for this package."""
+        return self._log("fine", msg, *args, **kwargs)
 
-    def fine(self, msg, *args, **kwargs):
-        return self._log('fine', msg, *args, **kwargs)
+    def finest(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the FINEST debug level for this package."""
+        return self._log("finest", msg, *args, **kwargs)
 
-    def finest(self, msg, *args, **kwargs):
-        return self._log('finest', msg, *args, **kwargs)
+    def debug(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the DEBUG level for this package."""
+        return self._log("debug", msg, *args, **kwargs)
 
-    def debug(self, msg, *args, **kwargs):
-        return self._log('debug', msg, *args, **kwargs)
+    def info(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the INFO level for this package."""
+        return self._log("info", msg, *args, **kwargs)
 
-    def info(self, msg, *args, **kwargs):
-        return self._log('info', msg, *args, **kwargs)
+    def warning(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the WARNING level for this package."""
+        return self._log("warning", msg, *args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs):
-        return self._log('warning', msg, *args, **kwargs)
+    def warn(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the WARNING level for this package (deprecated alias)."""
+        return self._log("warn", msg, *args, **kwargs)
 
-    def warn(self, msg, *args, **kwargs):
-        return self._log('warn', msg, *args, **kwargs)
+    def error(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the ERROR level for this package."""
+        return self._log("error", msg, *args, **kwargs)
 
-    def error(self, msg, *args, **kwargs):
-        return self._log('error', msg, *args, **kwargs)
+    def exception(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the ERROR level for this package, including exception info."""
+        return self._log("exception", msg, *args, **kwargs)
 
-    def exception(self, msg, *args, **kwargs):
-        return self._log('exception', msg, *args, **kwargs)
+    def critical(self, msg: str, *args, **kwargs) -> None:
+        """Log a message at the CRITICAL level for this package."""
+        return self._log("critical", msg, *args, **kwargs)
 
-    def critical(self, msg, *args, **kwargs):
-        return self._log('critical', msg, *args, **kwargs)
+    def log(
+        self,
+        error: "ErrorCode",
+        message: str | None = None,
+        *args,
+        exc_info: Exception | None = None,
+        level: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Log an `ErrorCode`, falling back to its own level and message.
 
-    def log(self, error: "ErrorCode", message, *args, exc_info=None, level=None, **kwargs):
+        Args:
+            error: Error code describing the event to log.
+            message: Message to log instead of ``error.message``, if provided.
+            *args: Positional arguments forwarded to the underlying log call.
+            exc_info: Exception info to attach to the log record.
+            level: Level to log at instead of ``error.level``, if provided.
+            **kwargs: Additional keyword arguments forwarded to the underlying log call.
+
+        """
         # Log messages are NOT DESIGNED TO BE EXCLUDED
         # Not checking for the isEnabledFor
 
         level = level or error.level
         message = message or error.message
-        self._log(level, message, *args, **kwargs)
+        self._log(level, message, *args, exc_info=exc_info, **kwargs)
 
-    def log_and_raise(self, error: "ErrorCode", message, *args, exc_info=None, level=None, **kwargs):
-        self.log(error=error, message=message, *args, exc_info=exc_info, level=level, **kwargs)
+    def log_and_raise(
+        self,
+        error: "ErrorCode",
+        message: str | None = None,
+        *args,
+        exc_info: Exception | None = None,
+        level: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Log an `ErrorCode` then raise it.
+
+        Args:
+            error: Error code to log and subsequently raise.
+            message: Message to log instead of ``error.message``, if provided.
+            *args: Positional arguments forwarded to the underlying log call.
+            exc_info: Exception info to attach to the log record.
+            level: Level to log at instead of ``error.level``, if provided.
+            **kwargs: Additional keyword arguments forwarded to the underlying log call.
+
+        Raises:
+            ErrorCode: Always re-raises ``error`` after logging it.
+
+        """
+        self.log(error, message, *args, exc_info=exc_info, level=level, **kwargs)
         raise error
 
-    def _log(self, func, msg, *args, **kwargs):
-        kwargs['package'] = self.name
+    def _log(self, func: str, msg: str, *args, **kwargs) -> None:
+        kwargs["package"] = self.name
         return getattr(self.logger, func)(msg, *args, **kwargs)
 
-    def oneTime(self, level, msg, *args, **kwargs):
+    def one_time(self, level: str, msg: str, *args, **kwargs) -> None:
+        """Log a message once per unique expanded content, then only count repeats.
+
+        Args:
+            level: Name of the level method to call (e.g. ``"warning"``) the
+                first time this message is seen.
+            msg: Message format string, expanded with ``args`` via ``%``.
+            *args: Values interpolated into ``msg`` via ``%``.
+            **kwargs: Additional keyword arguments forwarded to the level method.
+
+        """
         expanded_message = msg % args
         message_hash = hash(expanded_message)
 
         message_log_entry = self.ONE_TIME_MESSAGES.get(message_hash)
         if message_log_entry:
-            message_log_entry.Increase()
+            message_log_entry.increase()
         else:
             self.ONE_TIME_MESSAGES[message_hash] = KbotLogEntry(expanded_message)
 
@@ -338,157 +410,140 @@ class KbotPackageLogger:
             getattr(self, level)(msg, *args, **kwargs)
 
 
+def _derive_kmodule(record: logging.LogRecord) -> str:
+    """Turn '__init__' records into '<parent_package>.__init__' for readability."""
+    if record.module == "__init__":
+        return f"{Path(record.pathname).parent.name}.{record.module}"
+    return record.module
+
+
 class KbotFormatter(logging.Formatter):
     """Kbot formatter."""
-    def __init__(self):
-        super().__init__('%(asctime)s - %(kmodule)s::%(funcName)s(%(lineno)s) - %(package)s - %(levelname)s - %(threadName)s - %(message)s')
 
-    def format(self, record):
-        if record.module == '__init__':
-            record.kmodule = '%s.%s'%(os.path.split(os.path.dirname(record.pathname))[-1], record.module)
-        else:
-            record.kmodule = record.module
+    def __init__(self) -> None:
+        """Initialize the formatter with the Kbot log line layout."""
+        super().__init__(
+            "%(asctime)s - %(kmodule)s::%(funcName)s(%(lineno)s) - %(package)s - %(levelname)s - %(threadName)s - %(message)s"
+        )
+
+    @override
+    def format(self, record: logging.LogRecord) -> str:
+        record.kmodule = _derive_kmodule(record)
         return super().format(record)
 
 
 class DataDogFormatter(JsonFormatter):
-    def format(self, record):
-        if record.module == '__init__':
-            record.kmodule = '%s.%s'%(os.path.split(os.path.dirname(record.pathname))[-1], record.module)
-        else:
-            record.kmodule = record.module
+    """JSON formatter producing DataDog-compatible log records."""
+
+    @override
+    def format(self, record: logging.LogRecord) -> str:
+        record.kmodule = _derive_kmodule(record)
         return super().format(record)
 
-    def add_fields(self, log_record, record, message_dict):
+    @override
+    def add_fields(
+        self,
+        log_record: dict[str, Any],
+        record: logging.LogRecord,
+        message_dict: dict[str, Any],
+    ) -> None:
         super().add_fields(log_record, record, message_dict)
-        if not log_record.get('timestamp'):
+        if not log_record.get("timestamp"):
             # this doesn't use record.created, so it is slightly off
-            now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            log_record['timestamp'] = now
-        if log_record.get('level'):
-            log_record['level'] = log_record['level'].upper()
-        else:
-            log_record['level'] = record.levelname
+            now = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ"
+            )
+            log_record["timestamp"] = now
+        log_record["level"] = (log_record.get("level") or record.levelname).upper()
 
 
-class KbotHandler:
-    def __init__(self, level, path=None):
-        self.level = logging.NOTSET
-        self.handler = RotatingFileHandler(
-            os.path.join(os.environ['KBOT_HOME'], 'logs', 'core.log'),
-            maxBytes=5 * 1024 * 1024,
-            backupCount=10,
-        )
-        self.handler.setFormatter(KbotFormatter())
-        self.__filters = {}
-
-    def filter(self, record):
-        return True
-
-    def handle(self, record):
-        if self.filter(record):
-            return self.handler.handle(record)
-        return False
-
-    def setLevel(self, level):
-        self.handler.setLevel(level)
-
-
-class DataDogHandler:
-    def __init__(self, level, path=None):
-        self.level = logging.NOTSET
-        self.handler = RotatingFileHandler(
-            os.path.join(os.environ['KBOT_HOME'], 'logs', 'core.json'),
-            maxBytes=5 * 1024 * 1024,
-            backupCount=1,
-        )
-        self.handler.setFormatter(DataDogFormatter())
-        self.__filters = {}
-
-    def filter(self, record):
-        return True
-
-    def handle(self, record):
-        if self.filter(record):
-            return self.handler.handle(record)
-        return False
-
-    def setLevel(self, level):
-        self.handler.setLevel(level)
-
-
-class KbotPackageFilter:
-    def __init__(self, name, level):
-        self.name = name
-        self.level = level
-
-    def filter(self, record):
-        sys.stdout.flush()
-        if self.name in ('all', record.package) and record.levelno >= self.level:
-            return True
-        return False
-
-
-logging.addLevelName(FINE, 'FINE')
-logging.addLevelName(FINEST, 'FINEST')
+logging.addLevelName(FINE, "FINE")
+logging.addLevelName(FINEST, "FINEST")
 logging.setLoggerClass(KbotLogger)
-log = logging.getLogger('kbot')
+log = cast("KbotLogger", logging.getLogger("kbot"))
 # WARNING: This might not be a real fix but a work-around.
 # I did not find the root cause of the log duplication.
 log.propagate = False
-log.buildHandler(levels[glevel])
-#if os.path.basename(sys.argv[0]).startswith('RunBot'):
-#    handler = RotatingFileHandler(os.path.join(os.environ['KBOT_HOME'], 'logs', 'core.log'), maxBytes=5000000, backupCount=10)
-#else:
-#    handler = logging.StreamHandler(sys.stdout)
-#handler.setFormatter(KbotFormatter())
-#handler.setLevel(levels[glevel])
-#log.addHandler(handler)
+log.build_handler(levels[glevel])
 log.setLevel(levels[glevel])
-logger = log
+logger: KbotLogger = log
 logging.setLoggerClass(logging.Logger)
 
-mylogger = logger.getPackageLogger("utils")
+mylogger = logger.get_package_logger("utils")
 
 #
 # Here we have the custom code to be able to manage levels at runtime
 #
 
 
-def UpdateLevel(newLevel: int):
-    """Update level for logging"""
-    newValue = levels[NormalizeLevel(newLevel)]
-    logger.setLevel(newValue)
+def update_level(new_level: int) -> None:
+    """Update level for logging."""
+    new_value = levels[normalize_level(new_level)]
+    logger.setLevel(new_value)
     for h in log.handlers[:]:
-        h.setLevel(newValue)
+        h.setLevel(new_value)
 
 
-def UpdateSupportedPackages(cmd):
-    mylogger.debug("UpdateSupportedPackages: '%s'", cmd)
-    data = cmd.split(' ', 1)
-    mode = data[0].strip()
-    if mode in ('add', 'rem') and len(data) > 1:
-        data = data[1].split(' ')
-        packages = data[0].strip()
-        if mode == 'add' and len(data) < 2:
-            return
-        level = 0
-        if mode == 'add':
-            try:
-                level = int(data[1])
-            except:
-                return
-        packages = [p.strip() for p in packages.strip().split(',')]
-        for package in packages:
-            try:
-                if mode == 'add':
-                    mylogger.debug("Addpackage(%s, %s)", package, levels[NormalizeLevel(level)])
-                    logger.addPackage(package, levels[NormalizeLevel(level)])
-                elif mode == 'rem':
-                    mylogger.debug("Rempackage(%s, %s)", package)
-                    logger.remPackage(package)
-            except Exception as e:
-                print("EXC :", str(e))
-                sys.stdout.flush()
-    else:
+_ADD_COMMAND_TOKEN_COUNT = 2
+
+
+def _parse_debug_command(cmd: str) -> tuple[str, list[str], int] | None:
+    """Parse a runtime 'add <packages>[,...] <level>' or 'rem <packages>[,...]' command.
+
+    Returns a (mode, package_names, level) tuple, or None when malformed.
+    ``level`` is unused (0) for 'rem'.
+    """
+    mode, _, rest = cmd.partition(" ")
+    mode = mode.strip()
+    if mode not in ("add", "rem") or not rest:
+        return None
+
+    tokens = rest.split(" ")
+    packages = [p.strip() for p in tokens[0].strip().split(",")]
+
+    if mode == "rem":
+        return mode, packages, 0
+
+    if len(tokens) < _ADD_COMMAND_TOKEN_COUNT:
+        return None
+    try:
+        level = int(tokens[1])
+    except ValueError:
+        return None
+    return mode, packages, level
+
+
+def _apply_debug_command(mode: str, package: str, level: int) -> None:
+    """Add or remove a single package's debug override, swallowing errors."""
+    try:
+        if mode == "add":
+            mylogger.debug(
+                "Addpackage(%s, %s)", package, levels[normalize_level(level)]
+            )
+            logger.add_package(package, levels[normalize_level(level)])
+        else:
+            mylogger.debug("Rempackage(%s)", package)
+            logger.rem_package(package)
+    except Exception:
+        mylogger.exception(
+            "Failed to apply debug command (mode=%s, package=%s)", mode, package
+        )
+
+
+def update_supported_packages(cmd: str) -> None:
+    """Apply a runtime 'add <packages>[,...] <level>' or 'rem <packages>[,...]' command.
+
+    Args:
+        cmd: Raw debug command string to parse and apply.
+
+    """
+    mylogger.debug("update_supported_packages: '%s'", cmd)
+
+    parsed = _parse_debug_command(cmd)
+    if parsed is None:
         mylogger.warning("Invalid logger command")
+        return
+
+    mode, packages, level = parsed
+    for package in packages:
+        _apply_debug_command(mode, package, level)

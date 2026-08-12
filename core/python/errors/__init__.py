@@ -1,5 +1,7 @@
-import logging
 from typing import Literal
+
+from typing_extensions import override
+
 
 class ErrorCode(BaseException):
 
@@ -10,8 +12,12 @@ class ErrorCode(BaseException):
 
     level: Literal["critical", "error", "warning"] = "warning"
 
-    def __init__(self, *, message: str = None,
-                 level: Literal["critical", "error", "warning"] = None):
+    def __init__(
+        self,
+        *,
+        message: str | None = None,
+        level: Literal["critical", "error", "warning"] | None = None,
+    ):
         """Create a new error, using the level and message defined in the class
            or in the overidden constructor parameters.
         """
@@ -24,10 +30,12 @@ class ErrorCode(BaseException):
 
         super().__init__(self, f"{self.code}: {self.message}")
 
-    def __str__(self):
+    @override
+    def __str__(self) -> str:
         return f'{self.code}: {self.message}'
 
-    def __repr__(self):
+    @override
+    def __repr__(self) -> str:
         return str(self)
 
 # A sample error
