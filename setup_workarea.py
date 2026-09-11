@@ -830,7 +830,7 @@ class Installer:
             sys.stdout.flush()
             if os.system('%s/bin/kbot.sh load'%self.target) != 0:
                 print("Error during loading! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop' % (self.pg_ctl, self.target))
                 sys.exit(1)
 
             if self.admin_password:
@@ -840,7 +840,7 @@ class Installer:
                     if os.system('%s -q -p %s %s -U %s -c "%s"'\
                                  %(self.pg_psql, self.db_port, self.db_name, self.db_user, _db_request)) != 0:
                         print("Error: can't setup admin password! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop' % (self.pg_ctl, self.target))
                         sys.exit(1)
                 # setup admin password
                 elif os.system('export PGPASSWORD=\'%s\';%s -q -h %s -p %s %s -U %s -c "%s"'\
@@ -852,7 +852,7 @@ class Installer:
             print("Learning models...")
             if os.system('%s/bin/kbot.sh learn'%self.target) != 0:
                 print("Error during learning! Aborting...")
-                os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                 sys.exit(1)
 
     def _StartInstallation(self):
