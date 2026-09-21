@@ -66,7 +66,8 @@ def get_dependency(product_name, installer_path, work_area_path):
 
     return products
 
-if __name__ == "__main__":
+
+def main():
     nostart = True
     parser = argparse.ArgumentParser(prog="Kbot_Actions")
     parser.add_argument(
@@ -95,3 +96,8 @@ if __name__ == "__main__":
         installer_path=_result.installer,
         work_area_path=_result.workarea,
     )
+
+
+if __name__ == "__main__":
+    main()
+
