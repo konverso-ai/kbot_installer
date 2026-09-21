@@ -3,10 +3,8 @@ name = "kbot-installer"
 version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
-]
-requires-python = "==3.10.15"
+authors = []
+requires-python = "~=3.12.0"
 dependencies = []
 
 [build-system]
@@ -24,7 +22,163 @@ py-modules = ["Bot", "Load", "Learn", "System"]
 [tool.hatch.build.targets.wheel.force-include]
 "description.xml" = "installer/kbot_installer/description.xml"
 
+[tool.uv]
+#override-dependencies = [
+#    "protobuf==6.33.6",
+#]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64' and python_full_version >= '3.12' and python_full_version < '3.13'",
+]
+
 [[tool.uv.index]]
-name = "konverso-nexus"
-url = "https://nexus.konverso.ai/repository/python_whl/simple/"
-publish-url = "https://nexus.konverso.ai/repository/python_whl/"
+name = "konverso-aws-private"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
+
+[[tool.uv.index]]
+name = "konverso-aws-pypi-proxy"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+default = true
+
+[tool.deptry]
+# The default "tests" exclude only matches a top-level tests/ folder (re.match
+# anchors at the start), so nested test dirs like core/.../tests/ are missed,
+# making deptry flag pytest (a dev dependency) as used in "non-dev" code.
+extend_exclude = [
+    "(^|.*/)tests/",
+]
+known_first_party = [
+    "deps",
+    "setup_workarea",
+    "Bot",
+    "Learn",
+    "Load",
+    "RunBot",
+    "System",
+    "CustomizableUser",
+    "agentassist",
+    "am",
+    "authenticate",
+    "callback",
+    "classification",
+    "common",
+    "communication",
+    "dialog",
+    "domain",
+    "errors",
+    "kprocess",
+    "llm",
+    "nlp",
+    "recommendation",
+    "reports",
+    "search",
+    "security",
+    "smart",
+    "ticket",
+    "tools",
+    "unittest",
+    "utils",
+    "wf",
+    "agent_assist",
+    "api",
+    "content_view",
+    "jira_ext",
+    "manage",
+    "msteams_tab",
+    "oauth2",
+    "pages",
+    "rest",
+    "rest_addons",
+    "rest_common",
+    "search_app",
+    "web_client",
+]
+
+[tool.deptry.per_rule_ignores]
+# Spacy language models are loaded dynamically via spacy.load(...), never imported directly.
+# django-dbconn-retry is referenced as a string in INSTALLED_APPS (rest/rest/settings_common.py).
+# drf-spectacular-sidecar assets are loaded via importlib.resources, not imported directly.
+# langgraph-prebuilt is a transitive pin to constrain resolution (see dependency comment above).
+# asgiref is used internally by Django (asgiref.sync) without us importing it directly.
+# pyasyncore restores the stdlib `asyncore` module (removed in 3.12) needed at runtime by sleekxmpp.
+# oauth2 (Twitter-style OAuth1 client) is kept pinned for a downstream integration but not imported directly.
+DEP002 = [
+    "asgiref",
+    "da-core-news-md",
+    "de-core-news-md",
+    "django-dbconn-retry",
+    "drf-spectacular-sidecar",
+    "en-core-web-md",
+    "es-core-news-md",
+    "fi-core-news-md",
+    "fr-core-news-md",
+    "it-core-news-md",
+    "ja-core-news-md",
+    "ko-core-news-md",
+    "langgraph-prebuilt",
+    "nb-core-news-md",
+    "nl-core-news-md",
+    "oauth2",
+    "pl-core-news-md",
+    "pt-core-news-md",
+    "pyasyncore",
+    "sv-core-news-md",
+    "zh-core-web-md",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["core/python", "rest", "config"]
+py-modules = ["Bot", "Load", "Learn", "System"]
+exclude = [
+    "Makefile",
+    "*/Makefile",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"core/python" = "."
+"rest" = "."
+
+[tool.hatch.build.targets.wheel.force-include]
+"description.xml" = "installer/kbot/description.xml"
+"pyproject.toml" = "installer/kbot/pyproject.toml"
+"conf" = "installer/kbot/conf"
+
+[tool.kbot]
+doc = ["DOC", "KSEC", "RN"]
+build = ""
+date = ""
+categories = []
+
+[dependency-groups]
+deps = [
+    "deptry",
+]
+lint = [
+    "pylint",
+    "pylint-django",
+    "pylint-django-settings",
+    "pylint-plugin-utils",
+    "ruff",
+]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+typecheck = [
+    "ty",
+]
+dev = [
+    { include-group = "deps" },
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "test" },
+    "psycopg[binary]>=3.2,<4",
+]
