@@ -2,13 +2,14 @@
 import itertools
 import time
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
 import oci
 from oci.exceptions import ServiceError
 from oci.object_storage.models import BatchDeleteObjectIdentifier, BatchDeleteObjectsDetails
 
-from utils import logger
+from utils.Logger import logger
 from utils.bucket_storage import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
@@ -36,18 +37,21 @@ class OCIObjectStorage(BucketStorage):
         bucket_name: str | None,
         namespace: str | None = None,
         cluster_name: str | None = None,
+        region: str | None = None,
     ) -> None:
         """Initialize OCI Object Storage settings."""
         self.auth_method = auth_method or "instance_principal"
         self.bucket_name = bucket_name
         self.namespace = namespace
         self.cluster_name = cluster_name
+        self.region = region or "eu-paris-1"
         self.object_storage_client = None
         log.debug(
-            "Creating OCIObjectStorage(auth_method='%s', bucket_name='%s', namespace='%s')",
+            "Creating OCIObjectStorage(auth_method='%s', bucket_name='%s', namespace='%s', region='%s')",
             self.auth_method,
             self.bucket_name,
             self.namespace,
+            self.region,
         )
 
     def __connect_to_object_storage_service(self):
@@ -70,7 +74,7 @@ class OCIObjectStorage(BucketStorage):
 
             client = oci.object_storage.ObjectStorageClient(
                 config={
-                    "region": "eu-paris-1",
+                    "region": self.region,
                 },
                 signer=signer,
             )
@@ -388,6 +392,51 @@ class OCIObjectStorage(BucketStorage):
     def list_files_in_folder(self, folder_path: str = "") -> Iterator[str]:
         """List object keys contained in a folder."""
         yield from self.list(folder_path)
+
+    def list_with_last_modified(self, prefix: str = "") -> Iterator[tuple[str, datetime]]:
+        """List object keys and their last-modified timestamp under a logical prefix.
+
+        Args:
+            prefix: Logical prefix to inspect. Use an empty string for the
+                cluster root.
+
+        Yields:
+            Tuples of (logical object key, last-modified timestamp) with the
+            ``cluster_name`` prefix removed.
+        """
+        client = self.get_object_storage_client()
+        if not client:
+            log.error(
+                "OCI Object Storage client unavailable. Cannot list objects with prefix '%s'",
+                prefix,
+            )
+            return
+
+        namespace = self.__resolve_namespace(client)
+        if not namespace:
+            return
+
+        storage_prefix = self._storage_prefix(prefix)
+        start = None
+
+        try:
+            while True:
+                response = client.list_objects(
+                    namespace,
+                    self.bucket_name,
+                    prefix=storage_prefix or None,
+                    fields="name,timeModified",
+                    start=start,
+                )
+                for obj in response.data.objects or []:
+                    yield self._logical_key(obj.name), obj.time_modified
+
+                start = response.data.next_start_with
+                if not start:
+                    break
+        except Exception as e:
+            log.error("Failed to list objects with prefix '%s': %s", prefix, e, exc_info=True)
+            return
 
     def list_folders(self, path: str = "") -> Iterator[str]:
         """List folders directly inside the given path."""

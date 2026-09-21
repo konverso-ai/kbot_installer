@@ -1,13 +1,15 @@
 """Azure Blob Storage implementation of bucket storage."""
 import itertools
 import time
+from datetime import datetime
 from typing import Any, Iterator
 
 from azure.core.exceptions import ResourceNotFoundError, ClientAuthenticationError, ResourceExistsError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobPrefix, BlobServiceClient
+
 from utils.Logger import logger
-from utils.bucket_storage.base import BucketStorage
+from utils.bucket_storage import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
 
@@ -230,6 +232,32 @@ class AzureBlob(BucketStorage):
 
             blob_list = container_client.list_blobs(name_starts_with=prefix)
             yield from [blob.name for blob in blob_list]
+
+        except Exception as e:
+            log.error("Failed to list objects with prefix '%s': %s", prefix, str(e))
+            return
+
+    def list_with_last_modified(self, prefix: str = "") -> Iterator[tuple[str, datetime]]:
+        """List blob names and their last-modified timestamp under the given prefix.
+
+        Args:
+            prefix: Prefix to inspect. Use an empty string for the container
+                root. A trailing slash is appended automatically when needed.
+
+        Yields:
+            Tuples of (blob name, last-modified timestamp) found under the prefix.
+        """
+        container_client = self.get_container_client()
+        if not container_client:
+            log.error("Container client unavailable. Cannot list objects with prefix '%s'", prefix)
+            return
+
+        try:
+            if prefix and not prefix.endswith('/'):
+                prefix += '/'
+
+            blob_list = container_client.list_blobs(name_starts_with=prefix)
+            yield from ((blob.name, blob.last_modified) for blob in blob_list)
 
         except Exception as e:
             log.error("Failed to list objects with prefix '%s': %s", prefix, str(e))

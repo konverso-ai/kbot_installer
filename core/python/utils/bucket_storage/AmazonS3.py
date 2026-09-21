@@ -1,6 +1,7 @@
 """Amazon S3 implementation of bucket storage."""
 import itertools
 import time
+from datetime import datetime
 from typing import Any
 from collections.abc import Iterator
 
@@ -8,7 +9,7 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from utils.Logger import logger
-from utils.bucket_storage.base import BucketStorage
+from utils.bucket_storage import BucketStorage
 
 log = logger.getPackageLogger('bucket_storage')
 
@@ -37,7 +38,7 @@ class AmazonS3(BucketStorage):
     # No name, such that this class will not be loaded in factory
     name = ""
 
-    def __init__(self, region_name=None, bucket_name=None, cluster_name=None) -> None:
+    def __init__(self, region_name, bucket_name, cluster_name=None) -> None:
         """Initialize S3 settings from the bot configuration."""
         self.region_name = region_name
         self.bucket_name = bucket_name
@@ -104,7 +105,7 @@ class AmazonS3(BucketStorage):
                             Bucket=self.bucket_name,
                             CreateBucketConfiguration={'LocationConstraint': self.region_name}
                         )
-                    log.info("Created S3 Bucket %s", self.bucket_name)
+                    log.debug("Created S3 Bucket %s", self.bucket_name)
                 except Exception as create_error:
                     log.error("Couldn't create S3 Bucket %s due to %s", self.bucket_name, str(create_error))
             else:
@@ -379,6 +380,40 @@ class AmazonS3(BucketStorage):
             Object keys found in the folder.
         """
         yield from self.list(folder_path)
+
+    def list_with_last_modified(self, prefix: str = "") -> Iterator[tuple[str, datetime]]:
+        """List object keys and their last-modified timestamp under a logical prefix.
+
+        Args:
+            prefix: Logical prefix to inspect. Use an empty string for the
+                cluster root.
+
+        Yields:
+            Tuples of (logical object key, last-modified timestamp) with the
+            ``cluster_name`` prefix removed.
+        """
+        s3_client = self.get_s3_client()
+        if not s3_client:
+            log.error("S3 client unavailable. Cannot list objects with prefix '%s'", prefix)
+            return
+
+        try:
+            storage_prefix = self._storage_prefix(prefix)
+            cluster_prefix = f"{self.cluster_name}/" if self.cluster_name else ""
+            paginator = s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=storage_prefix)
+            for page in pages:
+                if 'Contents' not in page:
+                    continue
+                for obj in page['Contents']:
+                    key = obj['Key']
+                    if cluster_prefix and key.startswith(cluster_prefix):
+                        key = key[len(cluster_prefix):]
+                    yield key, obj['LastModified']
+
+        except Exception as e:
+            log.error("Failed to list objects with prefix '%s': %s", prefix, e, exc_info=True)
+            return
 
     def list_folders(self, path: str = "") -> Iterator[str]:
         """List folders directly inside the given path.

@@ -81,6 +81,36 @@ def _install_import_stubs():
         {"BlobServiceClient": MagicMock(), "BlobPrefix": _BlobPrefix},
     )
 
+    oci_module = _install_module("oci")
+    oci_object_storage = _install_module("oci.object_storage")
+    oci_object_storage.ObjectStorageClient = MagicMock()
+    oci_module.object_storage = oci_object_storage
+
+    oci_auth = _install_module("oci.auth")
+    oci_auth_signers = _install_module("oci.auth.signers")
+    oci_auth_signers.get_resource_principals_signer = MagicMock()
+    oci_auth_signers.InstancePrincipalsSecurityTokenSigner = MagicMock()
+    oci_auth.signers = oci_auth_signers
+    oci_module.auth = oci_auth
+
+    oci_exceptions = _install_module("oci.exceptions")
+
+    class _ServiceError(Exception):
+        def __init__(self, status=None, code=None, headers=None, message=None, **kwargs):
+            super().__init__(message or code or "ServiceError")
+            self.status = status
+            self.code = code
+
+    oci_exceptions.ServiceError = _ServiceError
+
+    _install_module(
+        "oci.object_storage.models",
+        {
+            "BatchDeleteObjectIdentifier": MagicMock(),
+            "BatchDeleteObjectsDetails": MagicMock(),
+        },
+    )
+
 
 _install_import_stubs()
 

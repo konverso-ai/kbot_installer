@@ -209,6 +209,35 @@ def test_list_normalizes_prefix_and_yields_blob_names(mock_bot_config, prefix, e
     mock_container.list_blobs.assert_called_once_with(name_starts_with=expected_prefix)
 
 
+@pytest.mark.parametrize(
+    "prefix,expected_prefix",
+    [
+        ("", ""),
+        ("folder", "folder/"),
+        ("folder/", "folder/"),
+    ],
+)
+def test_list_with_last_modified_yields_blob_names_and_timestamps(
+    mock_bot_config, prefix, expected_prefix
+):
+    blob = AzureBlob()
+    mock_container = MagicMock()
+    mock_blob_a = MagicMock(name="blob-a")
+    mock_blob_a.name = f"{expected_prefix}a.txt"
+    mock_blob_a.last_modified = "2026-01-01"
+    mock_blob_b = MagicMock(name="blob-b")
+    mock_blob_b.name = f"{expected_prefix}b.txt"
+    mock_blob_b.last_modified = "2026-02-01"
+    mock_container.list_blobs.return_value = [mock_blob_a, mock_blob_b]
+    blob.container_client = mock_container
+
+    assert list(blob.list_with_last_modified(prefix)) == [
+        (f"{expected_prefix}a.txt", "2026-01-01"),
+        (f"{expected_prefix}b.txt", "2026-02-01"),
+    ]
+    mock_container.list_blobs.assert_called_once_with(name_starts_with=expected_prefix)
+
+
 @pytest.mark.parametrize("folder_path", ["", "docs", "docs/"])
 def test_list_files_in_folder_delegates_to_list(mock_bot_config, folder_path):
     blob = AzureBlob()

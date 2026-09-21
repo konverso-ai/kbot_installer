@@ -15,6 +15,7 @@ ABSTRACT_METHODS = [
     "delete_folder",
     "restore_soft_deleted_blob",
     "list_folders",
+    "list_with_last_modified",
 ]
 
 
@@ -63,6 +64,9 @@ def test_complete_subclass_can_be_instantiated():
             return False
 
         def list_folders(self, path=""):
+            return []
+
+        def list_with_last_modified(self, prefix=""):
             return []
 
     instance = CompleteStorage()
