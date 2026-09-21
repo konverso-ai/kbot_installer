@@ -8,11 +8,13 @@ on:
   pull_request:
     types: [opened, synchronize, closed]
   workflow_dispatch:
-  
+
+permissions:
+  contents: read
+  id-token: write
+
 env:
-  GH_USER: konversoai 
-  NEXUS_USER: github
-  NEXUS_URL: https://nexus.konverso.ai
+  AWS_REGION: eu-west-3
   VERSION: ${{ github.ref_name }}
 
 jobs:
@@ -22,7 +24,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -60,34 +62,49 @@ jobs:
           orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.10'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "UV_INDEX_KONVERSO_AWS_PRIVATE_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PRIVATE_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Install Dependencies
         run: uv sync --all-groups --locked --no-editable
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
 
       - name: Lint code with Ruff
         run: uv ruff check
         continue-on-error: true
-  
+
       - name: Run Pylint
         run: uv pylint .
         continue-on-error: true
 
       - name: Build
         run: uv build
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
 
   build-release-wheel:
     name: Build & release wheel ${{ github.ref_name }}
@@ -96,24 +113,44 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.10'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "UV_INDEX_KONVERSO_AWS_PRIVATE_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PRIVATE_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Bump patch version
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
         run: |
           uv version --bump patch
           NEW_VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*["'\''"]([^"'\'']+)["'\''"].*/\1/')
@@ -122,26 +159,17 @@ jobs:
 
       - name: Commit and push version bump
         run: |
-          git config --global user.email "73905580+konversoai@users.noreply.github.com" && git config --global user.name "konversoai"   
+          git config --global user.email "73905580+konversoai@users.noreply.github.com" && git config --global user.name "konversoai"
           git add pyproject.toml uv.lock
           git commit -m "chore(KB-123): bump version to $NEW_VERSION [skip ci]"
           git push
 
       - name: Install Dependencies
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
         run: uv sync --all-groups --locked --no-editable
 
       - name: Build
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
-        run: uv build
+        run: uv build --wheel
 
-      - name: Publish to Nexus
-        env:
-          UV_PUBLISH_USERNAME: uv
-          UV_PUBLISH_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+      - name: Publish to AWS CodeArtifact
         run: |
-          uv publish --index konverso-nexus
+          uv publish --index konverso-aws-private
