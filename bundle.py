@@ -687,15 +687,13 @@ def _update_products(products=None, backup=None, target_version=None, recurse=Tr
 
 def usage():
     return """
-    Nexus user (-n or --repository)
-        In format 'domain:user:password'
     Action (-a or --action). One of:
       - upgrade: Update the given installation to a new version. Add variables:
            -v: The target version
       - install: Create a new /installer and /work area, a new bot !
           -w: Define your work area target directory
       - installer-only: Create a new /installer area, without creating a work area
-          -v: Version in format
+          -b: Bundle name
           -p: top product name
       - list: List the installed products.
           No parameters required
@@ -706,6 +704,9 @@ def usage():
     Status (-s or --status): Only print the bundle version status
         (BUNDLE_STATUS=UP_TO_DATE / UPDATE_AVAILABLE / UPGRADE_AVAILABLE / UNKNOWN)
         and exit. Usable regardless of -a, for pipeline conditions.
+
+    Examples: 
+        kbot_installer/bundle.sh -a installer-only -b ev-basic-2025.03.0029 -p mysite
     """
 
 

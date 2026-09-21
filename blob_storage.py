@@ -2,8 +2,15 @@ import os
 import json
 import xml.dom.minidom
 
-from utils.Logger import logger
-log = logger.getPackageLogger('blob')
+try:
+    from utils.Logger import logger
+
+    log = logger.getPackageLogger('blob')
+except:
+    import logging
+
+    log = logging.getLogger("blob")
+
 
 def get_bucket_provider(provider_name, container_name):
     # Case of Azure:

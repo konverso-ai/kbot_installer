@@ -10,8 +10,15 @@ import sys
 import tarfile
 import time
 
-import blob_storage
-from blob_storage import (_get_commit_id_from_repository_path,
+try:
+    import blob_storage
+except ImportError:
+    print("Please first install the required packages:")
+    print("pip3 install -r kbot_installer/requirements.txt")
+    sys.exit(1)
+
+from blob_storage import (get_bucket_provider,
+                          _get_commit_id_from_repository_path,
                           _get_xml_product_description,
                           _get_json_product_description,
                           _get_latest_available_repository_file)
@@ -60,7 +67,7 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
         msg = f"Installation path {installation_path} is not a directory !"
         raise RuntimeError(msg)
 
-    bucket_artifact_provider = blob_storage.get_bucket_provider(os.environ.get("BUNDLE_PROVIDER"), "artifacts")
+    bucket_artifact_provider = get_bucket_provider(os.environ.get("BUNDLE_PROVIDER"), "artifacts")
     repository_files = list(bucket_artifact_provider.list_with_last_modified())
 
     # Load all the required products
@@ -344,7 +351,6 @@ def _repository_download_and_install(repository_file, product_name):
 
     Returns the description.json dictionnary of the loaded file
     """
-
     print(f"    Downloading product {product_name} using repository file: {repository_file}")
     start = time.time()
     # artifact
@@ -690,6 +696,12 @@ if __name__ == "__main__":
         # it's cleaned after Bot.Init
         # set_logger(log, "a", LOG_FILENAME)
         log.info("Kbot actions '%s' started", action)
+
+        bundle_provider_name = os.environ.get("BUNDLE_PROVIDER")
+        if not bundle_provider_name:
+            print("Error: Missing S3/Blob setup (storage of the release artifacts)")
+            print("M")
+            sys.exit(1)
 
         bucket_artifact_provider = blob_storage.get_bucket_provider(os.environ.get("BUNDLE_PROVIDER"), "artifacts")
 
