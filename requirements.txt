@@ -4,5 +4,5 @@ boto3==1.37.34
 botocore==1.37.34
 cryptography<47
 defusedxml
-oci>=2.182.0
 python-json-logger
+oci>=2.182.0

@@ -4,14 +4,16 @@
 # pylint: disable=consider-using-with
 # pylint: disable=unspecified-encoding
 import json
-import logging
 import os.path
 import uuid
 import sys
 import tarfile
 import time
-import xml.dom.minidom
 
+import blob_storage
+from blob_storage import (_get_commit_id_from_repository_path,
+                          _get_xml_product_description,
+                          _get_json_product_description)
 from utils.Logger import logger
 
 DEV_DIR = "/home/konverso/dev/"
@@ -56,10 +58,9 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
 
     if not os.path.exists(installation_path):
         os.mkdir(installation_path)
-    else:
-        if not os.path.isdir(installation_path):
-            msg = f"Installation path {installation_path} is not a directory !"
-            raise RuntimeError(msg)
+    elif not os.path.isdir(installation_path):
+        msg = f"Installation path {installation_path} is not a directory !"
+        raise RuntimeError(msg)
 
     bucket_repo = get_bucket_provider()
     bundle_json_descriptor = get_bundle_descriptor(bucket_provider=bucket_repo, bundle_name=version)
@@ -67,9 +68,13 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
     if not bundle_json_descriptor:
         print(f"Bundle '{version}' is not currently available. Check name or check it was properly pushed on this bucket")
         sys.exit(1)
-    
+
     # Load all the required products
     recurse_product_download(bundle_json_descriptor, product, version, visited=[], recurse=recurse)
+
+    # Store the current bundle definition (last loaded bundle) into the installer area:
+    with open(os.path.join(installation_path, "bundle.json"), "w", encoding="utf-8") as fd:
+        json.dump(bundle_json_descriptor, fd, indent=4)
 
     if not create_workarea:
         return
@@ -106,46 +111,6 @@ def install(version, product, create_workarea=False, no_learn=False, recurse=Tru
     os.system(cmd)
 
 
-def _get_json_product_description(product_name):
-    """Returns a dictionnary containing the product definition, as found in the
-    description.json file
-    """
-    # Check if file is from Nexus
-    json_product_description_path = (
-        f"{installation_path}/{product_name}/description.json"
-    )
-    if not os.path.exists(json_product_description_path):
-        return None
-
-    with open(json_product_description_path, encoding="utf-8") as fd:
-        return json.load(fd)
-
-    return None
-
-
-def _get_xml_product_description(product_name):
-    """Returns a dictionnary containing the product definition, as found in the
-    description.xml file
-    """
-    product_description_path = f"{installation_path}/{product_name}/description.xml"
-    if not os.path.exists(product_description_path):
-        return False
-
-    result = {}
-    dom = xml.dom.minidom.parse(product_description_path)
-    for product in dom.getElementsByTagName("product"):
-        for attr in ("name", "version", "build", "date", "type", "doc"):
-            if product.hasAttribute(attr):
-                result[attr] = product.getAttribute(attr)
-
-        result["parents"] = []
-        for parents in product.getElementsByTagName("parents"):
-            for parent in parents.getElementsByTagName("parent"):
-                result["parents"].append(parent.getAttribute("name"))
-
-    return result
-
-
 def _get_product_definition(bundle_json_descriptor, product_name):
     """Given a list of NexusFile objects, returns the most recent version of
     the available binaries, onyl considering the "real" files (not returning the latest.tar.gz
@@ -153,7 +118,7 @@ def _get_product_definition(bundle_json_descriptor, product_name):
     versions = bundle_json_descriptor.get("versions")
     products = [x for x in versions if x.get("name") == product_name]
 
-    if not products: 
+    if not products:
         log.debug("Failed to find product '%s' in: %s",
                   product_name, ", ".join(x.get("name") for x in versions))
         return None
@@ -290,18 +255,18 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
     if not version:
         print("Missing version info. Please add the -v flag")
 
-    # The NEW proposed 
+    # The NEW proposed
     bundle_product_descriptor = _get_product_definition(bundle_json_descriptor, product_name)
 
     log.debug("Using product descriptor: %s", json.dumps(bundle_product_descriptor, indent=4))
 
     # Check if the product is already installed through Nexus
-    json_product_description = _get_json_product_description(product_name)
+    json_product_description = _get_json_product_description(installation_path, product_name)
 
     # For the top level product we will get it as XML
     # If this is git, then may be we do not have a JSON information, and we should
     # get the XML description
-    xml_product_description = _get_xml_product_description(product_name)
+    xml_product_description = _get_xml_product_description(installation_path, product_name)
 
     #
     # Attempt to figure out the version if not provided
@@ -325,18 +290,18 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
 
             # Product already installed. We check if anything new is in the bundle
             installed_commit_id = json_product_description.get("build").get("commit")
-            nexus_commit_id = _get_commit_id_from_nexus_path(bundle_product_descriptor.get("build").get("commit"))
+            repository_commit_id = _get_commit_id_from_repository_path(bundle_product_descriptor.get("build").get("commit"))
 
-            if nexus_commit_id == installed_commit_id:
+            if repository_commit_id == installed_commit_id:
                 print(
-                    f"   Product is on latest available version: {bundle_product_descriptor.get('build').get('timestamp')} / {nexus_commit_id}"
+                    f"   Product is on latest available version: {bundle_product_descriptor.get('build').get('timestamp')} / {repository_commit_id}"
                 )
             else:
                 print(
                     f"    Product on OLD VERSION: {json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
                 )
                 print(
-                    f"        Attempting to upgrade to: {bundle_product_descriptor.get('build').get('timestamp')} / {nexus_commit_id}"
+                    f"        Attempting to upgrade to: {bundle_product_descriptor.get('build').get('timestamp')} / {repository_commit_id}"
                 )
                 download = True
         else:
@@ -358,7 +323,7 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
         if not recurse:
             return
 
-        parents = _get_xml_product_description(product_name).get("parents")
+        parents = _get_xml_product_description(installation_path, product_name).get("parents")
         for parent in parents:
             recurse_product_download(bundle_json_descriptor, parent, version, visited=visited)
         return
@@ -396,13 +361,13 @@ def recurse_product_download(bundle_json_descriptor, product_name, version, visi
             return
 
         # Kick of the recursion on all required products before exiting.
-        parents = _get_xml_product_description(product_name).get("parents")
+        parents = _get_xml_product_description(installation_path, product_name).get("parents")
         for parent in parents:
             recurse_product_download(bundle_json_descriptor, parent, version, visited=visited)
 
         return
 
-    # We have a good 'latest' nexus file. Use it:
+    # We have a good 'latest' repository file. Use it:
     _bundle_product_download(bundle_product_descriptor, product_name)
 
     if not recurse:
@@ -421,7 +386,7 @@ def _bundle_product_download(bundle_product_descriptor, product_name):
     # Path in Bucket: release-2026.02/workday/workday_9f9b0818e7e51c68f34cb828dadcd0f000ff9259.tar.gz'
     # description: build': {'timestamp': '2026/04/20 07:38:34', 'branch': 'release-2025.02', 'commit': '2ca706c23e038d116bdc5322c9f6c2fdc6bb60b0'}, 'license': 'kbot-included', 'display': {'name': {'en': '', 'fr': ''}, 'description': {'en': '', 'fr': ''}}}
     path = bundle_product_descriptor.get("build").get("branch") + "/"
-    path += bundle_product_descriptor.get("name") + "/" 
+    path += bundle_product_descriptor.get("name") + "/"
     path += bundle_product_descriptor.get("name") + "_" + bundle_product_descriptor.get("build").get("commit") + ".tar.gz"
 
     print(f"    Downloading product {product_name}  using bundle description: {bundle_product_descriptor.get('build').get('timestamp')}")
@@ -459,7 +424,7 @@ def _bundle_product_download(bundle_product_descriptor, product_name):
     # Write a STAMP file, as a marker of this activity, and to serve
     # the purpose of time marker for differences
     with open(
-        f"{installation_path}/{product_name}/nexus.json", "w", encoding="utf-8"
+        f"{installation_path}/{product_name}/repository.json", "w", encoding="utf-8"
     ) as fd:
         json.dump(bundle_product_descriptor, fd)
 
@@ -478,46 +443,96 @@ def _bundle_product_download(bundle_product_descriptor, product_name):
         with open(fpath, "w", encoding="utf-8") as fd:
             content = fd.write(content)
 
-    print(f"    Saved info in {installation_path}/{product_name}/nexus.json")
+    print(f"    Saved info in {installation_path}/{product_name}/repository.json")
 
 
-def _get_commit_id_from_nexus_path(nexus_path):
-    """Given a nexus file path or name, returns the commit it, extracted from its name
+def _get_installed_bundle_specs():
+    bundle_json_path = os.path.join(installation_path, "bundle.json")
+    if not os.path.exists(bundle_json_path):
+        return None
 
-    For example, with input:
-        release-2022.03/gsuite/gsuite_d4ee90638cbffeef00f660e187c2bee8ecaf81b2.tar.gz
-    We would get:
-        d4ee90638cbffeef00f660e187c2bee8ecaf81b2
+    with open(bundle_json_path, encoding="utf-8") as fd:
+        return json.load(fd)
+
+def _print_bundle_status():
+    """Print the installed bundle version and compare it against the release bucket its connected to, so that
+    pipelines can easily detect whether an update (same bundle line, newer patch) or an
+    upgrade (newer bundle line, e.g. a new minor/major version) is available.
+
+    Prints a pipeline-friendly BUNDLE_STATUS line, one of:
+        UP_TO_DATE, UPDATE_AVAILABLE, UPGRADE_AVAILABLE, UNKNOWN
+    along with BUNDLE_CURRENT_VERSION and BUNDLE_LATEST_VERSION.
     """
-    return nexus_path.split("/")[-1].split("_")[-1].split(".")[0]
+    print("Installed Bundle")
+    print("====================================")
+    bundle_json = _get_installed_bundle_specs()
+    if not bundle_json:
+        print(f"No bundle.json found in {installation_path}. Cannot determine the current bundle type.")
+        sys.exit(1)
+    current_version = bundle_json.get("version")
+    print(current_version)
+
+    bundle_type = bundle_json.get("name")
+    if bundle_type and current_version:
+        bucket_repo = get_bucket_provider()
+        current_bundle_line = current_version.rsplit(".", 1)[0]
+
+        latest_overall = _get_latest_bundle_version(bucket_repo, bundle_type)
+        # Latest bundle restricted to the currently installed bundle line (patch-level only)
+        latest_patch = _get_latest_bundle_version(bucket_repo, bundle_type, major_version=current_bundle_line)
+
+        if not latest_overall:
+            print(f"[UNKNOWN] Could not determine the latest available bundle for type '{bundle_type}'")
+            print("BUNDLE_STATUS=UNKNOWN")
+        elif latest_overall.rsplit(".", 1)[0] != current_bundle_line:
+            # Newer major/minor version available
+            print(f"[UPGRADE AVAILABLE] Current: {bundle_type}-{current_version}  ->  Latest: {bundle_type}-{latest_overall}")
+            print("    A newer bundle is available - consider upgrading")
+            print("BUNDLE_STATUS=UPGRADE_AVAILABLE")
+        elif current_version != latest_patch:
+            # Newer patch available
+            print(f"[UPDATE AVAILABLE] Current: {bundle_type}-{current_version}  ->  Latest: {bundle_type}-{latest_patch}")
+            print("    A newer patch is available on the same release - consider updating")
+            print("BUNDLE_STATUS=UPDATE_AVAILABLE")
+        else:
+            print(f"[OK] Bundle is up to date ({bundle_type}-{current_version})")
+            print("BUNDLE_STATUS=UP_TO_DATE")
+
+        print(f"BUNDLE_CURRENT_VERSION={bundle_type}-{current_version}")
+        print(f"BUNDLE_LATEST_VERSION={bundle_type}-{latest_overall}" if latest_overall else "BUNDLE_LATEST_VERSION=")
+    print()
 
 
-def _list_or_update(products=None, update=False, backup=None, target_version=None, recurse=True):
-    """List or Update the given products.
+def _list_products(products=None, recurse=True):
+    """List the currently installed products and their versions.
+
     Arguments:
-        - target_version: A bundle name
-        - products: a List of product names
-        - update: a Boolean. If True then attempts to update the products
-        - backup: a Boolean. If True will save the product in a .save path before installing new one.
-        - recurse: a Boolean. If True, will recurse in the list or updates
+        - products: a List of product names to restrict the listing to (only applied
+          when recurse is False)
+        - recurse: a Boolean. If True, will recurse in the listing
     """
+    print("Installed Bundle")
+    print("====================================")
+    bundle_json = _get_installed_bundle_specs()
+    if not bundle_json:
+        print(f"No bundle.json found in {installation_path}. Cannot determine the current bundle type.")
+        sys.exit(1)
+    print(bundle_json.get("version"))
+    print()
+
     products = products or []
 
-    # Need to retrieve the bundle content. 
-
-    #bucket_repo = get_bucket_provider()
-    #bundle_json_descriptor = get_bundle_descriptor(bucket_provider=bucket_repo, bundle_name=version)
-
     # First retrieve all the products, and order them
-    #
     xml_product_descriptions = []
     for product_name in os.listdir(installation_path):
 
         if products and not recurse and product_name not in products:
             continue
-            
-        # print(f"Checking {product_name}")
-        xml_product_description = _get_xml_product_description(product_name)
+
+        if not os.path.isdir(os.path.join(installation_path, product_name)):
+            continue
+
+        xml_product_description = _get_xml_product_description(installation_path, product_name)
         if not xml_product_description:
             print(
                 f"Error: {product_name} is not a valid solution. Missing description.xml"
@@ -527,12 +542,11 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
 
     xml_product_descriptions = _xml_products_sorting(xml_product_descriptions)
 
-    # We only print the tree in the List mode
-    if not update:
-        print("Tree of currently installed products")
-        print("====================================")
-        top_tree_items = _get_tree(xml_product_descriptions, recurse=recurse)
-        tree_print(top_tree_items, recurse=recurse)
+    print("Tree of currently installed products")
+    print("====================================")
+    top_tree_items = _get_tree(xml_product_descriptions, recurse=recurse)
+    tree_print(top_tree_items, recurse=recurse)
+    print()
 
     print("Versions of installed products")
     print("==============================")
@@ -542,17 +556,17 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
         print(f"Checking {xml_product_description.get('type')}: {product_name}")
 
         # Check if the product is already installed through bucket
-        json_product_description = _get_json_product_description(product_name)
+        json_product_description = _get_json_product_description(installation_path, product_name)
         # If this is git, then may be we do not have a JSON information, and we should
 
-        #
-        # Attempt to figure out the version if not provided
-        #
         if json_product_description:
+            build = json_product_description.get("build")
             # The version (2024.02-dev) is the branch minute the "release-"
-            version = json_product_description.get("build").get("branch")[len("release-"):]
+            version = build.get("branch")[len("release-"):]
             if version:
                 print(f"    On product branch '{version}'")
+            print(f"        Commit   : {build.get('commit')}")
+            print(f"        Built on : {build.get('timestamp')}")
 
         elif xml_product_description:
 
@@ -572,81 +586,127 @@ def _list_or_update(products=None, update=False, backup=None, target_version=Non
                 print(f"    Version {version}")
             else:
                 print("   (No product version)")
-            continue
         else:
             print("    Failed to find any version information")
-            continue
 
-        target_version = target_version or version
 
-        if update and version and target_version and target_version != version:
-            print(f"    Version is to be updated from {version} to {target_version}")
+def _get_latest_bundle_version(bucket_repo, bundle_type, major_version=None):
+    """Given a bundle type, returns the name of the most recently uploaded bundle of
+    this type, based on the last-modified timestamp of its descriptor file.
 
-        # Get the definitions of the latest available version in Bucket
-        latest_nexus_definition = None
-        if update:
-            latest_nexus_definition = _get_product_definition(
-                bundle_json_descriptor, product_name
-            )
+    Bundles are stored in the bucket as "<type>/<version>.json".
+    """
+    # Names on the repository are in format BUNDLE_NAME-BUNDLE_VERSION
+    # such as:
+    # ev-basic-2025.02.0012.json', 'ev-basic-2025.02.0013.json', 'ev-basic-2025.02.0014.json'
 
-        if latest_nexus_definition:
-            nexus_commit_id = _get_commit_id_from_nexus_path(
-                latest_nexus_definition.js.get("path")
-            )
-            installed_commit_id = _get_commit_id_from_nexus_path(
-                json_product_description.get("build").get("commit")
-            )
+    names = list(bucket_repo.list()) #bundle_type)
+    names = [name.rsplit(".", 1)[0] for name in names if name.endswith(".json")]
 
-            if nexus_commit_id == installed_commit_id:
-                if update:
-                    print(
-                        "    Product is already on latest available code: "
-                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
-                    )
-                else: # Print
-                    branch = latest_nexus_definition.js.get('downloadUrl').split("/")[5]
-                    # 'https://nexus.konverso.ai/repository/kbot_raw/release-2025.02/kbot/kbot_399b792296e65da681895427e9c65e69950cbf7a.tar.gz'
-                    #  0       2                 3          4        5               6
-                    print(
-                        f"    Product on branch: {branch}"
-                    )
+    names = [name for name in names if name.startswith(bundle_type + "-")]
 
-                    print(
-                        "    Product on latest available code: "
-                        f"{latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
-                    )
-            else:
-                print(
-                    "    Product is on OLD VERSION: "
-                    f"{json_product_description.get('build').get('timestamp')}/{json_product_description.get('build').get('commit')}"
-                )
-                if update:
-                    _bundle_product_download(
-                        latest_nexus_definition, product_name
-                    )
-                else:
-                    print(
-                        f"        Could upgrade to: {latest_nexus_definition.js.get('lastModified')} / {nexus_commit_id}"
-                    )
+    if major_version:
+        #Version such as 2025.03
+        names = [name for name in names if name.startswith(bundle_type + "-" + major_version + ".")]
 
-        else:
-            print("    Version file not found")
+    names.sort()
+    if names:
+        # Strip the "<bundle_type>-" prefix so the result is comparable to the
+        # bare version stored in bundle.json (e.g. "2025.03.0016").
+        return names[-1][len(bundle_type) + 1:]
+
+    return None
+
+def _update_products(products=None, backup=None, target_version=None, recurse=True):
+    """Update the installed products to the latest available bundle.
+
+    The current bundle type is read from the installer's bundle.json (as written by a
+    previous install/update), then used to look up the latest bundle of that type in the
+    bucket, unless target_version is explicitly given. Products are then downloaded/updated
+    the same way as the install() flow, based on the resolved bundle definition.
+
+    Arguments:
+        - products: a List of product names to update. Defaults to all currently installed
+          products.
+        - backup: a Boolean. If True will save the product in a .save path before installing new one.
+        - target_version: A bundle name to update to. If not given, the latest bundle
+          matching the currently installed bundle type is used.
+        - recurse: a Boolean. If True, will recurse in the updates
+    """
+    products = products or [
+        product_name for product_name in os.listdir(installation_path)
+        if _get_xml_product_description(installation_path, product_name)
+    ]
+
+    bundle_json_path = os.path.join(installation_path, "bundle.json")
+    if not os.path.exists(bundle_json_path):
+        print(f"No bundle.json found in {installation_path}. Cannot determine the current bundle type.")
+        sys.exit(1)
+
+    with open(bundle_json_path, encoding="utf-8") as fd:
+        current_bundle_descriptor = json.load(fd)
+
+    bundle_type = current_bundle_descriptor.get("name")
+    if not bundle_type:
+        print(f"No 'name' field found in {bundle_json_path}. Cannot determine the latest bundle.")
+        sys.exit(1)
+
+    bucket_repo = get_bucket_provider()
+
+    current_version = current_bundle_descriptor.get("version")
+
+    if target_version:
+        prefix = bundle_type + "-"
+        latest_version = target_version[len(prefix):] if target_version.startswith(prefix) else target_version
+    else:
+        latest_version = _get_latest_bundle_version(bucket_repo, bundle_type, major_version=current_version.rsplit(".", 1)[0])
+        if not latest_version:
+            print(f"No bundle available for type '{bundle_type}'")
+            sys.exit(1)
+
+    if current_version == latest_version:
+        print(f"Already on latest available version: {latest_version}")
+        sys.exit(0)
+
+    bundle_name = f"{bundle_type}-{latest_version}"
+    print(f"Updating to bundle '{bundle_name}'")
+
+    bundle_json_descriptor = get_bundle_descriptor(bucket_provider=bucket_repo, bundle_name=bundle_name)
+    if not bundle_json_descriptor:
+        print(f"Bundle '{bundle_name}' is not currently available.")
+        sys.exit(1)
+
+    visited = []
+    for product_name in products:
+        recurse_product_download(bundle_json_descriptor, product_name, latest_version, visited=visited, recurse=recurse)
+
+    # Store the current bundle definition (last loaded bundle) into the installer area:
+    with open(bundle_json_path, "w", encoding="utf-8") as fd:
+        json.dump(bundle_json_descriptor, fd, indent=4)
 
 
 def usage():
     return """
-    Nexus user (-n or --nexus)
-        In format 'domain:user:password'
     Action (-a or --action). One of:
       - upgrade: Update the given installation to a new version. Add variables:
            -v: The target version
       - install: Create a new /installer and /work area, a new bot !
           -w: Define your work area target directory
       - installer-only: Create a new /installer area, without creating a work area
-          -v: Version in format
+          -b: Bundle name
           -p: top product name
       - list: List the installed products.
           No parameters required
+
+    List (-l or --list): List the installed products and exit. Same as -a list,
+        usable regardless of -a.
+
+    Status (-s or --status): Only print the bundle version status
+        (BUNDLE_STATUS=UP_TO_DATE / UPDATE_AVAILABLE / UPGRADE_AVAILABLE / UNKNOWN)
+        and exit. Usable regardless of -a, for pipeline conditions.
+
+    Examples: 
+        kbot_installer/bundle.sh -a installer-only -b ev-basic-2025.03.0029 -p mysite
     """
 
 
@@ -712,6 +772,24 @@ if __name__ == "__main__":
             required=False,
         )
         parser.add_argument(
+            "-l",
+            "--list",
+            help="List the installed products and exit",
+            dest="list",
+            action="store_true",
+            required=False,
+            default=False,
+        )
+        parser.add_argument(
+            "-s",
+            "--status",
+            help="Only print the bundle version status (UP_TO_DATE / UPDATE_AVAILABLE / UPGRADE_AVAILABLE) and exit",
+            dest="status",
+            action="store_true",
+            required=False,
+            default=False,
+        )
+        parser.add_argument(
             "-w",
             "--workarea",
             help="Default work-area path",
@@ -737,6 +815,13 @@ if __name__ == "__main__":
             required=False,
             default=False,
         )
+        parser.add_argument(
+            "-v", "--version",
+            help="Target version for upgrade",
+            dest="version",
+            required=False,
+        )
+
         # backup, one of:
         # - none (default)
         # - folder: Old folder is saved into .backup.(iterative number)
@@ -750,7 +835,8 @@ if __name__ == "__main__":
         hostname = _result.hostname
         workarea = _result.workarea
         installation_path = _result.installer or "/home/konverso/dev/installer"
-        recurse = not _result.no_rec
+        _recurse = not _result.no_rec
+        _version = _result.version
 
         #
         # If defined, set the git user / password for this session
@@ -775,60 +861,31 @@ if __name__ == "__main__":
         log.info("Kbot actions '%s' started", action)
 
         #
-        # Now get the nexus parameter
+        # Now get the Bucket Storage parameter
         # (Preferably from variables)
         #
         bucket = None
 
-        # Case of command line configuration
-        if _result.bucket:
-            print(
-                ("Nexus password is in command line. This is unsecure. "
-                 "Prefere setting variables NEXUS_HOST, NEXUS_USERNAME and NEXUS_PASSWORD")
-            )
+        bucket_provider = blob_storage.get_bucket_provider(os.environ.get("BUNDLE_PROVIDER"), "bundles")
+        global bucket_artifact_providers
+        bucket_artifact_providers = blob_storage.get_bucket_provider(os.environ.get("BUNDLE_PROVIDER"), "artifacts")
 
-            bucket_type, account_url = _result.bucket.split("::", 2)
-            nexus = NexusRepository(host.strip(), user.strip(), password.strip())
-            bucket_provider =  AzureBlob(account_url=account_url, container_name="bundles")
-            bucket_artifact_providers = AzureBlob(account_url=account_url, container_name="artifacts")
-
-        # Case of Azure:
-        elif (
-            os.environ.get("BUNDLE_PROVIDER") == "azure_blob"
-            and os.environ.get("BUNDLE_AZURE_BLOB_URL")):
-
-            from utils.bucket_storage.AzureBlob import AzureBlob
-            log.debug("Blob URL: %s", os.environ.get("BUNDLE_AZURE_BLOB_URL"))
-            bucket_provider = AzureBlob(
-                account_url=os.environ.get("BUNDLE_AZURE_BLOB_URL"),
-                container_name="bundles")
-            bucket_artifact_providers = AzureBlob(
-                account_url=os.environ.get("BUNDLE_AZURE_BLOB_URL"),
-                container_name="artifacts")
-
-        # Case of Amazon S3:
-        elif (
-            os.environ.get("BUNDLE_PROVIDER") == "amazon_s3"
-            and os.environ.get("BUNDLE_AMAZON_S3_REGION")
-            and os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME")):
-
-            from utils.bucket_storage.AmazonS3 import AmazonS3
-            bucket_provider =  AmazonS3(
-                region_name=os.environ.get("BUNDLE_AMAZON_S3_REGION"),
-                bucket_name=os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME"),
-                cluster_name="bundles")
-
-            bucket_artifact_providers =  AmazonS3(
-                region_name=os.environ.get("BUNDLE_AMAZON_S3_REGION"),
-                bucket_name=os.environ.get("BUNDLE_AMAZON_S3_BUCKET_NAME"),
-                cluster_name="artifacts")
-        else:
+        if not bucket_provider or not bucket_artifact_providers:
             print(usage())
             print("Blob Storage repository details are required")
-            print("BUNDLE_PROVIDER='%s' and BUNDLE_AZURE_BLOB_URL='%s'" % (
+            print("BUNDLE_PROVIDER='%s', BUNDLE_AZURE_BLOB_URL='%s', BUNDLE_OCI_BUCKET_NAME='%s'" % (
                 os.environ.get("BUNDLE_PROVIDER"),
-                os.environ.get("BUNDLE_AZURE_BLOB_URL")))
+                os.environ.get("BUNDLE_AZURE_BLOB_URL"),
+                os.environ.get("BUNDLE_OCI_BUCKET_NAME")))
             sys.exit(1)
+
+        if _result.status:
+            _print_bundle_status()
+            sys.exit(0)
+
+        if _result.list:
+            _list_products(products=products, recurse=_recurse)
+            sys.exit(0)
 
         # Setup the installer folder and a new work-area
         if action == "install":
@@ -848,12 +905,18 @@ if __name__ == "__main__":
 
         # Move to a new version
         elif action == "upgrade":
-            _list_or_update(
+            if not _version:
+                print(usage())
+                print(
+                    "Expecting a version to upgrade to",
+                )
+                sys.exit(1)
+
+            _update_products(
                 backup=backup,
                 products=products,
-                update=True,
-                target_version=bundle_name,
-                recurse=recurse
+                target_version=_version,
+                recurse=_recurse
             )
 
         # Only setup the installer folder
@@ -869,11 +932,15 @@ if __name__ == "__main__":
                     products,
                 )
                 sys.exit(1)
-            install(version=bundle_name, product=products[0], create_workarea=False, recurse=recurse)
+            install(version=bundle_name, product=products[0], create_workarea=False, recurse=_recurse)
 
         # List the currently installed products
         elif action == "list":
-            _list_or_update(products=products, update=False, recurse=recurse)
+            _list_products(products=products, recurse=_recurse)
+
+        # List the currently installed products
+        elif action == "update":
+            _update_products(products=products, recurse=_recurse)
 
         else:
             msg = "Invalid action. Should be one of: update, upgrade, install, installer-only"

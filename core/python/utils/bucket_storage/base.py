@@ -1,6 +1,7 @@
 """Bucket storage abstractions for cloud object stores."""
 from abc import ABC, abstractmethod
 from typing import Any, Iterator
+from datetime import datetime
 
 
 class BucketStorage(ABC):
@@ -103,4 +104,17 @@ class BucketStorage(ABC):
 
         Yields:
             Folder names directly inside ``path``, without their full path.
+        """
+
+    @abstractmethod
+    def list_with_last_modified(self, prefix: str = "") -> Iterator[tuple[str, datetime]]:
+        """List object keys under the given prefix along with their last-modified timestamp.
+
+        Args:
+            prefix: Prefix to list objects from. Use an empty string for the
+                root. Should not start with ``/`` but should end with ``/``
+                when not empty.
+
+        Yields:
+            Tuples of (object key, last-modified timestamp) found under the prefix.
         """

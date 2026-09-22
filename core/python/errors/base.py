@@ -40,6 +40,13 @@ class KB11111(ErrorCode):
     message = "Database running out of threads"
 
 
+class KB0002(ErrorCode):
+    level = "warning"
+    code = "KB0002"
+    message = "Call to Konverso File Manager failed"
+    documentation_link = ""
+
+
 class LLM00001(ErrorCode):
     """
     Indicates that the prompt was blocked by a guardrail

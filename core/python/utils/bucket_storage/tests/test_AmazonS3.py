@@ -283,6 +283,49 @@ def test_list_returns_empty_list_on_error(mock_bot_config):
     assert list(s3.list("folder")) == []
 
 
+@pytest.mark.parametrize(
+    "prefix,expected_storage_prefix,expected_entries",
+    [
+        ("", "test-cluster/", [("a.txt", "2026-01-01"), ("b.txt", "2026-02-01")]),
+        ("folder", "test-cluster/folder/", [("folder/a.txt", "2026-01-01"), ("folder/b.txt", "2026-02-01")]),
+        ("folder/", "test-cluster/folder/", [("folder/a.txt", "2026-01-01"), ("folder/b.txt", "2026-02-01")]),
+    ],
+)
+def test_list_with_last_modified_yields_keys_and_timestamps(
+    mock_bot_config, prefix, expected_storage_prefix, expected_entries
+):
+    s3 = AmazonS3()
+    mock_client = MagicMock()
+    mock_paginator = MagicMock()
+    mock_client.get_paginator.return_value = mock_paginator
+    a_key, b_key = (f"{expected_storage_prefix}a.txt", f"{expected_storage_prefix}b.txt")
+    mock_paginator.paginate.return_value = [
+        {
+            "Contents": [
+                {"Key": a_key, "LastModified": "2026-01-01"},
+                {"Key": b_key, "LastModified": "2026-02-01"},
+            ]
+        },
+        {},
+    ]
+    s3.s3_client = mock_client
+
+    assert list(s3.list_with_last_modified(prefix)) == expected_entries
+    mock_paginator.paginate.assert_called_once_with(
+        Bucket="test-bucket",
+        Prefix=expected_storage_prefix,
+    )
+
+
+def test_list_with_last_modified_returns_empty_on_error(mock_bot_config):
+    s3 = AmazonS3()
+    mock_client = MagicMock()
+    mock_client.get_paginator.side_effect = RuntimeError("list failed")
+    s3.s3_client = mock_client
+
+    assert list(s3.list_with_last_modified("folder")) == []
+
+
 @pytest.mark.parametrize("folder_path", ["", "docs", "docs/"])
 def test_list_files_in_folder_delegates_to_list(mock_bot_config, folder_path):
     s3 = AmazonS3()
