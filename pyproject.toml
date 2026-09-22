@@ -33,6 +33,7 @@ extend_exclude = [
     "(^|.*/)tests/",
 ]
 known_first_party = [
+    "blob_storage",
     "deps",
     "setup_workarea",
     "Bot",
@@ -119,7 +120,9 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["core/python", "rest", "config"]
+# "rest" and "config" don't exist in this repo (copy-pasted from the kbot monorepo's
+# pyproject.toml); they are generated on the install target, not present in source.
+packages = ["core/python"]  # , "rest", "config"
 py-modules = ["Bot", "Load", "Learn", "System"]
 exclude = [
     "Makefile",
@@ -128,12 +131,12 @@ exclude = [
 
 [tool.hatch.build.targets.wheel.sources]
 "core/python" = "."
-"rest" = "."
+# "rest" = "."
 
 [tool.hatch.build.targets.wheel.force-include]
 "description.xml" = "installer/kbot/description.xml"
 "pyproject.toml" = "installer/kbot/pyproject.toml"
-"conf" = "installer/kbot/conf"
+# "conf" = "installer/kbot/conf"  # "conf" doesn't exist in this repo; it's created on the install target
 
 [tool.kbot]
 doc = ["DOC", "KSEC", "RN"]
