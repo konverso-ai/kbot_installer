@@ -17,7 +17,7 @@ log = logger.get_package_logger("backend")
 class AzureVaultBackend:
     """Backend for Azure Key Vault secrets."""
 
-    _client: SecretClient
+    __client: SecretClient
 
     def __init__(self, credentials: AzureCredentials, vault_name: str) -> None:
         """Build the Azure Key Vault client from the given credentials.

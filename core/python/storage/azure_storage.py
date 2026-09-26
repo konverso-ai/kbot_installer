@@ -137,7 +137,7 @@ class AzureStorage(StorageBase):
         """Download a storage object to a local file."""
         container_client = self._get_container_client()
         if not container_client:
-            log.exception(
+            log.error(
                 "Container client unavailable. Retrieval aborted. '%s'",
                 self.container_name,
             )
@@ -153,7 +153,7 @@ class AzureStorage(StorageBase):
         """List blob names under the given prefix."""
         container_client = self._get_container_client()
         if not container_client:
-            log.exception(
+            log.error(
                 "Container client unavailable. Cannot list objects with prefix '%s'",
                 prefix,
             )
@@ -179,7 +179,7 @@ class AzureStorage(StorageBase):
         """List folders directly inside the given path."""
         container_client = self._get_container_client()
         if not container_client:
-            log.exception(
+            log.error(
                 "Container client unavailable. Cannot list folders in path '%s'",
                 path,
             )

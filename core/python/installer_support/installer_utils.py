@@ -131,9 +131,7 @@ def version_to_branch(version: str | None, env: Literal["dev", "prod"] = "dev") 
         return f"release-{base_version}-dev"
     if env == "dev":
         return f"release-{version}-dev"
-    if env == "prod":
-        return f"release-{version}"
-    return None
+    return f"release-{version}"
 
 
 def ensure_directory(path: str | Path) -> Path:

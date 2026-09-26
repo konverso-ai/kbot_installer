@@ -130,7 +130,7 @@ class S3Storage(StorageBase):
         try:
             log.debug("BUCKET = %s :: %s", key, self.bucket_name)
             response = s3_client.get_object(Bucket=self.bucket_name, Key=key)
-            data = response["Body"].read()
+            data = cast("bytes", response["Body"].read())
             log.debug(
                 "Successfully retrieved object from AWS S3: %s; encoding: %s",
                 key,
@@ -240,7 +240,7 @@ class S3Storage(StorageBase):
         """List object keys under a logical prefix."""
         s3_client = self._get_s3_client()
         if not s3_client:
-            log.exception(
+            log.error(
                 "S3 client unavailable. Cannot list objects with prefix '%s'",
                 prefix,
             )
@@ -258,7 +258,7 @@ class S3Storage(StorageBase):
                 if "Contents" not in page:
                     continue
                 for obj in page["Contents"]:
-                    object_key = obj["Key"]
+                    object_key = cast("str", obj["Key"])
                     if cluster_prefix and object_key.startswith(cluster_prefix):
                         object_key = object_key[len(cluster_prefix) :]
                     yield object_key

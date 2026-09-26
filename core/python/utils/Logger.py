@@ -82,7 +82,7 @@ class KbotLogger(logging.Logger):
 
         # key: a package name
         # value: a KbotPackageLogger object
-        self.__packages = {}
+        self.__packages: dict[str, KbotPackageLogger] = {}
 
         # key: a package name ('all' is the catch-all bucket)
         # value: the minimum level enabled for that package
@@ -182,7 +182,7 @@ class KbotLogger(logging.Logger):
         # f's frame and everything below it up to here belongs to this module
         # (KbotLogger/KbotPackageLogger wrapper layers), regardless of how many
         # of them were crossed: skip them all to reach the real call site.
-        while hasattr(f, "f_code"):
+        while f is not None:
             co = f.f_code
             if os.path.normcase(co.co_filename) == _srcfile:
                 f = f.f_back
@@ -196,7 +196,7 @@ class KbotLogger(logging.Logger):
                 if sinfo[-1] == "\n":
                     sinfo = sinfo[:-1]
                 sio.close()
-            return co.co_filename, f.f_lineno, co.co_name, sinfo
+            return co.co_filename, cast("int", f.f_lineno), co.co_name, sinfo
         return "(unknown file)", 0, "(unknown function)", None
 
     def get_package_logger(self, name: str) -> "KbotPackageLogger":
@@ -277,7 +277,7 @@ def _instance_name() -> str:
         kprocess = importlib.import_module("kprocess")
     except ImportError:
         return Path(sys.argv[0]).stem.lower()
-    return kprocess.instance_name
+    return cast("str", kprocess.instance_name)
 
 
 class KbotLogEntry:
@@ -415,7 +415,7 @@ class KbotPackageLogger:
 
     def _log(self, func: str, msg: str, *args, **kwargs) -> None:
         kwargs["package"] = self.name
-        return getattr(self.logger, func)(msg, *args, **kwargs)
+        getattr(self.logger, func)(msg, *args, **kwargs)
 
     def one_time(self, level: str, msg: str, *args, **kwargs) -> None:
         """Log a message once per unique expanded content, then only count repeats.

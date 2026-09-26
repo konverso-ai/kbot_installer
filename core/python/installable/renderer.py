@@ -29,7 +29,7 @@ class DependencyTreeRenderer:
             Formatted tree string.
 
         """
-        lines = []
+        lines: list[str] = []
         self._visited.clear()
 
         # Find root products (no dependencies)
@@ -56,7 +56,7 @@ class DependencyTreeRenderer:
             Formatted tree string.
 
         """
-        lines = []
+        lines: list[str] = []
         self._visited.clear()
 
         # Find root products
@@ -80,7 +80,7 @@ class DependencyTreeRenderer:
             Formatted tree string.
 
         """
-        lines = []
+        lines: list[str] = []
         self._visited.clear()
 
         if root:
@@ -108,7 +108,7 @@ class DependencyTreeRenderer:
 
         """
         levels = graph.get_dependency_levels()
-        lines = []
+        lines: list[str] = []
 
         for i, level in enumerate(levels):
             lines.append(f"Level {i}: {', '.join(sorted(level))}")

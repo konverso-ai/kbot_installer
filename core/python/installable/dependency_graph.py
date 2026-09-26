@@ -31,8 +31,8 @@ class DependencyGraph:
 
         """
         self.products = products
-        self.dependencies = defaultdict(list)
-        self.dependents = defaultdict(list)
+        self.dependencies: defaultdict[str, list[str]] = defaultdict(list)
+        self.dependents: defaultdict[str, list[str]] = defaultdict(list)
         self._build_graph()
 
     def _build_graph(self) -> None:
@@ -80,8 +80,8 @@ class DependencyGraph:
             List of all transitive dependency names.
 
         """
-        visited = set()
-        dependencies = []
+        visited: set[str] = set()
+        dependencies: list[str] = []
         stack = [product_name]
 
         while stack:
@@ -107,8 +107,8 @@ class DependencyGraph:
             List of all transitive dependent names.
 
         """
-        visited = set()
-        dependents = []
+        visited: set[str] = set()
+        dependents: list[str] = []
         stack = [product_name]
 
         while stack:
@@ -132,7 +132,7 @@ class DependencyGraph:
 
         """
         # Use DFS to detect cycles
-        visited = set()
+        visited: set[str] = set()
         rec_stack = set()
 
         def has_cycle(node: str) -> bool:
@@ -165,7 +165,7 @@ class DependencyGraph:
 
         """
         cycles = []
-        visited = set()
+        visited: set[str] = set()
         rec_stack = set()
         path = []
 
@@ -215,7 +215,7 @@ class DependencyGraph:
             in_degree[product.name] = len(self.dependencies[product.name])
 
         queue = deque([name for name, degree in in_degree.items() if degree == 0])
-        result = []
+        result: list[str] = []
 
         while queue:
             current = queue.popleft()
@@ -291,7 +291,7 @@ class DependencyGraph:
         """
         queue = deque([root_product_name])
         processed = set()
-        result = []
+        result: list[str] = []
 
         while queue:
             current = queue.popleft()

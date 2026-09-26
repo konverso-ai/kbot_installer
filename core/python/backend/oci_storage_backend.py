@@ -20,7 +20,7 @@ log = logger.get_package_logger("backend")
 class OciStorageBackend:
     """Backend for Oracle Cloud Infrastructure (OCI) Object Storage."""
 
-    _client: ObjectStorageClient
+    __client: ObjectStorageClient
 
     def __init__(self, credentials: OciCredentials) -> None:
         """Build the OCI Object Storage client from the given credentials.

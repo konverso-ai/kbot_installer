@@ -20,7 +20,7 @@ log = logger.get_package_logger("backend")
 class S3VaultBackend:
     """Backend for AWS Secrets Manager."""
 
-    _client: SecretsManagerClient | None
+    __client: SecretsManagerClient
 
     def __init__(self, credentials: S3Credentials) -> None:
         """Build the boto3 Secrets Manager client from the given credentials.

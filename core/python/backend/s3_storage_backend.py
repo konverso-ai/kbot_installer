@@ -20,7 +20,7 @@ log = logger.get_package_logger("backend")
 class S3StorageBackend:
     """Backend for AWS S3."""
 
-    _client: S3Client | None
+    __client: S3Client
 
     def __init__(self, credentials: S3Credentials) -> None:
         """Build the boto3 S3 client from the given credentials.

@@ -1,6 +1,6 @@
 """Oracle Cloud Infrastructure (OCI) default credentials, config only."""
 
-from typing import Annotated, TypeAlias
+from typing import Annotated, TypeAlias, cast
 
 import oci
 from pydantic import Field
@@ -59,7 +59,10 @@ class OciCredentials(BaseSettings):
             with ``region`` overridden when explicitly configured.
 
         """
-        config = oci.config.from_file(profile_name=self.config_profile)
+        config = cast(
+            "dict[str, str | None]",
+            oci.config.from_file(profile_name=self.config_profile),
+        )
         if self.region:
             config["region"] = self.region
         return config

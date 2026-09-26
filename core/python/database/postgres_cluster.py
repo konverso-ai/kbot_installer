@@ -9,6 +9,7 @@ over a live connection via psycopg.
 import socket
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import psutil
 
@@ -128,7 +129,7 @@ def _find_port_owner_pid(port: int) -> int | None:
 
     for conn in connections:
         if conn.laddr and conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
-            return conn.pid
+            return cast("int | None", conn.pid)
     return None
 
 

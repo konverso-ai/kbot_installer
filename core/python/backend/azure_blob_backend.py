@@ -17,7 +17,7 @@ log = logger.get_package_logger("backend")
 class AzureBlobBackend:
     """Backend for Azure Blob Storage."""
 
-    _client: BlobServiceClient
+    __client: BlobServiceClient
 
     def __init__(self, account_url: str, credentials: AzureCredentials) -> None:
         """Build the Azure Blob Storage client from the given account URL and credentials.

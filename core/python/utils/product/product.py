@@ -365,7 +365,7 @@ class Product(BaseModel):
                     {"@name": category.name} for category in self.categories.category
                 ]
             }
-        return xmltodict.unparse({"product": product}, pretty=True)
+        return cast("str", xmltodict.unparse({"product": product}, pretty=True))
 
     def to_json(self) -> dict[str, Any]:
         """Convert Product to a JSON-serializable dictionary."""

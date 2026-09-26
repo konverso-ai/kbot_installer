@@ -5,7 +5,7 @@ and calling methods using string names and importlib.
 """
 
 import importlib
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from .utils import build_class_name, build_module_name
 
@@ -45,7 +45,7 @@ def factory_class(name: str, package: str) -> type[T]:
     class_name = build_class_name(name, package)
 
     # Delegate the actual import + attribute lookup to factory_function
-    return factory_function(f"{package}.{module_name}", class_name)
+    return cast("type[T]", factory_function(f"{package}.{module_name}", class_name))
 
 
 def factory_function(module_name: str, attribute_name: str) -> T:
@@ -80,7 +80,7 @@ def factory_function(module_name: str, attribute_name: str) -> T:
 
     """
     module = importlib.import_module(module_name)
-    return getattr(module, attribute_name)
+    return cast("T", getattr(module, attribute_name))
 
 
 def factory_object(name: str, package: str, **kwargs: object) -> T:
@@ -119,7 +119,7 @@ def factory_object(name: str, package: str, **kwargs: object) -> T:
 
     # Delegate the actual import + attribute lookup to factory_function
     cls = factory_function(f"{package}.{module_name}", class_name)
-    return cls(**kwargs)
+    return cast("T", cls(**kwargs))
 
 
 def factory_method(name: str, package: str, **kwargs: object) -> object:

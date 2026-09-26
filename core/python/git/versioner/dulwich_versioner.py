@@ -15,8 +15,10 @@ from dulwich.diff_tree import CHANGE_ADD, CHANGE_DELETE, CHANGE_MODIFY, tree_cha
 from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
 from dulwich.graph import find_merge_base
 from dulwich.object_store import tree_lookup_path
+from dulwich.objects import ObjectID, Tag
 from dulwich.objectspec import parse_commit
 from dulwich.porcelain import Error as DulwichPorcelainError
+from dulwich.refs import Ref
 from dulwich.repo import Repo
 from typing_extensions import override
 
@@ -37,8 +39,7 @@ from git.versioner.str_repr_mixin import StrReprMixin
 from utils.Logger import logger
 
 if TYPE_CHECKING:
-    from dulwich.objects import Blob
-    from dulwich.refs import Ref
+    from dulwich.objects import Blob, Commit
 
 log = logger.get_package_logger("git.versioner")
 
@@ -245,10 +246,9 @@ class DulwichVersioner(StrReprMixin):
     def _tag_pointing_at(repo: Repo, commit_id: bytes) -> str | None:
         """Return a tag name resolving to ``commit_id``, if any."""
         for tag in porcelain.tag_list(repo):
-            ref = b"refs/tags/" + tag
-            target = repo.refs[ref]
+            target = repo.refs[Ref(b"refs/tags/" + tag)]
             obj = repo[target]
-            resolved = obj.object[1] if obj.type_name == b"tag" else target
+            resolved = obj.object[1] if isinstance(obj, Tag) else target
             if resolved == commit_id:
                 return tag.decode()
         return None
@@ -263,7 +263,7 @@ class DulwichVersioner(StrReprMixin):
         """Return the content of a tracked file at a given revision."""
         with self._open_repository(repository_path) as repo:
             try:
-                commit_id = parse_commit(repo, revision).id
+                commit = parse_commit(repo, revision)
             except (KeyError, ValueError) as e:
                 error_msg = f"Unknown revision '{revision}' in {repository_path}"
                 raise VersionerError(error_msg) from e
@@ -271,7 +271,7 @@ class DulwichVersioner(StrReprMixin):
             try:
                 _, blob_id = tree_lookup_path(
                     repo.get_object,
-                    repo[commit_id].tree,
+                    commit.tree,
                     file_path.encode(),
                 )
             except KeyError:
@@ -289,7 +289,7 @@ class DulwichVersioner(StrReprMixin):
             except KeyError as e:
                 error_msg = f"No '{remote}' remote configured in {repository_path}"
                 raise RemoteNotFoundError(error_msg) from e
-            return url.decode() if isinstance(url, bytes) else str(url)
+            return url.decode()
 
     @override
     def status(self, repository_path: str | Path) -> RepoStatus:
@@ -366,9 +366,9 @@ class DulwichVersioner(StrReprMixin):
             return (ahead, behind)
 
     @staticmethod
-    def _count_commits(repo: Repo, tip: bytes, exclude: list[bytes]) -> int:
+    def _count_commits(repo: Repo, tip: ObjectID, exclude: list[ObjectID]) -> int:
         """Count commits reachable from ``tip`` but not from ``exclude``."""
-        return sum(1 for _ in repo.get_walker(include=[tip], exclude=list(exclude)))
+        return sum(1 for _ in repo.get_walker(include=[tip], exclude=exclude))
 
     @override
     def add(
@@ -422,7 +422,7 @@ class DulwichVersioner(StrReprMixin):
             with self._open_repository(repository_path) as repo:
                 porcelain.restore(
                     repo,
-                    paths=cast("list[bytes | str]", list(files)),
+                    paths=[*files],
                     staged=True,
                     worktree=False,
                 )
@@ -440,7 +440,7 @@ class DulwichVersioner(StrReprMixin):
             with self._open_repository(repository_path) as repo:
                 porcelain.restore(
                     repo,
-                    paths=cast("list[bytes | str]", list(files)),
+                    paths=[*files],
                     staged=False,
                     worktree=True,
                 )
@@ -493,10 +493,7 @@ class DulwichVersioner(StrReprMixin):
     def list_tags(self, repository_path: str | Path) -> list[str]:
         """List tag names present in the repository."""
         with self._open_repository(repository_path) as repo:
-            tags = [
-                tag.decode() if isinstance(tag, bytes) else tag
-                for tag in porcelain.tag_list(repo)
-            ]
+            tags = [tag.decode() for tag in porcelain.tag_list(repo)]
         return sorted(tags)
 
     @override
@@ -628,28 +625,32 @@ class DulwichVersioner(StrReprMixin):
             The structured list of added, modified and deleted paths.
 
         """
-        result = PullResult(
-            old_commit_id=old_commit.decode() if old_commit else None,
-            new_commit_id=new_commit.decode() if new_commit else None,
-        )
+        old_commit_id = old_commit.decode() if old_commit else None
+        new_commit_id = new_commit.decode() if new_commit else None
         if old_commit == new_commit or new_commit is None:
-            return result
+            return PullResult(old_commit_id=old_commit_id, new_commit_id=new_commit_id)
 
-        old_tree = repo[old_commit].tree if old_commit else None
-        new_tree = repo[new_commit].tree
+        old_tree = cast("Commit", repo[old_commit]).tree if old_commit else None
+        new_tree = cast("Commit", repo[new_commit]).tree
 
+        added: list[str] = []
+        modified: list[str] = []
+        deleted: list[str] = []
         for change in tree_changes(repo.object_store, old_tree, new_tree):
-            if change.type == CHANGE_ADD:
-                result.added.append(change.new.path.decode())
-            elif change.type == CHANGE_DELETE:
-                result.deleted.append(change.old.path.decode())
-            elif change.type == CHANGE_MODIFY:
-                result.modified.append(change.new.path.decode())
+            if change.type == CHANGE_ADD and change.new:
+                added.append(change.new.path.decode())
+            elif change.type == CHANGE_DELETE and change.old:
+                deleted.append(change.old.path.decode())
+            elif change.type == CHANGE_MODIFY and change.new:
+                modified.append(change.new.path.decode())
 
-        result.added.sort()
-        result.modified.sort()
-        result.deleted.sort()
-        return result
+        return PullResult(
+            old_commit_id=old_commit_id,
+            new_commit_id=new_commit_id,
+            added=sorted(added),
+            modified=sorted(modified),
+            deleted=sorted(deleted),
+        )
 
     def _ensure_remote_branch_exists(
         self, repo: Repo, remote_branch_ref: bytes, branch: str
@@ -709,7 +710,7 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to commit changes: {e}"
             raise VersionerError(error_msg) from e
 
-        return commit_id.decode() if isinstance(commit_id, bytes) else str(commit_id)
+        return commit_id.decode()
 
     @override
     def push(self, repository_path: str | Path, branch: str) -> None:
@@ -861,7 +862,7 @@ class DulwichVersioner(StrReprMixin):
         """
         try:
             remote_kwargs = self._dulwich_remote_kwargs()
-            refs = porcelain.ls_remote(repository_url, **remote_kwargs)
+            refs = porcelain.ls_remote(repository_url, **remote_kwargs).refs
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to list remote branches for {repository_url}: {e}"
             raise VersionerError(error_msg) from e
@@ -871,12 +872,13 @@ class DulwichVersioner(StrReprMixin):
             error_msg = f"Failed to list remote branches for {repository_url}: {e}"
             raise VersionerError(error_msg) from e
 
-        branches: list[str] = []
-        for ref in refs:
-            ref_bytes = ref if isinstance(ref, bytes) else ref.encode()
-            if ref_bytes.startswith(_LOCAL_BRANCH_PREFIX):
-                branches.append(ref_bytes[len(_LOCAL_BRANCH_PREFIX) :].decode())
-        return sorted(set(branches))
+        return sorted(
+            {
+                ref[len(_LOCAL_BRANCH_PREFIX) :].decode()
+                for ref in refs
+                if ref.startswith(_LOCAL_BRANCH_PREFIX)
+            }
+        )
 
     def _get_available_branches(self, repo: Repo) -> list[str]:
         """Get all available branches (local and remote) from repository.

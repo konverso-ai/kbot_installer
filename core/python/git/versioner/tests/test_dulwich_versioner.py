@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+from dulwich.client import LsRemoteResult
 from dulwich.errors import GitProtocolError, NotGitRepository
 from dulwich.porcelain import Error as DulwichPorcelainError
 
@@ -134,11 +135,14 @@ class TestDulwichVersioner:
         """Test listing remote branch names."""
         with patch(
             "git.versioner.dulwich_versioner.porcelain.ls_remote",
-            return_value={
-                b"refs/heads/main": b"sha1",
-                b"refs/heads/master": b"sha2",
-                b"refs/tags/v1": b"sha3",
-            },
+            return_value=LsRemoteResult(
+                refs={
+                    b"refs/heads/main": b"sha1",
+                    b"refs/heads/master": b"sha2",
+                    b"refs/tags/v1": b"sha3",
+                },
+                symrefs={},
+            ),
         ):
             assert versioner.list_remote_branches(
                 "https://github.com/test/repo.git"
@@ -192,7 +196,9 @@ class TestDulwichVersioner:
         versioner = DulwichVersioner(auth=auth)
         with patch(
             "git.versioner.dulwich_versioner.porcelain.ls_remote",
-            return_value={b"refs/heads/main": b"sha1"},
+            return_value=LsRemoteResult(
+                refs={b"refs/heads/main": b"sha1"}, symrefs={}
+            ),
         ) as mock_ls_remote:
             assert versioner.list_remote_branches(
                 "git@github.com:test/repo.git"
@@ -1091,7 +1097,9 @@ def test_remote_exists_valid_uses_ssh_agent_auth() -> None:
         patch.dict("os.environ", {"SSH_AUTH_SOCK": "/tmp/ssh-agent"}, clear=True),
         patch(
             "git.versioner.dulwich_versioner.porcelain.ls_remote",
-            return_value={b"refs/heads/main": b"sha1"},
+            return_value=LsRemoteResult(
+                refs={b"refs/heads/main": b"sha1"}, symrefs={}
+            ),
         ),
     ):
         auth = add_ssh_auth("ssh", username="git", use_agent=True)

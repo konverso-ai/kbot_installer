@@ -47,4 +47,8 @@ class AzureClientSecretCredentials(BaseSettings):
 
     def client_secret_kwargs(self) -> dict[str, str | None]:
         """Return Azure client-secret fields for storage backend construction."""
-        return self.model_dump()
+        return {
+            "tenant_id": self.tenant_id,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }

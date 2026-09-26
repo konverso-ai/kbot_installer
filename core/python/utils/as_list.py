@@ -1,6 +1,6 @@
 """Normalize scalar or list values into lists."""
 
-from typing import TypeVar
+from typing import TypeVar, cast
 
 T = TypeVar("T")
 
@@ -17,4 +17,4 @@ def as_list(value: T | list[T] | None) -> list[T]:
     """
     if not value:
         return []
-    return value if isinstance(value, list) else [value]
+    return cast("list[T]", value) if isinstance(value, list) else [value]

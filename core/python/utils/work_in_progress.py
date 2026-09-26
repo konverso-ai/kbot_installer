@@ -1,7 +1,7 @@
 """Work-in-progress models for bundle serialization."""
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from pydantic import (
     BaseModel,
@@ -92,7 +92,7 @@ class Setting(BaseModel):
             raise ValueError(
                 f"`type` doit être l'une des classes : str, int, float, bool. Reçu : {v!r}"
             )
-        return v
+        return cast("type", v)
 
     @field_serializer("type")
     def serialize_type(self, v: type) -> str:
@@ -231,7 +231,7 @@ class Settings(RootModel[dict[str, Setting]]):
         """Return the number of settings."""
         return len(self.root)
 
-    def get(self, key: str, default: Any = None) -> Setting | None:
+    def get(self, key: str, default: Setting | None = None) -> Setting | None:
         """Return the setting named `key`, or `default` if absent.
 
         Args:

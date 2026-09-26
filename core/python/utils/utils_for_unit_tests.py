@@ -82,4 +82,4 @@ def compare(operator: CompareOperator, param1: object, param2: object = None) ->
     ``not`` only uses ``param1``.
     """
     compare_func = globals()[f"_compare_{operator}"]
-    return compare_func(param1, param2)
+    return bool(compare_func(param1, param2))

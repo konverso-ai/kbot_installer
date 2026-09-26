@@ -88,6 +88,7 @@ class NexusFiles(BaseModel):
 
     def filter(
         self,
+        *,
         folder_name: str | None = None,
         name: str | None = None,
         ends_with: str | None = None,
@@ -136,9 +137,7 @@ class NexusFiles(BaseModel):
         """Return the most recently modified file, if any."""
         if not self.files:
             return None
-        return sorted(
-            self.files, key=lambda item: item.last_modified or "", reverse=True
-        )[0]
+        return max(self.files, key=lambda item: item.last_modified or "")
 
     @override
     def __iter__(self) -> Iterator[NexusFile]:

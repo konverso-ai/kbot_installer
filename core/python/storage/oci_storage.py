@@ -103,7 +103,7 @@ class OciStorage(StorageBase):
             return None
         try:
             response = client.get_object(self.namespace_name, self.bucket_name, key)
-            data = response.data.content
+            data = cast("bytes", response.data.content)
             log.debug(
                 "Successfully retrieved object from OCI Object Storage: %s; encoding: %s",
                 key,
@@ -196,7 +196,7 @@ class OciStorage(StorageBase):
         """List object keys under a logical prefix."""
         client = self._get_client()
         if not client:
-            log.exception(
+            log.error(
                 "OCI client unavailable. Cannot list objects with prefix '%s'",
                 prefix,
             )
@@ -213,7 +213,7 @@ class OciStorage(StorageBase):
                     fields="name",
                 )
                 for object_summary in response.data.objects:
-                    yield object_summary.name
+                    yield cast("str", object_summary.name)
                 start = response.data.next_start_with
                 if not start:
                     break
@@ -233,7 +233,7 @@ class OciStorage(StorageBase):
         """List folders directly inside the given path."""
         client = self._get_client()
         if not client:
-            log.exception(
+            log.error(
                 "OCI client unavailable. Cannot list folders in path '%s'",
                 path,
             )
@@ -248,7 +248,7 @@ class OciStorage(StorageBase):
                 fields="name",
             )
             for object_prefix in response.data.prefixes or []:
-                folder_name = object_prefix[len(path) :].rstrip("/")
+                folder_name = cast("str", object_prefix)[len(path) :].rstrip("/")
                 if folder_name:
                     yield folder_name
         except Exception:
