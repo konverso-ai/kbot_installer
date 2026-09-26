@@ -4,10 +4,10 @@ import getpass
 import shutil
 from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
-from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from installer_support.thirdparty_env import resolve_site_packages_dir
 from workarea.rule_action import RuleAction
 from workarea.workarea_rule import WorkareaRule
 
@@ -342,41 +342,51 @@ def setup_products(work_root: Path, products: Iterable[Path]) -> None:
         target.symlink_to(product_root)
 
 
-def setup_drf_yasg_static(work_root: Path) -> None:
+def setup_drf_yasg_static(work_root: Path, installer_root: Path) -> None:
     """Symlink the `drf_yasg` package's static assets into the workarea.
+
+    The source directory is resolved from the 3rdparty interpreter kbot
+    actually runs against (via `installer_support.thirdparty_env`), not from
+    whatever `drf_yasg` may be installed in kbot-installer's own environment,
+    so the served assets always match the version kbot ships.
 
     Does nothing if the `drf_yasg` static directory cannot be found, or if a
     target already exists at `work_root / "ui" / "web" / "static"`.
 
     Args:
         work_root: Root directory of the workarea.
+        installer_root: Installer directory holding the downloaded products.
 
     """
-    source = Path(str(files("drf_yasg") / "static"))
-    target = work_root / "ui" / "web" / "static"
-
-    if not source.exists():
-        return
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-
-    if target.exists() or target.is_symlink():
-        return
-
-    target.symlink_to(source)
+    _setup_thirdparty_static(work_root, installer_root, "drf_yasg")
 
 
-def setup_drf_spectacular_static(work_root: Path) -> None:
+def setup_drf_spectacular_static(work_root: Path, installer_root: Path) -> None:
     """Symlink the `drf_spectacular` package's static assets into the workarea.
+
+    The source directory is resolved from the 3rdparty interpreter kbot
+    actually runs against (via `installer_support.thirdparty_env`), not from
+    whatever `drf_spectacular` may be installed in kbot-installer's own
+    environment, so the served assets always match the version kbot ships.
 
     Does nothing if the `drf_spectacular` static directory cannot be found, or if a
     target already exists at `work_root / "ui" / "web" / "static"`.
 
     Args:
         work_root: Root directory of the workarea.
+        installer_root: Installer directory holding the downloaded products.
 
     """
-    source = Path(str(files("drf_spectacular") / "static"))
+    _setup_thirdparty_static(work_root, installer_root, "drf_spectacular")
+
+
+def _setup_thirdparty_static(work_root: Path, installer_root: Path, package: str) -> None:
+    """Symlink `package`'s static assets, as installed in the 3rdparty interpreter, into the workarea."""
+    site_packages = resolve_site_packages_dir(installer_root)
+    if site_packages is None:
+        return
+
+    source = site_packages / package / "static"
     target = work_root / "ui" / "web" / "static"
 
     if not source.exists():

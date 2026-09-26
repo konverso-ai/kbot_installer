@@ -1,5 +1,6 @@
 """ProductDownloadable for downloading a product and its dependencies."""
 
+import shutil
 from collections import deque
 from pathlib import Path
 
@@ -8,15 +9,20 @@ from typing_extensions import override
 from downloadable.base import DownloadableBase
 from git.provider.base import ProviderBase
 from installer_support.installation_table import InstallationTable
+from utils.Logger import logger
 from utils.path_utils import ensure_directory
 from utils.product.product import Product
+
+log = logger.get_package_logger("downloadable")
 
 
 class ProductDownloadable(DownloadableBase):
     """Orchestrate downloading a Product through a ProviderBase.
 
-    A product already present in the target installer folder is left as-is;
-    only missing products are cloned.
+    A product already present in the target installer folder is skipped when
+    up to date, and removed then downloaded again when outdated (e.g. after a
+    version change). User-managed copies (manual builds, git working copies,
+    symlinks) are never replaced: see `_local_copy_kind`.
     """
 
     __product: Product
@@ -61,10 +67,12 @@ class ProductDownloadable(DownloadableBase):
             self._download_without_dependencies(self.__product, path / self.__product.name)
 
     def _download_without_dependencies(self, product: Product, path: Path) -> None:
-        """Clone product into path, unless it is already present.
+        """Clone product into path, unless it is already up to date or user-managed.
 
         When the product pins a commit, the product is re-downloaded whenever
-        the commit recorded in the existing ``description.xml`` no longer matches.
+        the commit recorded in the existing ``description.json`` no longer
+        matches; the outdated folder is removed first. User-managed copies (see
+        `_local_copy_kind`) are always kept, even when outdated.
 
         Args:
             product: Product to clone.
@@ -76,6 +84,19 @@ class ProductDownloadable(DownloadableBase):
         """
         self.__table.begin_installation(product.name)
         pinned_commit = product.build.commit if product.build else None
+        local_copy = self._local_copy_kind(path)
+        if local_copy is not None:
+            details = f"Kept {local_copy}"
+            if pinned_commit and not self._is_up_to_date(path, pinned_commit):
+                details += f" (expected commit {pinned_commit[:10]})"
+                log.warning("Keeping %s '%s' instead of downloading commit %s.", local_copy, path, pinned_commit)
+            self.__table.complete_installation(
+                product_name=product.name,
+                provider_name="local",
+                status="kept",
+                details=details,
+            )
+            return
         if self._is_up_to_date(path, pinned_commit):
             self.__table.complete_installation(
                 product_name=product.name,
@@ -92,6 +113,11 @@ class ProductDownloadable(DownloadableBase):
                 error_message=msg,
             )
             raise ValueError(msg)
+        if path.exists():
+            # Stale download (e.g. a previous version): start from a clean folder
+            # so files removed in the new version don't linger.
+            log.info("Removing outdated '%s' before downloading it again.", path)
+            shutil.rmtree(path)
         self.__provider.clone_and_checkout(
             path.name,
             path,
@@ -103,6 +129,37 @@ class ProductDownloadable(DownloadableBase):
             provider_name=self.__provider.get_name(),
             status="success",
         )
+
+    @staticmethod
+    def _local_copy_kind(path: Path) -> str | None:
+        """Tell whether path holds a user-managed copy the installer must never replace.
+
+        Such copies are left untouched even when outdated, since replacing them
+        would delete the user's work:
+
+        - a symbolic link (e.g. to a repository under ``~/dev/git``);
+        - a git working copy (it may hold uncommitted changes);
+        - a manual build: ``make`` in ``~/dev/git/<product>`` copies the product
+          into the installer folder and removes its ``description.json``
+          (Makefile ``finish`` target), whereas every storage download has one.
+
+        Args:
+            path: Directory the product would be downloaded into.
+
+        Returns:
+            A short description of the local copy, or None if path is absent or
+            holds a regular download that may be replaced.
+
+        """
+        if path.is_symlink():
+            return "local symlink"
+        if not path.is_dir():
+            return None
+        if (path / ".git").exists():
+            return "local git working copy"
+        if (path / "description.xml").exists() and not (path / "description.json").exists():
+            return "local build"
+        return None
 
     @staticmethod
     def _is_up_to_date(path: Path, pinned_commit: str | None) -> bool:

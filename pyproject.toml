@@ -5,6 +5,7 @@ requires-python = ">=3.10, <3.13"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
+    "azure-keyvault-secrets>=4.11.0",
     "azure-storage-blob>=12.30.0",
     "boto3>=1.43.32",
     "click",
@@ -16,23 +17,24 @@ dependencies = [
     "oci>=2.181.1",
     "packaging",
     "psutil",
+    "psycopg[binary]",
     "pydantic-settings",
     "pygit2",
     "python-dotenv",
     "python-json-logger",
     "requests",
     "rich",
-    "typing_extensions",
-    "tqdm",
-    "xmltodict>=1.0.4",
     "tomlkit>=0.15.0",
-    "psycopg[binary]",
-    "drf-yasg>=1.21.7",
-    "azure-keyvault-secrets>=4.11.0",
+    "tqdm",
+    "typing_extensions",
+    "xmltodict>=1.0.4",
 ]
 
 [project.scripts]
 kbot-installer = "cli.__main__:main"
+kbot-load = "cli.commands:load"
+kbot-learn = "cli.commands:learn"
+kbot-set-admin-password = "cli.commands:set_admin_password_command"
 tries = "tools.tries:main"
 
 [build-system]
@@ -50,15 +52,15 @@ only-include = ["core/python"]
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
-# [[tool.uv.index]]
-# name = "konverso-aws-private"
-# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
-# publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
+[[tool.uv.index]]
+name = "konverso-aws-private"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
+publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
 
-# [[tool.uv.index]]
-# name = "konverso-aws-pypi-proxy"
-# url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
-# default = true
+[[tool.uv.index]]
+name = "konverso-aws-pypi-proxy"
+url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
+default = true
 
 [dependency-groups]
 deps = [
@@ -123,7 +125,7 @@ python-json-logger = "pythonjsonlogger"
 
 [tool.deptry.per_rule_ignores]
 DEP001 = ["tomllib", "Bot"]
-DEP002 = ["colorama", "furl", "gitpython", "psutil", "pygit2", "tqdm", "drf-yasg"]
+DEP002 = ["colorama", "furl", "gitpython", "pygit2", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]
 

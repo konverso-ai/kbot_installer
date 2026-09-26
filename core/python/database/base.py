@@ -46,6 +46,12 @@ class DatabaseBackend(Protocol):
     def check_connection(self) -> None:
         """Verify that a connection to the database can be established."""
 
+    def backup(self, path: Path) -> bool:
+        """Dump the database data into a SQL file, returning False if there is nothing to back up."""
+
+    def destroy(self) -> None:
+        """Irreversibly delete the database data."""
+
 
 class InternalDbSettings(DbSettings):
     """Settings for a self-managed PostgreSQL instance owned by the installer."""

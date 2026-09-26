@@ -35,6 +35,66 @@ def add_database(mode: DbMode, **kwargs) -> DatabaseBackend:
     return cast("DatabaseBackend", backend_cls(settings=settings))
 
 
+def create_database(
+    *,
+    db_host: str | None,
+    db_port: int,
+    db_user: str,
+    password: str,
+    db_name: str,
+    workarea_path: Path,
+    pg_dir: Path | None = None,
+    schema_paths: list[Path] | None = None,
+    admin_user: str = "postgres",
+    admin_password: str = "postgres",  # noqa: S107
+) -> DatabaseBackend:
+    """Create the product database backend, without touching the database.
+
+    See `build_database` for the arguments; ``schema_paths`` defaults to none,
+    for operations that don't apply the schema (e.g. backup or destroy).
+
+    Returns:
+        The external backend when ``db_host`` is set, the internal one otherwise.
+
+    Raises:
+        ValueError: If ``pg_dir`` was not provided.
+
+    """
+    if pg_dir is None:
+        msg = "'pg_dir' is required to locate the 'psql' client used to apply schema files."
+        raise ValueError(msg)
+
+    psql_path = pg_dir / "bin" / "psql"
+
+    if db_host:
+        return add_database(
+            mode="external",
+            host=db_host,
+            port=db_port,
+            database=db_name,
+            user=db_user,
+            password=password,
+            psql_path=psql_path,
+            schema_paths=schema_paths or [],
+            allow_schema_creation=True,
+        )
+    return add_database(
+        mode="internal",
+        host="localhost",
+        port=db_port,
+        database=db_name,
+        user=db_user,
+        password=password,
+        psql_path=psql_path,
+        schema_paths=schema_paths or [],
+        pg_dir=pg_dir,
+        pg_data=workarea_path / "var" / "db",
+        log_path=workarea_path / "logs" / "postgres.log",
+        admin_user=admin_user,
+        admin_password=admin_password,
+    )
+
+
 def build_database(
     *,
     schema_paths: list[Path],
@@ -77,41 +137,18 @@ def build_database(
         ValueError: If ``pg_dir`` was not provided.
 
     """
-    if pg_dir is None:
-        msg = "'pg_dir' is required to locate the 'psql' client used to apply schema files."
-        raise ValueError(msg)
-
-    psql_path = pg_dir / "bin" / "psql"
-
-    if db_host:
-        db = add_database(
-            mode="external",
-            host=db_host,
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=password,
-            psql_path=psql_path,
-            schema_paths=schema_paths,
-            allow_schema_creation=True,
-        )
-    else:
-        db = add_database(
-            mode="internal",
-            host="localhost",
-            port=db_port,
-            database=db_name,
-            user=db_user,
-            password=password,
-            psql_path=psql_path,
-            schema_paths=schema_paths,
-            pg_dir=pg_dir,
-            pg_data=workarea_path / "var" / "db",
-            log_path=workarea_path / "logs" / "postgres.log",
-            admin_user=admin_user,
-            admin_password=admin_password,
-        )
-
+    db = create_database(
+        schema_paths=schema_paths,
+        db_host=db_host,
+        db_port=db_port,
+        db_user=db_user,
+        password=password,
+        db_name=db_name,
+        workarea_path=workarea_path,
+        pg_dir=pg_dir,
+        admin_user=admin_user,
+        admin_password=admin_password,
+    )
     db.prepare()
     db.initialize()
     return db

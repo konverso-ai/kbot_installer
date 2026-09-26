@@ -1,5 +1,6 @@
 """Database backend for externally managed PostgreSQL instances."""
 
+from pathlib import Path
 from typing import ClassVar
 
 from database.base import ExternalDbSettings
@@ -7,6 +8,8 @@ from database.utils import (
     apply_missing_upgrades,
     apply_schema,
     connect,
+    drop_owned_objects,
+    dump_database,
     is_database_empty,
 )
 
@@ -60,3 +63,24 @@ class ExternalDatabase:
         """Apply any pending schema upgrades if the database is not empty."""
         if not self._check_is_empty():
             apply_missing_upgrades(self.__settings)
+
+    def backup(self, path: Path) -> bool:
+        """Dump the database into a SQL file.
+
+        Args:
+            path: SQL file to write.
+
+        Returns:
+            Always True: an external database always exists.
+
+        """
+        dump_database(self.__settings, path)
+        return True
+
+    def destroy(self) -> None:
+        """Drop every object owned by the application user.
+
+        The database itself and the user are left in place: deleting them
+        requires the external PostgreSQL server's administrator.
+        """
+        drop_owned_objects(self.__settings)

@@ -418,3 +418,25 @@ class TestInstallationTable:
         final_call = mock_console.print.call_args_list[1]
         assert "Success" in final_call[0][0]
         assert "bitbucket" in final_call[0][0]
+
+    @patch("installer_support.installation_table.Console")
+    def test_complete_installation_kept_displayed_without_verbose(self, mock_console_class) -> None:
+        """Kept local copies are always shown, with their details, even without verbose."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=False)
+
+        installation_table.complete_installation(
+            "kbot", "local", "kept", details="Kept local build (expected commit abc123)"
+        )
+
+        line = mock_console.print.call_args[0][0]
+        assert "Kept" in line
+        assert "Kept local build (expected commit abc123)" in line
+
+    def test_get_summary_counts_kept_without_verbose(self, installation_table) -> None:
+        """The summary mentions kept local copies even without verbose."""
+        installation_table.add_result("kbot", "local", "kept")
+        installation_table.add_result("ithd", "storage", "success")
+
+        assert installation_table.get_summary() == "Installation complete: 1 successful, 1 kept (local)"

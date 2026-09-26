@@ -1,21 +1,27 @@
 """Commandes CLI pour kbot-installer."""
 
 import os
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import click
 
-from database.factory import build_database
-from database.utils import resolve_db_password
+from database.base import DbSettings
+from database.factory import build_database, create_database
+from database.utils import resolve_admin_password, resolve_db_password, set_admin_password
 from downloadable.factory import build_downloadable
 from git.models import GitProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
+from installer_support.kbot_commands import run_kbot_command
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
 from storage.base import StorageBackendEnum
+from updatable.factory import UpdatableName
+from updatable.workarea_updatable import WorkareaUpdatable
 
 # Setup logging from configuration file
 setup_logging()
@@ -27,6 +33,10 @@ _PROVIDER_CHOICES = click.Choice(
 )
 _STORAGE_CHOICES = click.Choice(
     [backend.value for backend in StorageBackendEnum],
+    case_sensitive=False,
+)
+_HOW_CHOICES = click.Choice(
+    [mode.value for mode in UpdatableName],
     case_sensitive=False,
 )
 
@@ -197,6 +207,118 @@ def _resolve_pg_dir(installer_path: Path) -> Path:
     return Path(pg_dir_str)
 
 
+def _app_db_settings(
+    *,
+    db_host: str | None,
+    db_port: int,
+    db_user: str,
+    db_password: str,
+    db_name: str,
+    pg_dir: Path,
+) -> DbSettings:
+    """Build connection settings for the kbot application database.
+
+    Args:
+        db_host: External Postgres host, or None to use the internal cluster (localhost).
+        db_port: Postgres port.
+        db_user: Postgres application user.
+        db_password: Postgres application password.
+        db_name: Postgres database name.
+        pg_dir: PostgreSQL installation directory, used to locate 'psql'.
+
+    Returns:
+        The database settings, without any schema to apply.
+
+    """
+    return DbSettings(
+        host=db_host or "localhost",
+        port=db_port,
+        database=db_name,
+        user=db_user,
+        password=db_password,
+        psql_path=pg_dir / "bin" / "psql",
+        schema_paths=[],
+    )
+
+
+def _resolve_backup_path(backup_file: Path, workarea_path: Path) -> Path:
+    """Resolve the database backup file for 'uninstall'.
+
+    Args:
+        backup_file: File or existing directory given by the user (``~`` is
+            expanded). A directory gets a timestamped 'dump_<...>.sql' file,
+            named like the legacy 'dump_db.sh' does.
+        workarea_path: Workarea about to be removed.
+
+    Returns:
+        The absolute path of the backup file.
+
+    Raises:
+        click.UsageError: If the backup file would be inside the workarea,
+            which is removed right after.
+
+    """
+    path = backup_file.expanduser()
+    if path.is_dir():
+        path /= f"dump_{datetime.now().astimezone():%Y%m%d_%H%M%S}.sql"
+    path = path.resolve()
+    if path.is_relative_to(workarea_path.resolve()):
+        msg = f"Backup file '{path}' must be outside the workarea '{workarea_path}', which is removed."
+        raise click.UsageError(msg)
+    return path
+
+
+def _load_and_learn(
+    *,
+    workarea_path: Path,
+    db_host: str | None,
+    db_port: int,
+    db_user: str,
+    db_password: str,
+    db_name: str,
+    pg_dir: Path,
+    with_load: bool,
+    with_learn: bool,
+    no_admin_password: bool,
+) -> None:
+    """Load initial data and/or train ML models after an install, via 'kbot.sh'.
+
+    Args:
+        workarea_path: Workarea directory holding 'bin/kbot.sh'.
+        db_host: External Postgres host, or None to use an internal cluster.
+        db_port: Postgres port.
+        db_user: Postgres application user.
+        db_password: Postgres application password.
+        db_name: Postgres database name.
+        pg_dir: PostgreSQL installation directory, used to locate 'psql'.
+        with_load: Whether to load initial data and set the kbot admin password.
+        with_learn: Whether to train ML models.
+        no_admin_password: Whether to generate a random kbot admin password
+            instead of reading 'KBOT_ADMIN_PASSWORD' (used only with `with_load`).
+
+    """
+    if with_load:
+        admin_password, generated_admin_password = resolve_admin_password(no_password=no_admin_password)
+
+        run_kbot_command(workarea_path, "load")
+        set_admin_password(
+            _app_db_settings(
+                db_host=db_host,
+                db_port=db_port,
+                db_user=db_user,
+                db_password=db_password,
+                db_name=db_name,
+                pg_dir=pg_dir,
+            ),
+            admin_password,
+        )
+        if generated_admin_password is not None:
+            click.echo(f"Generated kbot admin password: {generated_admin_password}")
+
+    if with_learn:
+        run_kbot_command(workarea_path, "learn")
+
+
 def _build_schema_paths(installer_path: Path) -> list[Path]:
     """Build the ordered list of product schema files to apply.
 
@@ -260,12 +382,6 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     help="Workarea directory (default: $HOME/dev/work)",
 )
 @click.option(
-    "--secret",
-    type=str,
-    required=True,
-    help="Admin secret password for the installed product.",
-)
-@click.option(
     "--provider",
     type=_PROVIDER_CHOICES,
     multiple=True,
@@ -302,7 +418,7 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     "--db-password",
     type=str,
     default=None,
-    help="Postgres password (default: 'kbot_db_pwd', unless --no-password is used).",
+    help="Postgres password (default: 'kbot_db_pwd', unless --no-db-password is used).",
 )
 @click.option(
     "--db-name",
@@ -312,10 +428,13 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     help="Postgres database name.",
 )
 @click.option(
-    "--no-password",
+    "--no-db-password",
     is_flag=True,
     default=False,
-    help="Generate a random database password instead of using --db-password.",
+    help=(
+        "Generate a random password for the Postgres database user (--db-user), instead of "
+        "--db-password or its default. Not the kbot 'admin' password (see --no-admin-password)."
+    ),
 )
 @click.option(
     "--skip-python-requirements",
@@ -327,17 +446,42 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     ),
 )
 @click.option(
+    "--with-load",
+    is_flag=True,
+    default=False,
+    help="Load initial data after installing (runs 'kbot.sh load').",
+)
+@click.option(
+    "--with-learn",
+    is_flag=True,
+    default=False,
+    help="Train ML models after installing (runs 'kbot.sh learn').",
+)
+@click.option(
+    "--no-admin-password",
+    is_flag=True,
+    default=False,
+    help=(
+        "Generate a random kbot admin password instead of reading 'KBOT_ADMIN_PASSWORD' (used only with --with-load)."
+    ),
+)
+@click.option(
     "-V",
     "--verbose",
     is_flag=True,
     default=False,
     help="Show detailed output (skipped products, provider download details).",
 )
+@click.option(
+    "--force-recreate",
+    is_flag=True,
+    default=False,
+    help="Delete an existing '--workarea-dir' before installing, instead of cancelling.",
+)
 def install(
     installer_dir: str,
     workarea_dir: str,
     product: str,
-    secret: str,
     version: str | None,
     bundle: str | None,
     *,
@@ -348,9 +492,13 @@ def install(
     db_user: str = "kbot_db_user",
     db_password: str | None = None,
     db_name: str = "kbot_db",
-    no_password: bool = False,
+    no_db_password: bool = False,
     skip_python_requirements: bool = False,
+    with_load: bool = False,
+    with_learn: bool = False,
+    no_admin_password: bool = False,
     verbose: bool = False,
+    force_recreate: bool = False,
 ) -> None:
     r"""Install a kbot product or bundle: build the installer, workarea, and database.
 
@@ -363,12 +511,15 @@ def install(
     downloaded product's ``db/init/db_schema.sql`` is applied, in dependency
     order (dependencies before the products that depend on them). If
     ``--workarea-dir`` already exists, the installation is cancelled before
-    anything is downloaded or built.
+    anything is downloaded or built, unless ``--force-recreate`` is given, in
+    which case the existing directory is deleted first.
 
     Examples:
-        kbot-installer install -b ev-basic-00018 -p site-konverso --secret 'K0nversOK!' \\
+        kbot-installer install -b ev-basic-00018 -p site-konverso --with-load --with-learn \\
             --workarea-dir ~/dev/work --installer-dir ~/dev/installer
-        kbot-installer install -p site-konverso -v 2025.03-dev --secret 'K0nversOK!' \\
+        kbot-installer install -p site-konverso -v 2025.03-dev --with-load \\
+            --workarea-dir ~/dev/work --installer-dir ~/dev/installer
+        kbot-installer install -p site-konverso -v 2025.03-dev --force-recreate \\
             --workarea-dir ~/dev/work --installer-dir ~/dev/installer
 
     """
@@ -380,14 +531,14 @@ def install(
     workarea_path = Path(workarea_dir)
 
     if workarea_path.exists():
-        click.echo(
-            f"Workarea directory '{workarea_path}' already exists. Installation cancelled.",
-            err=True,
-        )
-        raise click.Abort
-
-    # secret is captured for the future admin data "load" step; not applied yet.
-    _ = secret
+        if not force_recreate:
+            click.echo(
+                f"Workarea directory '{workarea_path}' already exists. Installation cancelled.",
+                err=True,
+            )
+            raise click.Abort
+        click.echo(f"Deleting existing workarea directory '{workarea_path}' (--force-recreate)...")
+        shutil.rmtree(workarea_path)
 
     try:
         storage_backend = StorageBackendEnum(storage)
@@ -408,7 +559,7 @@ def install(
         if not skip_python_requirements:
             install_product_python_requirements(installer_path)
 
-        password, generated_password = resolve_db_password(db_password, no_password=no_password)
+        password, generated_password = resolve_db_password(db_password, no_password=no_db_password)
         schema_paths = _build_schema_paths(installer_path)
 
         # A 'psql' client (from the same 3rdparty PG_DIR) is required in every
@@ -430,6 +581,19 @@ def install(
         if generated_password is not None:
             click.echo(f"Generated database password for '{db_user}': {generated_password}")
 
+        _load_and_learn(
+            workarea_path=workarea_path,
+            db_host=db_host,
+            db_port=db_port,
+            db_user=db_user,
+            db_password=password,
+            db_name=db_name,
+            pg_dir=pg_dir,
+            with_load=with_load,
+            with_learn=with_learn,
+            no_admin_password=no_admin_password,
+        )
+
         click.echo("Installation completed successfully.")
 
     except click.UsageError:
@@ -438,6 +602,372 @@ def install(
         raise
     except Exception as e:
         click.echo(f"Error installing product: {e}", err=True)
+        raise click.Abort from e
+
+
+@cli.command(name="update")
+@click.option(
+    "--workarea",
+    is_flag=True,
+    default=False,
+    help="Update the workarea.",
+)
+@click.option(
+    "--how",
+    type=_HOW_CHOICES,
+    default=UpdatableName.SMOOTH.value,
+    show_default=True,
+    help="Update strategy to apply.",
+)
+@click.option(
+    "-i",
+    "--installer-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "installer"),
+    help="Installer directory (default: $HOME/dev/installer)",
+)
+@click.option(
+    "-w",
+    "--workarea-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "work"),
+    help="Workarea directory (default: $HOME/dev/work)",
+)
+def update(
+    installer_dir: str,
+    workarea_dir: str,
+    *,
+    workarea: bool = False,
+    how: str = UpdatableName.SMOOTH.value,
+) -> None:
+    """Update parts of an existing kbot installation.
+
+    Currently supports ``--workarea`` to update the workarea in place, using
+    the strategy given by ``--how``.
+
+    Examples:
+        kbot-installer update --workarea --how repair
+        kbot-installer update --workarea --how smooth -i ~/dev/installer -w ~/dev/work
+
+    """
+    if not workarea:
+        msg = "Nothing to update: specify what to update (e.g. '--workarea')."
+        raise click.UsageError(msg)
+
+    try:
+        installable = build_workarea(
+            installer_path=Path(installer_dir),
+            workarea_path=Path(workarea_dir),
+        )
+        installable.update_mode = True
+        WorkareaUpdatable(installable=installable, mode=UpdatableName(how))()
+        click.echo("Update completed successfully.")
+
+    except click.UsageError:
+        raise
+    except Exception as e:
+        click.echo(f"Error updating workarea: {e}", err=True)
+        raise click.Abort from e
+
+
+@cli.command(name="load")
+@click.option(
+    "-w",
+    "--workarea-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "work"),
+    help="Workarea directory (default: $HOME/dev/work)",
+)
+def load(workarea_dir: str) -> None:
+    """Load initial data into a workarea's database.
+
+    Runs the installed workarea's own ``bin/kbot.sh load``.
+
+    Examples:
+        kbot-installer load -w ~/dev/work
+
+    """
+    try:
+        run_kbot_command(Path(workarea_dir), "load")
+        click.echo("Load completed successfully.")
+
+    except Exception as e:
+        click.echo(f"Error loading data: {e}", err=True)
+        raise click.Abort from e
+
+
+@cli.command(name="learn")
+@click.option(
+    "-w",
+    "--workarea-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "work"),
+    help="Workarea directory (default: $HOME/dev/work)",
+)
+def learn(workarea_dir: str) -> None:
+    """Train ML models for a workarea.
+
+    Runs the installed workarea's own ``bin/kbot.sh learn``.
+
+    Examples:
+        kbot-installer learn -w ~/dev/work
+
+    """
+    try:
+        run_kbot_command(Path(workarea_dir), "learn")
+        click.echo("Learn completed successfully.")
+
+    except Exception as e:
+        click.echo(f"Error learning models: {e}", err=True)
+        raise click.Abort from e
+
+
+@cli.command(name="set-admin-password")
+@click.option(
+    "-i",
+    "--installer-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "installer"),
+    help="Installer directory (default: $HOME/dev/installer)",
+)
+@click.option(
+    "--db-host",
+    type=str,
+    default=None,
+    help="Postgres hostname or IP (default: localhost, i.e. the internal database).",
+)
+@click.option(
+    "--db-port",
+    type=int,
+    default=5432,
+    show_default=True,
+    help="Postgres port.",
+)
+@click.option(
+    "--db-user",
+    type=str,
+    default="kbot_db_user",
+    show_default=True,
+    help="Postgres user.",
+)
+@click.option(
+    "--db-password",
+    type=str,
+    default=None,
+    help="Postgres password (default: 'kbot_db_pwd').",
+)
+@click.option(
+    "--db-name",
+    type=str,
+    default="kbot_db",
+    show_default=True,
+    help="Postgres database name.",
+)
+@click.option(
+    "--no-admin-password",
+    is_flag=True,
+    default=False,
+    help="Generate a random kbot admin password instead of reading 'KBOT_ADMIN_PASSWORD'.",
+)
+def set_admin_password_command(
+    installer_dir: str,
+    *,
+    db_host: str | None = None,
+    db_port: int = 5432,
+    db_user: str = "kbot_db_user",
+    db_password: str | None = None,
+    db_name: str = "kbot_db",
+    no_admin_password: bool = False,
+) -> None:
+    """Set the kbot 'admin' user's password in the database.
+
+    Reads the password from 'KBOT_ADMIN_PASSWORD', or generates and displays a
+    random one with ``--no-admin-password``. The data must already be loaded
+    (see ``load``), since only the existing 'admin' user is updated.
+
+    Examples:
+        KBOT_ADMIN_PASSWORD='secret' kbot-installer set-admin-password
+        kbot-installer set-admin-password --no-admin-password --db-host db.example.com
+
+    """
+    admin_password, generated_admin_password = resolve_admin_password(no_password=no_admin_password)
+    password, _ = resolve_db_password(db_password, no_password=False)
+
+    try:
+        set_admin_password(
+            _app_db_settings(
+                db_host=db_host,
+                db_port=db_port,
+                db_user=db_user,
+                db_password=password,
+                db_name=db_name,
+                pg_dir=_resolve_pg_dir(Path(installer_dir)),
+            ),
+            admin_password,
+        )
+        if generated_admin_password is not None:
+            click.echo(f"Generated kbot admin password: {generated_admin_password}")
+        click.echo("Admin password set successfully.")
+
+    except click.UsageError:
+        raise
+    except Exception as e:
+        click.echo(f"Error setting admin password: {e}", err=True)
+        raise click.Abort from e
+
+
+@cli.command(name="uninstall")
+@click.option(
+    "-i",
+    "--installer-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "installer"),
+    help="Installer directory (default: $HOME/dev/installer)",
+)
+@click.option(
+    "-w",
+    "--workarea-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "work"),
+    help="Workarea directory (default: $HOME/dev/work)",
+)
+@click.option(
+    "--db-host",
+    type=str,
+    default=None,
+    help="Postgres hostname or IP of an external database. When unset, the internal database is removed.",
+)
+@click.option(
+    "--db-port",
+    type=int,
+    default=5432,
+    show_default=True,
+    help="Postgres port.",
+)
+@click.option(
+    "--db-user",
+    type=str,
+    default="kbot_db_user",
+    show_default=True,
+    help="Postgres user.",
+)
+@click.option(
+    "--db-password",
+    type=str,
+    default=None,
+    help="Postgres password (default: 'kbot_db_pwd').",
+)
+@click.option(
+    "--db-name",
+    type=str,
+    default="kbot_db",
+    show_default=True,
+    help="Postgres database name.",
+)
+@click.option(
+    "--backup-file",
+    type=click.Path(),
+    default=None,
+    help=(
+        "Dump the database into this file before removing it (no backup when unset). "
+        "A directory gets a 'dump_<YYYYmmdd_HHMMSS>.sql' file; it must be outside the workarea."
+    ),
+)
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    default=False,
+    help="Do not ask for confirmation.",
+)
+def uninstall(
+    installer_dir: str,
+    workarea_dir: str,
+    *,
+    db_host: str | None = None,
+    db_port: int = 5432,
+    db_user: str = "kbot_db_user",
+    db_password: str | None = None,
+    db_name: str = "kbot_db",
+    backup_file: str | None = None,
+    yes: bool = False,
+) -> None:
+    """Uninstall a kbot workarea: stop its services, then delete its database and directory.
+
+    Mirrors the legacy 'uninstall.sh': dumps the database into
+    ``--backup-file`` (only when given), runs ``bin/kbot.sh stop``,
+    then deletes the database (the internal cluster under the workarea, or,
+    with ``--db-host``, every object owned by ``--db-user`` in the external
+    database), and finally removes the workarea directory. Nothing is removed
+    if the backup fails.
+
+    Examples:
+        kbot-installer uninstall -w ~/dev/work
+        kbot-installer uninstall -w ~/dev/work --backup-file ~
+        kbot-installer uninstall -w ~/dev/work --backup-file ~/backups/kbot.sql
+        kbot-installer uninstall -w ~/dev/work --db-host db.example.com --db-password secret -y
+
+    """
+    installer_path = Path(installer_dir)
+    workarea_path = Path(workarea_dir)
+
+    # Guard the final 'rmtree' against pointing at anything but a kbot workarea.
+    if not (workarea_path / "products" / "kbot").is_dir():
+        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot')."
+        raise click.UsageError(msg)
+
+    backup_path = None if backup_file is None else _resolve_backup_path(Path(backup_file), workarea_path)
+
+    if db_host:
+        db_description = f"all objects owned by '{db_user}' in the external database '{db_name}' on '{db_host}'"
+    else:
+        db_description = f"the internal database under '{workarea_path / 'var' / 'db'}'"
+    click.echo(f"About to remove the workarea '{workarea_path}' entirely, including all its configuration files,")
+    click.echo(f"and {db_description}.")
+    if backup_path is None:
+        click.echo("The database will NOT be backed up (use --backup-file to keep a dump).")
+    else:
+        click.echo(f"The database will first be backed up to '{backup_path}'.")
+    if not yes:
+        click.confirm("Continue with uninstallation?", abort=True)
+
+    password, _ = resolve_db_password(db_password, no_password=False)
+    pg_dir = _resolve_pg_dir(installer_path)
+    prepend_thirdparty_ld_library_path(installer_path)
+
+    try:
+        db = create_database(
+            db_host=db_host,
+            db_port=db_port,
+            db_user=db_user,
+            password=password,
+            db_name=db_name,
+            workarea_path=workarea_path,
+            pg_dir=pg_dir,
+        )
+
+        # Back up first, while kbot (and its database) may still be running.
+        if backup_path is not None:
+            click.echo(f"Backing up database to '{backup_path}'...")
+            if not db.backup(backup_path):
+                click.echo("Warning: no database found, nothing to back up.", err=True)
+
+        click.echo("Stopping kbot services...")
+        try:
+            run_kbot_command(workarea_path, "stop")
+        except (RuntimeError, OSError) as e:
+            # Like 'uninstall.sh', keep going: the database is stopped explicitly below.
+            click.echo(f"Warning: {e}", err=True)
+
+        click.echo("Removing database...")
+        db.destroy()
+
+        click.echo(f"Removing workarea directory '{workarea_path}'...")
+        shutil.rmtree(workarea_path)
+        click.echo("Uninstallation completed successfully.")
+
+    except Exception as e:
+        click.echo(f"Error uninstalling workarea: {e}", err=True)
         raise click.Abort from e
 
 

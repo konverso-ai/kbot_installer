@@ -6,8 +6,11 @@ It is kept separate from `database.internal_database`, which only ever talks SQL
 over a live connection via psycopg.
 """
 
+import socket
 import subprocess
 from pathlib import Path
+
+import psutil
 
 from database.base import InternalDbSettings
 from utils.Logger import logger
@@ -91,6 +94,44 @@ def is_running(settings: InternalDbSettings) -> bool:
     return not result.returncode
 
 
+def _port_in_use(host: str, port: int) -> bool:
+    """Check whether some process is already listening on `host`:`port`.
+
+    Args:
+        host: Host to probe.
+        port: TCP port to probe.
+
+    Returns:
+        True if a TCP connection to `host`:`port` succeeds.
+
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        return sock.connect_ex((host, port)) == 0
+
+
+def _find_port_owner_pid(port: int) -> int | None:
+    """Best-effort lookup of the PID listening on `port`, for error messages.
+
+    Args:
+        port: TCP port to look up.
+
+    Returns:
+        The owning PID, or None if it cannot be determined (e.g. insufficient
+        permissions, or no matching listening socket found).
+
+    """
+    try:
+        connections = psutil.net_connections(kind="tcp")
+    except (psutil.AccessDenied, PermissionError):
+        return None
+
+    for conn in connections:
+        if conn.laddr and conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+            return conn.pid
+    return None
+
+
 def start(settings: InternalDbSettings) -> None:
     """Start the PostgreSQL server for this cluster.
 
@@ -99,10 +140,17 @@ def start(settings: InternalDbSettings) -> None:
             log path, port, and optional Unix socket directory.
 
     Raises:
-        PostgresClusterError: If the server does not report as running
+        PostgresClusterError: If `settings.port` is already occupied by
+            another process, or if the server does not report as running
             after the start attempt.
 
     """
+    if _port_in_use(settings.host, settings.port):
+        pid = _find_port_owner_pid(settings.port)
+        owner = f" (in use by PID {pid}, possibly a leftover process from a previous run)" if pid else ""
+        msg = f"Cannot start PostgreSQL: port {settings.port} on {settings.host} is already in use{owner}."
+        raise PostgresClusterError(msg)
+
     settings.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     options = ["-o", f"-p{settings.port}"]

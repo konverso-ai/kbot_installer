@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from database.external_database import ExternalDatabase
-from database.factory import add_database, build_database
+from database.factory import add_database, build_database, create_database
 from database.internal_database import InternalDatabase
 
 
@@ -125,6 +125,55 @@ class TestBuildDatabase:
             build_database(
                 schema_paths=[tmp_path / "schema.sql"],
                 db_host="db.example.com",
+                db_port=5432,
+                db_user="app_user",
+                password="app-pwd",  # noqa: S106
+                db_name="app_db",
+                workarea_path=tmp_path / "workarea",
+            )
+
+
+class TestCreateDatabase:
+    """Test cases for create_database."""
+
+    def test_createdatabase_internal_uses_cluster_under_workarea_without_preparing(self, tmp_path: Path) -> None:
+        mock_backend = MagicMock()
+        with patch("database.factory.add_database", return_value=mock_backend) as mock_add:
+            result = create_database(
+                db_host=None,
+                db_port=5432,
+                db_user="app_user",
+                password="app-pwd",  # noqa: S106
+                db_name="app_db",
+                workarea_path=tmp_path / "workarea",
+                pg_dir=tmp_path / "pg",
+            )
+
+        assert result is mock_backend
+        assert mock_add.call_args.kwargs["mode"] == "internal"
+        assert mock_add.call_args.kwargs["pg_data"] == tmp_path / "workarea" / "var" / "db"
+        assert mock_add.call_args.kwargs["schema_paths"] == []
+        mock_backend.prepare.assert_not_called()
+
+    def test_createdatabase_external_uses_db_host(self, tmp_path: Path) -> None:
+        with patch("database.factory.add_database") as mock_add:
+            create_database(
+                db_host="db.example.com",
+                db_port=5432,
+                db_user="app_user",
+                password="app-pwd",  # noqa: S106
+                db_name="app_db",
+                workarea_path=tmp_path / "workarea",
+                pg_dir=tmp_path / "pg",
+            )
+
+        assert mock_add.call_args.kwargs["mode"] == "external"
+        assert mock_add.call_args.kwargs["host"] == "db.example.com"
+
+    def test_createdatabase_invalid_requires_pg_dir(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="pg_dir"):
+            create_database(
+                db_host=None,
                 db_port=5432,
                 db_user="app_user",
                 password="app-pwd",  # noqa: S106

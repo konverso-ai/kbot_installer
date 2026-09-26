@@ -7,6 +7,7 @@ import pytest
 
 from workarea.rule_action import RuleAction
 from workarea.rules_config import _resolve_default_rules_path, load_default_rules
+from workarea.utils import apply_rules
 
 
 class TestLoadDefaultRules:
@@ -39,6 +40,41 @@ class TestLoadDefaultRules:
         sources = {str(rule.source) for rule in rules}
         assert "core/python" in sources
         assert "rest/api" in sources
+
+    def test_entry_point_scripts_are_real_copies_not_symlinks(self, tmp_path: Path) -> None:
+        """Regression: RunBot.py/Learn.py/Load.py must end up as real files.
+
+        The `core/python` rules link every `.py` file, then separately copy
+        RunBot(.py)/Learn(.py)/Load(.py) so these entry-point scripts are real
+        files (running them as a symlink resolves `sys.path[0]` to the
+        product's own source dir instead of the merged workarea, breaking
+        imports of files only added by other products, e.g.
+        `common/connection/ev_global_auth.py`). `apply_rule` skips a rule for
+        any target that already exists, so if the general link rule isn't
+        told to exclude these filenames, it creates the symlink first and the
+        later copy rule silently never runs.
+        """
+        product_root = tmp_path / "product"
+        core_python = product_root / "core" / "python"
+        core_python.mkdir(parents=True)
+        (core_python / "Bot.py").write_text("# regular module\n")
+        for name in ("RunBot.py", "Learn.py", "Load.py"):
+            (core_python / name).write_text(f"# {name} entry point\n")
+
+        work_root = tmp_path / "work"
+
+        apply_rules(
+            product_root=product_root,
+            work_root=work_root,
+            rules=load_default_rules(),
+            runtime_variables={},
+        )
+
+        assert (work_root / "core" / "python" / "Bot.py").is_symlink()
+        for name in ("RunBot.py", "Learn.py", "Load.py"):
+            target = work_root / "core" / "python" / name
+            assert target.is_file()
+            assert not target.is_symlink()
 
 
 class TestResolveDefaultRulesPath:

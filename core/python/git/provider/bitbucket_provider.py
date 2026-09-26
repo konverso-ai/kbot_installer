@@ -22,4 +22,5 @@ class BitbucketProvider(ProviderMixin):
     name = "bitbucket"
     ssh_host = "bitbucket.org"
     base_url = "https://{name}.org/{account_name}/{repository_name}.git"
+    branch_url = "https://bitbucket.org/{account_name}/{repository_name}/branch/{branch_name}"
     default_branches: ClassVar[list[str]] = ["master", "dev"]

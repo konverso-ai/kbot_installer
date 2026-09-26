@@ -1,5 +1,7 @@
 """Internal PostgreSQL database backend, bootstrapping its own cluster."""
 
+import shutil
+from pathlib import Path
 from typing import ClassVar
 
 import psycopg
@@ -11,6 +13,7 @@ from database.utils import (
     apply_missing_upgrades,
     apply_schema,
     connect,
+    dump_database,
     is_database_empty,
 )
 
@@ -53,6 +56,39 @@ class InternalDatabase:
         """Apply any missing upgrade scripts if the database is not empty."""
         if not is_database_empty(self.__settings):
             apply_missing_upgrades(self.__settings)
+
+    def backup(self, path: Path) -> bool:
+        """Dump the database into a SQL file, starting the local server if needed.
+
+        Args:
+            path: SQL file to write.
+
+        Returns:
+            False if there is nothing to back up (the cluster was never
+            initialized, e.g. after an install that failed early), True otherwise.
+
+        """
+        if not postgres_cluster.is_initialized(self.__settings):
+            return False
+        if not postgres_cluster.is_running(self.__settings):
+            postgres_cluster.start(self.__settings)
+        dump_database(self.__settings, path)
+        return True
+
+    def destroy(self) -> None:
+        """Stop the local PostgreSQL server, then delete its data directory.
+
+        Raises:
+            PostgresClusterError: If the server is still running after being stopped.
+
+        """
+        if postgres_cluster.is_initialized(self.__settings) and postgres_cluster.is_running(self.__settings):
+            postgres_cluster.stop(self.__settings)
+            if postgres_cluster.is_running(self.__settings):
+                msg = f"PostgreSQL server for '{self.__settings.pg_data}' is still running after 'pg_ctl stop'."
+                raise postgres_cluster.PostgresClusterError(msg)
+        if self.__settings.pg_data.exists():
+            shutil.rmtree(self.__settings.pg_data)
 
     def _admin_connect(self, *, database: str | None = None) -> Connection:
         """Connect using admin credentials.
@@ -134,17 +170,11 @@ class InternalDatabase:
             self._admin_connect(database=settings.database) as conn,
             conn.cursor() as cur,
         ):
-            cur.execute(
-                sql.SQL("ALTER SCHEMA public OWNER TO {}").format(
-                    sql.Identifier(settings.user)
-                )
-            )
+            cur.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(sql.Identifier(settings.user)))
 
             if settings.max_connections is not None:
                 # ALTER SYSTEM SET is a utility statement and does not accept
                 # bind parameters either; inline the value as a literal.
                 cur.execute(
-                    sql.SQL("ALTER SYSTEM SET max_connections = {}").format(
-                        sql.Literal(str(settings.max_connections))
-                    )
+                    sql.SQL("ALTER SYSTEM SET max_connections = {}").format(sql.Literal(str(settings.max_connections)))
                 )

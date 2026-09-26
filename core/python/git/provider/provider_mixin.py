@@ -28,12 +28,15 @@ class ProviderMixin(ProviderBase):
         ssh_host: Hostname used to build SSH repository URLs.
         base_url: HTTPS URL template with ``{name}``, ``{account_name}`` and
             ``{repository_name}`` placeholders.
+        branch_url: Web URL template with ``{account_name}``,
+            ``{repository_name}`` and ``{branch_name}`` placeholders.
 
     """
 
     name: str = ""
     ssh_host: str = ""
     base_url: str = ""
+    branch_url: str = ""
     default_branches: ClassVar[list[str]] = []
 
     def __init__(
@@ -141,6 +144,32 @@ class ProviderMixin(ProviderBase):
                 raise ProviderError(error_msg) from e
 
         self._branch_used = branch
+
+    def get_branch_url(self, repository_name: str, branch_name: str) -> str:
+        """Return the provider's web page showing a branch of a repository.
+
+        This is a human-facing URL meant to be linked to from a report, not a
+        URL git can clone from: see :meth:`_build_repository_url` for that.
+
+        Args:
+            repository_name: Short repository name.
+            branch_name: Branch to link to.
+
+        Returns:
+            The URL of the branch on the provider's web interface.
+
+        Raises:
+            ValueError: If the provider does not define a ``branch_url`` template.
+
+        """
+        if not self.branch_url:
+            msg = f"Provider '{self.name}' cannot build a branch URL: branch_url is required"
+            raise ValueError(msg)
+        return self.branch_url.format(
+            account_name=self.account_name,
+            repository_name=repository_name,
+            branch_name=branch_name,
+        )
 
     @override
     def remote_exists(self, repository_name: str) -> bool:

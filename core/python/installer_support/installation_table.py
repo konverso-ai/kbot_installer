@@ -10,7 +10,8 @@ from typing import Literal
 from rich.console import Console
 from rich.table import Table
 
-InstallationStatus = Literal["success", "error", "skipped", "in_progress"]
+InstallationStatus = Literal["success", "error", "skipped", "kept", "in_progress"]
+FinalStatus = Literal["success", "error", "skipped", "kept"]
 
 _PRODUCT_WIDTH = 22
 _PROVIDER_WIDTH = 18
@@ -24,8 +25,10 @@ class InstallationResult:
     Attributes:
         product_name: Name of the product installed.
         provider_name: Name of the provider used for installation.
-        status: Installation status ('success', 'error', 'skipped', 'in_progress').
+        status: Installation status ('success', 'error', 'skipped', 'kept', 'in_progress').
+            'kept' means a local copy (e.g. a manual build) was deliberately left untouched.
         error_message: Error message if status is 'error'.
+        details: Free-form details shown instead of the default ones.
 
     """
 
@@ -33,6 +36,7 @@ class InstallationResult:
     provider_name: str
     status: InstallationStatus
     error_message: str | None = None
+    details: str | None = None
 
 
 class InstallationTable:
@@ -71,8 +75,9 @@ class InstallationTable:
         self,
         product_name: str,
         provider_name: str,
-        status: Literal["success", "error", "skipped"],
+        status: FinalStatus,
         error_message: str | None = None,
+        details: str | None = None,
     ) -> None:
         """Record and display the final installation result for a product.
 
@@ -81,6 +86,7 @@ class InstallationTable:
             provider_name: Name of the provider used.
             status: Final installation status.
             error_message: Error message if status is 'error'.
+            details: Free-form details shown instead of the default ones.
 
         """
         result = InstallationResult(
@@ -88,6 +94,7 @@ class InstallationTable:
             provider_name=provider_name,
             status=status,
             error_message=error_message,
+            details=details,
         )
         self.results.append(result)
 
@@ -101,7 +108,7 @@ class InstallationTable:
         self,
         product_name: str,
         provider_name: str,
-        status: Literal["success", "error", "skipped"],
+        status: FinalStatus,
         error_message: str | None = None,
         *,
         display_immediately: bool = False,
@@ -204,14 +211,13 @@ class InstallationTable:
     ) -> str:
         """Format one installation row as fixed-width text."""
         return (
-            f"{product_name:<{_PRODUCT_WIDTH}}"
-            f"{provider_name:<{_PROVIDER_WIDTH}}"
-            f"{status_text:<{_STATUS_WIDTH}}"
-            f"{details}"
+            f"{product_name:<{_PRODUCT_WIDTH}}{provider_name:<{_PROVIDER_WIDTH}}{status_text:<{_STATUS_WIDTH}}{details}"
         )
 
     def _get_details(self, result: InstallationResult) -> str:
         """Return the details column for a result."""
+        if result.details:
+            return result.details
         if result.status == "error" and result.error_message:
             return result.error_message
         if result.status == "skipped":
@@ -232,6 +238,7 @@ class InstallationTable:
             "success": "green",
             "error": "red",
             "skipped": "yellow",
+            "kept": "cyan",
             "in_progress": "blue",
         }
         return styles.get(status, "white")
@@ -250,6 +257,7 @@ class InstallationTable:
             "success": "✅",
             "error": "❌",
             "skipped": "⏭️",
+            "kept": "📌",
             "in_progress": "⏳",
         }
         return icons.get(status, "❓")
@@ -267,12 +275,15 @@ class InstallationTable:
         success_count = sum(1 for r in self.results if r.status == "success")
         error_count = sum(1 for r in self.results if r.status == "error")
         skipped_count = sum(1 for r in self.results if r.status == "skipped")
+        kept_count = sum(1 for r in self.results if r.status == "kept")
 
         summary_parts = []
         if success_count > 0:
             summary_parts.append(f"{success_count} successful")
         if error_count > 0:
             summary_parts.append(f"{error_count} failed")
+        if kept_count > 0:
+            summary_parts.append(f"{kept_count} kept (local)")
         if skipped_count > 0 and self.verbose:
             summary_parts.append(f"{skipped_count} skipped")
 

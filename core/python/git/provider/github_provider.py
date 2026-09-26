@@ -22,4 +22,5 @@ class GithubProvider(ProviderMixin):
     name = "github"
     ssh_host = "github.com"
     base_url = "https://{name}.com/{account_name}/{repository_name}.git"
+    branch_url = "https://github.com/{account_name}/{repository_name}/tree/{branch_name}"
     default_branches: ClassVar[list[str]] = ["main", "dev"]

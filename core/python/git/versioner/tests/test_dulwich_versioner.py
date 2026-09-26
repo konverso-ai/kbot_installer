@@ -9,7 +9,7 @@ from dulwich.porcelain import Error as DulwichPorcelainError
 
 from git.auth_protocol import GitAuthProtocol
 from git.versioner.base import VersionerBase
-from git.versioner.errors import VersionerError
+from git.versioner.errors import DetachedHeadError, MergeConflictError, VersionerError
 from git.versioner.dulwich_versioner import DulwichVersioner
 from utils.utils_for_unit_tests import compare
 
@@ -467,7 +467,11 @@ def test_get_current_branch_name_valid_returns_branch(
     expected: str,
 ) -> None:
     mock_repo = MagicMock()
-    mock_repo.refs.follow.return_value = (b"HEAD", params["branch_ref"])
+    # Repo.refs.follow returns (chain_of_refnames, sha), not (sha, refname).
+    mock_repo.refs.follow.return_value = (
+        [b"HEAD", params["branch_ref"]],
+        b"0" * 40,
+    )
     assert compare(
         "eq",
         bare_versioner._get_current_branch_name(mock_repo),
@@ -478,8 +482,9 @@ def test_get_current_branch_name_valid_returns_branch(
 @pytest.mark.parametrize(
     "params, expected",
     [
-        ({"branch_ref": None}, VersionerError),
-        ({"branch_ref": b"refs/remotes/origin/main"}, VersionerError),
+        ({"chain": []}, DetachedHeadError),
+        ({"chain": [b"HEAD"]}, DetachedHeadError),
+        ({"chain": [b"HEAD", b"refs/remotes/origin/main"]}, DetachedHeadError),
     ],
 )
 def test_get_current_branch_name_invalid_raises(
@@ -488,7 +493,7 @@ def test_get_current_branch_name_invalid_raises(
     expected: type[BaseException],
 ) -> None:
     mock_repo = MagicMock()
-    mock_repo.refs.follow.return_value = (b"HEAD", params["branch_ref"])
+    mock_repo.refs.follow.return_value = (params["chain"], b"0" * 40)
     with pytest.raises(expected, match="No current branch found"):
         bare_versioner._get_current_branch_name(mock_repo)
 
@@ -512,7 +517,7 @@ def test_fetch_valid_fetches_origin(bare_versioner: DulwichVersioner) -> None:
         patch("git.versioner.dulwich_versioner.porcelain.fetch") as mock_fetch,
     ):
         bare_versioner.fetch("/test/path")
-    mock_fetch.assert_called_once_with(mock_repo, b"origin")
+    mock_fetch.assert_called_once_with(mock_repo, b"origin", errstream=ANY)
 
 
 @pytest.mark.parametrize(
@@ -543,14 +548,40 @@ def test_fetch_invalid_raises(
 def test_pull_valid_merges_remote_branch(bare_versioner: DulwichVersioner) -> None:
     mock_repo = MagicMock()
     mock_repo.get_refs.return_value = {b"refs/remotes/origin/main": b"sha1"}
+    mock_repo.head.return_value = b"a" * 40
     with (
         patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
         patch.object(bare_versioner, "_get_current_branch_name", return_value="main"),
         patch("git.versioner.dulwich_versioner.porcelain.fetch"),
-        patch("git.versioner.dulwich_versioner.porcelain.merge") as mock_merge,
+        patch(
+            "git.versioner.dulwich_versioner.porcelain.merge",
+            return_value=(b"b" * 40, []),
+        ) as mock_merge,
+    ):
+        result = bare_versioner.pull("/test/path", "main")
+    mock_merge.assert_called_once_with(mock_repo, "origin/main")
+    compare("eq", result.has_changes, False)
+    compare("eq", result.new_commit_id, "a" * 40)
+
+
+def test_pull_invalid_raises_on_merge_conflicts(
+    bare_versioner: DulwichVersioner,
+) -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_refs.return_value = {b"refs/remotes/origin/main": b"sha1"}
+    mock_repo.head.return_value = b"a" * 40
+    with (
+        patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
+        patch.object(bare_versioner, "_get_current_branch_name", return_value="main"),
+        patch("git.versioner.dulwich_versioner.porcelain.fetch"),
+        patch(
+            "git.versioner.dulwich_versioner.porcelain.merge",
+            return_value=(None, [b"conf/kbot.conf", b"README.md"]),
+        ),
+        pytest.raises(MergeConflictError, match="2 conflicted") as excinfo,
     ):
         bare_versioner.pull("/test/path", "main")
-    mock_merge.assert_called_once_with(mock_repo, "origin/main")
+    compare("eq", excinfo.value.conflicts, ["conf/kbot.conf", "README.md"])
 
 
 def test_pull_invalid_raises_when_remote_branch_missing(
@@ -633,6 +664,7 @@ def test_push_valid_pushes_current_branch(bare_versioner: DulwichVersioner) -> N
         mock_repo,
         b"origin",
         refspecs=["refs/heads/main:refs/heads/main"],
+        errstream=ANY,
     )
 
 
@@ -691,6 +723,7 @@ def test_push_branches_valid_pushes_multiple(bare_versioner: DulwichVersioner) -
             "refs/heads/main:refs/heads/main",
             "refs/heads/dev:refs/heads/dev",
         ],
+        errstream=ANY,
     )
 
 
@@ -917,12 +950,10 @@ def test_stash_invalid_wraps_dulwich_error(bare_versioner: DulwichVersioner) -> 
 
 
 def test_safe_pull_valid_without_stash(bare_versioner: DulwichVersioner) -> None:
-    mock_repo = MagicMock()
     with (
-        patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
         patch.object(bare_versioner, "stash", return_value=False),
         patch.object(bare_versioner, "pull") as mock_pull,
-        patch.object(bare_versioner, "_apply_stash") as mock_apply,
+        patch.object(bare_versioner, "_apply_stash_at") as mock_apply,
     ):
         bare_versioner.safe_pull("/test/path", "main")
     mock_pull.assert_called_once_with("/test/path", "main")
@@ -932,46 +963,56 @@ def test_safe_pull_valid_without_stash(bare_versioner: DulwichVersioner) -> None
 def test_safe_pull_valid_restores_stash_after_success(
     bare_versioner: DulwichVersioner,
 ) -> None:
-    mock_repo = MagicMock()
     with (
-        patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
         patch.object(bare_versioner, "stash", return_value=True),
         patch.object(bare_versioner, "pull"),
-        patch.object(bare_versioner, "_apply_stash") as mock_apply,
+        patch.object(bare_versioner, "_apply_stash_at") as mock_apply,
     ):
         bare_versioner.safe_pull("/test/path", "main")
-    mock_apply.assert_called_once_with(mock_repo)
+    mock_apply.assert_called_once_with("/test/path")
 
 
 def test_safe_pull_valid_restores_stash_after_pull_failure(
     bare_versioner: DulwichVersioner,
 ) -> None:
-    mock_repo = MagicMock()
     with (
-        patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
         patch.object(bare_versioner, "stash", return_value=True),
         patch.object(
             bare_versioner,
             "pull",
             side_effect=VersionerError("pull failed"),
         ),
-        patch.object(bare_versioner, "_apply_stash") as mock_apply,
+        patch.object(bare_versioner, "_apply_stash_at") as mock_apply,
     ):
         with pytest.raises(VersionerError, match="pull failed"):
             bare_versioner.safe_pull("/test/path", "main")
-    mock_apply.assert_called_once_with(mock_repo)
+    mock_apply.assert_called_once_with("/test/path")
 
 
 def test_safe_pull_invalid_wraps_dulwich_error(bare_versioner: DulwichVersioner) -> None:
+    # safe_pull stashes first, so an unopenable repository surfaces from stash.
     with (
         patch.object(
             bare_versioner,
             "_get_repository",
             side_effect=NotGitRepository("not a repo"),
         ),
-        pytest.raises(VersionerError, match="Failed to perform safe pull"),
+        pytest.raises(VersionerError, match="Failed to stash changes"),
     ):
         bare_versioner.safe_pull("/test/path", "main")
+
+
+def test_apply_stash_at_valid_opens_and_applies(
+    bare_versioner: DulwichVersioner,
+) -> None:
+    mock_repo = MagicMock()
+    with (
+        patch.object(bare_versioner, "_get_repository", return_value=mock_repo),
+        patch.object(bare_versioner, "_apply_stash") as mock_apply,
+    ):
+        bare_versioner._apply_stash_at("/test/path")
+    mock_apply.assert_called_once_with(mock_repo)
+    mock_repo.close.assert_called_once()
 
 
 def test_apply_stash_valid_no_entries_is_noop(bare_versioner: DulwichVersioner) -> None:

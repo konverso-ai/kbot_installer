@@ -9,6 +9,16 @@ from auth.ssh.ssh_auth import SshAuth
 from utils.utils_for_unit_tests import compare
 
 
+@pytest.fixture(autouse=True)
+def _no_ld_library_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Build the plain ssh command, whatever the interpreter running the tests.
+
+    SshAuth prefixes the command with an env reset when LD_LIBRARY_PATH is set,
+    so the default expectations below only hold once it is cleared.
+    """
+    monkeypatch.delenv("LD_LIBRARY_PATH", raising=False)
+
+
 @pytest.mark.parametrize(
     "params, expected",
     [
@@ -146,3 +156,35 @@ def test_contextmanager_valid_cleans_up_temp_key() -> None:
         assert compare("eq", key_path.exists(), True)
     assert compare("eq", key_path.exists(), False)
     assert compare("eq", temp_dir.exists(), False)
+
+
+def test_sshcommand_valid_clears_ld_library_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bundled OpenSSL must not leak into the system ssh binary."""
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/opt/python/lib:/opt/openssl/lib")
+    auth = SshAuth(use_agent=True)
+    assert compare(
+        "eq",
+        auth.remote_kwargs()["ssh_command"],
+        "env -u LD_LIBRARY_PATH ssh -o StrictHostKeyChecking=accept-new",
+    )
+    assert compare(
+        "eq",
+        auth.git_ssh_command(),
+        "env -u LD_LIBRARY_PATH ssh -o StrictHostKeyChecking=accept-new",
+    )
+
+
+def test_sshcommand_valid_ignores_empty_ld_library_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/fake-agent.sock")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "")
+    auth = SshAuth(use_agent=True)
+    assert compare(
+        "eq",
+        auth.remote_kwargs()["ssh_command"],
+        "ssh -o StrictHostKeyChecking=accept-new",
+    )

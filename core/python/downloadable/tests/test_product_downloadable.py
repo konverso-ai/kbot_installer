@@ -63,6 +63,9 @@ class TestProductDownloadableWithoutDependencies:
         product = _make_product("acme")
         product_dir = tmp_path / "acme"
         _write_description_xml(product_dir, product)
+        (product_dir / "description.json").write_text(
+            json.dumps(product.to_json()), encoding="utf-8"
+        )
 
         provider = MagicMock(spec=ProviderBase)
         provider.get_name.return_value = "github"
@@ -173,6 +176,161 @@ class TestProductDownloadableCommitPinning:
             branch="main",
             commit_id="new-commit",
         )
+
+
+class TestProductDownloadableCleanRedownload:
+    """Tests for replacing outdated downloads and keeping user-managed copies."""
+
+    @staticmethod
+    def _write_download(product_dir: Path, product: Product) -> None:
+        """Simulate a storage download: description.xml + description.json."""
+        _write_description_xml(product_dir, product)
+        (product_dir / "description.json").write_text(
+            json.dumps(product.to_json()), encoding="utf-8"
+        )
+
+    @staticmethod
+    def _provider_writing(product: Product) -> MagicMock:
+        provider = MagicMock(spec=ProviderBase)
+        provider.get_name.return_value = "storage"
+
+        def _clone(_repository_name: str, target_path: Path, **_kwargs: object) -> None:
+            _write_description_xml(Path(target_path), product)
+
+        provider.clone_and_checkout.side_effect = _clone
+        return provider
+
+    def test_download_removes_outdated_download_before_downloading_again(
+        self, tmp_path: Path
+    ) -> None:
+        """Files of the previous version must not survive a re-download."""
+        old_product = _make_product("acme", commit="old-commit")
+        new_product = _make_product("acme", commit="new-commit")
+        product_dir = tmp_path / "acme"
+        self._write_download(product_dir, old_product)
+        (product_dir / "removed_in_new_version.py").write_text("", encoding="utf-8")
+        provider = self._provider_writing(new_product)
+
+        ProductDownloadable(
+            product=new_product,
+            provider=provider,
+            table=InstallationTable(),
+            include_dependencies=False,
+        ).download(tmp_path)
+
+        provider.clone_and_checkout.assert_called_once()
+        assert not (product_dir / "removed_in_new_version.py").exists()
+        assert (product_dir / "description.xml").exists()
+
+    def test_download_removes_incomplete_folder_before_downloading(
+        self, tmp_path: Path
+    ) -> None:
+        """A leftover folder without description.xml (e.g. interrupted download) is cleaned up."""
+        product = _make_product("acme", commit="abc123")
+        product_dir = tmp_path / "acme"
+        product_dir.mkdir()
+        (product_dir / "partial.tmp").write_text("", encoding="utf-8")
+        provider = self._provider_writing(product)
+
+        ProductDownloadable(
+            product=product,
+            provider=provider,
+            table=InstallationTable(),
+            include_dependencies=False,
+        ).download(tmp_path)
+
+        provider.clone_and_checkout.assert_called_once()
+        assert not (product_dir / "partial.tmp").exists()
+
+    def test_download_keeps_local_build_even_when_commit_differs(
+        self, tmp_path: Path
+    ) -> None:
+        """A manual 'make' build (description.xml without description.json) is never replaced."""
+        product = _make_product("kbot", commit="new-commit")
+        product_dir = tmp_path / "kbot"
+        _write_description_xml(product_dir, product)
+        (product_dir / "my_build.py").write_text("", encoding="utf-8")
+        provider = self._provider_writing(product)
+        table = InstallationTable()
+
+        ProductDownloadable(
+            product=product,
+            provider=provider,
+            table=table,
+            include_dependencies=False,
+        ).download(tmp_path)
+
+        provider.clone_and_checkout.assert_not_called()
+        assert (product_dir / "my_build.py").exists()
+        result = table.results[-1]
+        assert result.status == "kept"
+        assert result.details == "Kept local build (expected commit new-commit)"
+
+    def test_download_keeps_git_working_copy_even_when_commit_differs(
+        self, tmp_path: Path
+    ) -> None:
+        """A git working copy (possibly with uncommitted changes) is never replaced."""
+        old_product = _make_product("ev-customer", commit="old-commit")
+        new_product = _make_product("ev-customer", commit="new-commit")
+        product_dir = tmp_path / "ev-customer"
+        self._write_download(product_dir, old_product)
+        (product_dir / ".git").mkdir()
+        provider = self._provider_writing(new_product)
+        table = InstallationTable()
+
+        ProductDownloadable(
+            product=new_product,
+            provider=provider,
+            table=table,
+            include_dependencies=False,
+        ).download(tmp_path)
+
+        provider.clone_and_checkout.assert_not_called()
+        assert (product_dir / ".git").is_dir()
+        assert table.results[-1].status == "kept"
+        assert table.results[-1].details.startswith("Kept local git working copy")
+
+    def test_download_keeps_symlinked_product(self, tmp_path: Path) -> None:
+        """A product symlinked to another folder (e.g. under ~/dev/git) is never replaced."""
+        product = _make_product("kbot", commit="new-commit")
+        target = tmp_path / "git" / "kbot"
+        self._write_download(target, _make_product("kbot", commit="old-commit"))
+        installer_dir = tmp_path / "installer"
+        installer_dir.mkdir()
+        (installer_dir / "kbot").symlink_to(target)
+        provider = self._provider_writing(product)
+        table = InstallationTable()
+
+        ProductDownloadable(
+            product=product,
+            provider=provider,
+            table=table,
+            include_dependencies=False,
+        ).download(installer_dir)
+
+        provider.clone_and_checkout.assert_not_called()
+        assert (target / "description.json").exists()
+        assert table.results[-1].status == "kept"
+
+    def test_download_keeps_up_to_date_local_build_without_warning_details(
+        self, tmp_path: Path
+    ) -> None:
+        """An unpinned product with a local build is kept, without an expected-commit note."""
+        product = _make_product("kbot")
+        product_dir = tmp_path / "kbot"
+        _write_description_xml(product_dir, product)
+        provider = self._provider_writing(product)
+        table = InstallationTable()
+
+        ProductDownloadable(
+            product=product,
+            provider=provider,
+            table=table,
+            include_dependencies=False,
+        ).download(tmp_path)
+
+        provider.clone_and_checkout.assert_not_called()
+        assert table.results[-1].details == "Kept local build"
 
 
 class TestProductDownloadableWithDependencies:

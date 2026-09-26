@@ -5,20 +5,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import click
+
 from database.base import DbSettings
 from database.utils import (
     DEFAULT_DB_PASSWORD,
+    DatabaseDumpError,
     SCHEMA_VERSION_TABLE,
     SqlFileError,
     apply_missing_upgrades,
     apply_schema,
     connect,
+    drop_owned_objects,
+    dump_database,
     ensure_version_table,
     execute_sql_file,
     get_applied_version,
     is_database_empty,
     mark_version_applied,
+    resolve_admin_password,
     resolve_db_password,
+    safe_encrypt,
+    set_admin_password,
     upgrade_files,
     version_from_upgrade_file,
 )
@@ -62,9 +70,7 @@ def mock_subprocess_run() -> MagicMock:
 class TestConnect:
     """Test cases for connect."""
 
-    def test_connect_valid_uses_settings_database(
-        self, settings: DbSettings, mock_connect: MagicMock
-    ) -> None:
+    def test_connect_valid_uses_settings_database(self, settings: DbSettings, mock_connect: MagicMock) -> None:
         connect(settings)
 
         mock_connect.assert_called_once_with(
@@ -75,9 +81,7 @@ class TestConnect:
             password=settings.password,
         )
 
-    def test_connect_valid_overrides_database(
-        self, settings: DbSettings, mock_connect: MagicMock
-    ) -> None:
+    def test_connect_valid_overrides_database(self, settings: DbSettings, mock_connect: MagicMock) -> None:
         connect(settings, database="other_db")
 
         mock_connect.assert_called_once_with(
@@ -145,9 +149,7 @@ class TestExecuteSqlFile:
 class TestEnsureVersionTable:
     """Test cases for ensure_version_table."""
 
-    def test_ensureversiontable_valid_creates_table(
-        self, settings: DbSettings, mock_conn: MagicMock
-    ) -> None:
+    def test_ensureversiontable_valid_creates_table(self, settings: DbSettings, mock_conn: MagicMock) -> None:
         ensure_version_table(settings)
 
         cur = mock_conn.cursor.return_value.__enter__.return_value
@@ -158,9 +160,7 @@ class TestEnsureVersionTable:
 class TestGetAppliedVersion:
     """Test cases for get_applied_version."""
 
-    def test_getappliedversion_valid_returns_versions(
-        self, settings: DbSettings, mock_conn: MagicMock
-    ) -> None:
+    def test_getappliedversion_valid_returns_versions(self, settings: DbSettings, mock_conn: MagicMock) -> None:
         cur = mock_conn.cursor.return_value.__enter__.return_value
         cur.fetchall.return_value = [("1.0.0",), ("1.0.1",)]
 
@@ -168,9 +168,7 @@ class TestGetAppliedVersion:
 
         assert compare("eq", result, {"1.0.0", "1.0.1"})
 
-    def test_getappliedversion_valid_ensures_table_first(
-        self, settings: DbSettings, mock_conn: MagicMock
-    ) -> None:
+    def test_getappliedversion_valid_ensures_table_first(self, settings: DbSettings, mock_conn: MagicMock) -> None:
         cur = mock_conn.cursor.return_value.__enter__.return_value
         cur.fetchall.return_value = []
 
@@ -182,9 +180,7 @@ class TestGetAppliedVersion:
 class TestMarkVersionApplied:
     """Test cases for mark_version_applied."""
 
-    def test_markversionapplied_valid_inserts_version(
-        self, settings: DbSettings, mock_conn: MagicMock
-    ) -> None:
+    def test_markversionapplied_valid_inserts_version(self, settings: DbSettings, mock_conn: MagicMock) -> None:
         mark_version_applied(settings, "1.0.0")
 
         cur = mock_conn.cursor.return_value.__enter__.return_value
@@ -312,14 +308,10 @@ class TestApplySchema:
 class TestUpgradeFiles:
     """Test cases for upgrade_files."""
 
-    def test_upgradefiles_valid_returns_empty_without_upgrades_dir(
-        self, settings: DbSettings
-    ) -> None:
+    def test_upgradefiles_valid_returns_empty_without_upgrades_dir(self, settings: DbSettings) -> None:
         assert compare("eq", upgrade_files(settings), [])
 
-    def test_upgradefiles_valid_returns_sorted_upgrade_files(
-        self, settings: DbSettings, tmp_path: Path
-    ) -> None:
+    def test_upgradefiles_valid_returns_sorted_upgrade_files(self, settings: DbSettings, tmp_path: Path) -> None:
         upgrades_dir = tmp_path / "upgrades"
         upgrades_dir.mkdir()
         (upgrades_dir / "upgrade_2.sql").write_text("", encoding="utf-8")
@@ -366,9 +358,7 @@ class TestApplyMissingUpgrades:
         ):
             apply_missing_upgrades(settings)
 
-            mock_execute.assert_called_once_with(
-                settings=settings, path=upgrades_dir / "upgrade_2.sql"
-            )
+            mock_execute.assert_called_once_with(settings=settings, path=upgrades_dir / "upgrade_2.sql")
             mock_mark.assert_called_once_with(settings=settings, version="2")
 
     def test_applymissingupgrades_valid_applies_nothing_when_up_to_date(
@@ -417,3 +407,122 @@ class TestResolveDbPassword:
 
         assert password == DEFAULT_DB_PASSWORD
         assert generated is None
+
+
+class TestResolveAdminPassword:
+    """Tests for resolve_admin_password."""
+
+    def test_resolveadminpassword_valid_returns_env_password(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("KBOT_ADMIN_PASSWORD", "env-pwd")
+
+        password, generated = resolve_admin_password(no_password=False)
+
+        assert password == "env-pwd"
+        assert generated is None
+
+    def test_resolveadminpassword_valid_prefers_env_password_over_no_password(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("KBOT_ADMIN_PASSWORD", "env-pwd")
+
+        password, generated = resolve_admin_password(no_password=True)
+
+        assert password == "env-pwd"
+        assert generated is None
+
+    def test_resolveadminpassword_valid_generates_random_password_when_no_password(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("KBOT_ADMIN_PASSWORD", raising=False)
+
+        password, generated = resolve_admin_password(no_password=True)
+
+        assert password == generated
+        assert generated is not None
+        assert len(generated) > 0
+
+    def test_resolveadminpassword_invalid_raises_without_env_or_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("KBOT_ADMIN_PASSWORD", raising=False)
+
+        with pytest.raises(click.UsageError, match="KBOT_ADMIN_PASSWORD"):
+            resolve_admin_password(no_password=False)
+
+
+class TestDropOwnedObjects:
+    """Tests for drop_owned_objects."""
+
+    def test_dropownedobjects_valid_drops_owned_by_current_user(
+        self, settings: DbSettings, mock_conn: MagicMock
+    ) -> None:
+        drop_owned_objects(settings)
+
+        cur = mock_conn.cursor.return_value.__enter__.return_value
+        cur.execute.assert_called_once_with("DROP OWNED BY CURRENT_USER")
+        mock_conn.commit.assert_called_once()
+
+
+class TestDumpDatabase:
+    """Tests for dump_database."""
+
+    def test_dumpdatabase_valid_invokes_pgdump_next_to_psql(
+        self, settings: DbSettings, mock_subprocess_run: MagicMock, tmp_path: Path
+    ) -> None:
+        dump_path = tmp_path / "backups" / "dump.sql"
+
+        dump_database(settings, dump_path)
+
+        command = mock_subprocess_run.call_args.args[0]
+        assert compare("eq", command[0], str(settings.psql_path.with_name("pg_dump")))
+        assert compare("in", "--no-owner", command)
+        assert compare("eq", command[command.index("-f") + 1], str(dump_path))
+        assert compare("eq", command[-1], settings.database)
+        assert compare("eq", mock_subprocess_run.call_args.kwargs["env"]["PGPASSWORD"], settings.password)
+        assert compare("eq", dump_path.parent.is_dir(), True)
+
+    def test_dumpdatabase_invalid_raises_when_pgdump_fails(
+        self, settings: DbSettings, mock_subprocess_run: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_subprocess_run.return_value = MagicMock(returncode=1, stderr="boom")
+
+        with pytest.raises(DatabaseDumpError, match="boom"):
+            dump_database(settings, tmp_path / "dump.sql")
+
+
+class TestSafeEncrypt:
+    """Tests for safe_encrypt."""
+
+    # Produced by kbot's own 'utils.SafeEncrypt("K0nversOK!")' with the salt bytes(range(16)).
+    KBOT_REFERENCE = (
+        "YmU0NGU5ZDBmODFhODhkZjZmOGZhNzBlYmQzZjk1OGRlNTk2MzVlYTkwYTMwNzU5OTk3MjFlMmM4NGI5NjdhZSQAAQIDBAUGBwgJCgsMDQ4P"
+    )
+
+    def test_safeencrypt_valid_matches_kbot_reference_hash(self) -> None:
+        with patch("database.utils.secrets.token_bytes", return_value=bytes(range(16))):
+            assert compare("eq", safe_encrypt("K0nversOK!"), self.KBOT_REFERENCE)
+
+    def test_safeencrypt_valid_verifies_like_kbot_with_stored_salt(self) -> None:
+        assert compare("eq", safe_encrypt("K0nversOK!", self.KBOT_REFERENCE), self.KBOT_REFERENCE)
+
+    def test_safeencrypt_invalid_wrong_password_does_not_verify(self) -> None:
+        assert compare("ne", safe_encrypt("wrong", self.KBOT_REFERENCE), self.KBOT_REFERENCE)
+
+    def test_safeencrypt_valid_uses_random_salt(self) -> None:
+        assert compare("ne", safe_encrypt("K0nversOK!"), safe_encrypt("K0nversOK!"))
+
+
+class TestSetAdminPassword:
+    """Tests for set_admin_password."""
+
+    def test_setadminpassword_valid_stores_hashed_password_with_parameterized_query(
+        self, settings: DbSettings, mock_conn: MagicMock
+    ) -> None:
+        set_admin_password(settings, "new-pwd")
+
+        cur = mock_conn.cursor.return_value.__enter__.return_value
+        cur.execute.assert_called_once()
+        args = cur.execute.call_args[0]
+        assert compare("in", "users_im_account", args[0])
+        (stored,) = args[1]
+        assert compare("ne", stored, "new-pwd")
+        assert compare("eq", safe_encrypt("new-pwd", stored), stored)
+        mock_conn.commit.assert_called_once()

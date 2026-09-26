@@ -16,6 +16,12 @@ from auth.ssh.base import RemoteKwargs, SshAuthBase
 GitUsername: TypeAlias = Annotated[str, Field(default="git")]
 StrictHostKeyChecking: TypeAlias = Annotated[str, Field(default="accept-new")]
 
+# Interpreters shipping their own OpenSSL (the kbot runtime does) export an
+# LD_LIBRARY_PATH that makes the system ssh binary abort with
+# "OpenSSL version mismatch". ssh must run against the system libraries, so the
+# variable is cleared for that subprocess only.
+SSH_ENV_RESET = "env -u LD_LIBRARY_PATH"
+
 DEFAULT_KEY_FILENAMES: tuple[str, ...] = (
     "id_ed25519",
     "id_rsa",
@@ -93,7 +99,10 @@ class SshAuth(SshAuthBase):
         return kwargs
 
     def _ssh_command(self) -> str:
-        return f"ssh -o StrictHostKeyChecking={self.strict_host_key_checking}"
+        command = f"ssh -o StrictHostKeyChecking={self.strict_host_key_checking}"
+        if os.environ.get("LD_LIBRARY_PATH"):
+            command = f"{SSH_ENV_RESET} {command}"
+        return command
 
     def git_ssh_command(self) -> str:
         """Build the SSH command used as ``GIT_SSH_COMMAND`` for git subprocesses."""

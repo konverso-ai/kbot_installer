@@ -120,3 +120,27 @@ class TestUpgrade:
             db.upgrade()
 
             mock_upgrade.assert_not_called()
+
+
+class TestBackup:
+    """Test cases for ExternalDatabase.backup."""
+
+    def test_backup_valid_dumps_database(
+        self, db: ExternalDatabase, settings: ExternalDbSettings, tmp_path: Path
+    ) -> None:
+        with patch("database.external_database.dump_database") as mock_dump:
+            assert db.backup(tmp_path / "dump.sql") is True
+
+        mock_dump.assert_called_once_with(settings, tmp_path / "dump.sql")
+
+
+class TestDestroy:
+    """Test cases for ExternalDatabase.destroy."""
+
+    def test_destroy_valid_drops_objects_owned_by_user(
+        self, db: ExternalDatabase, settings: ExternalDbSettings
+    ) -> None:
+        with patch("database.external_database.drop_owned_objects") as mock_drop:
+            db.destroy()
+
+        mock_drop.assert_called_once_with(settings)

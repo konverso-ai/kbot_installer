@@ -5,7 +5,6 @@ azure-storage-blob>=12.30.0
 boto3>=1.43.32
 click
 colorama
-drf-yasg>=1.21.7
 dulwich>=1.2.6
 furl
 httpx

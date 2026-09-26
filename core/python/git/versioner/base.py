@@ -8,6 +8,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from git.auth_protocol import GitAuthProtocol
+from git.versioner.author import Author
+from git.versioner.pull_result import PullResult
+from git.versioner.status import RepoStatus
 
 __all__ = ["VersionerBase"]
 
@@ -16,7 +19,8 @@ class VersionerBase(ABC):
     """Abstract base class for versioners.
 
     This class defines the interface that all versioners must implement.
-    It provides methods for full git operations: clone, add, pull, commit, and push.
+    It provides methods for full git operations: clone, add, pull, commit, and push,
+    plus read-only inspection of a local repository.
 
     Attributes:
         name (str): Name of the versioner.
@@ -33,6 +37,195 @@ class VersionerBase(ABC):
 
         """
 
+    #
+    # Read-only inspection
+    #
+
+    @abstractmethod
+    def head_commit_id(self, repository_path: str | Path) -> str:
+        """Return the full commit id (SHA-1) currently pointed to by HEAD.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            The 40-character hexadecimal commit id.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            VersionerError: If HEAD cannot be resolved (e.g. empty repository).
+
+        """
+
+    @abstractmethod
+    def current_branch(self, repository_path: str | Path) -> str:
+        """Return the name of the branch currently checked out.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            The short branch name (without the ``refs/heads/`` prefix).
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            DetachedHeadError: If HEAD does not point to a local branch.
+
+        """
+
+    @abstractmethod
+    def describe_head(self, repository_path: str | Path) -> str:
+        """Return a human-readable name for HEAD, even when detached.
+
+        Falls back to the name of a tag pointing at HEAD, then to the
+        abbreviated commit id, so callers can display a meaningful label
+        without having to handle :class:`DetachedHeadError` themselves.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            The branch name, a tag name, or the 7-character commit id.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            VersionerError: If the repository has no commit yet.
+
+        """
+
+    @abstractmethod
+    def read_file(
+        self,
+        repository_path: str | Path,
+        file_path: str,
+        revision: str = "HEAD",
+    ) -> bytes | None:
+        """Return the content of a tracked file at a given revision.
+
+        Replaces GitPython's ``diff_item.a_blob.data_stream.read()``, used to
+        show the committed version of a locally modified file.
+
+        Args:
+            repository_path: Path to the local repository.
+            file_path: Repository-relative path of the file.
+            revision: Commit, branch or tag to read the file from.
+
+        Returns:
+            The file content, or None if the path does not exist at that
+            revision.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            VersionerError: If the revision is unknown.
+
+        """
+
+    @abstractmethod
+    def remote_url(self, repository_path: str | Path, remote: str = "origin") -> str:
+        """Return the configured URL of a remote.
+
+        Args:
+            repository_path: Path to the local repository.
+            remote: Name of the remote to look up.
+
+        Returns:
+            The remote URL, as stored in the repository configuration.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            RemoteNotFoundError: If no such remote is configured.
+
+        """
+
+    @abstractmethod
+    def status(self, repository_path: str | Path) -> RepoStatus:
+        """Return the staged, unstaged and untracked paths of the repository.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            A :class:`RepoStatus` snapshot with repository-relative paths.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            VersionerError: If the status cannot be computed.
+
+        """
+
+    @abstractmethod
+    def is_bare(self, repository_path: str | Path) -> bool:
+        """Return whether the repository is bare (has no working tree).
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            True if the repository is bare.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+
+        """
+
+    @abstractmethod
+    def working_dir(self, repository_path: str | Path) -> str:
+        """Return the absolute path of the repository working tree.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            The working tree path.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            VersionerError: If the repository is bare.
+
+        """
+
+    @abstractmethod
+    def ahead_behind(
+        self, repository_path: str | Path, branch: str | None = None
+    ) -> tuple[int, int]:
+        """Count commits the local branch is ahead of and behind its remote.
+
+        Replaces parsing the English output of ``git status`` for the
+        ``"git pull"`` / ``"git push"`` hints.
+
+        Args:
+            repository_path: Path to the local repository.
+            branch: Branch to compare. Defaults to the current branch.
+
+        Returns:
+            A ``(ahead, behind)`` tuple. ``(0, 0)`` when the remote-tracking
+            branch is unknown, so callers treat it as "nothing pending".
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+            BranchNotFoundError: If the local branch does not exist.
+
+        """
+
+    @abstractmethod
+    def list_local_branches(self, repository_path: str | Path) -> list[str]:
+        """List local branch names present in the repository.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            Sorted unique local branch names.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+
+        """
+
+    #
+    # Write operations
+    #
+
     @abstractmethod
     def add(
         self,
@@ -41,12 +234,114 @@ class VersionerBase(ABC):
     ) -> None:
         """Add files to the staging area.
 
+        When ``files`` is None every change is staged, including deletions,
+        matching ``git add --all``.
+
         Args:
             repository_path: Path to the local repository.
-            files: List of files to add. If None, adds all changes.
+            files: Repository-relative (or absolute) paths to add. If None,
+                adds all changes.
 
         Raises:
             VersionerError: If the add operation fails.
+
+        """
+
+    @abstractmethod
+    def remove(self, repository_path: str | Path, files: list[str]) -> None:
+        """Remove files from the index and from the working tree.
+
+        Equivalent to ``git rm``; replaces GitPython's
+        ``index.remove(files, working_tree=True)``.
+
+        Args:
+            repository_path: Path to the local repository.
+            files: Repository-relative (or absolute) paths to remove.
+
+        Raises:
+            VersionerError: If a path does not match a tracked file, or if the
+                removal fails.
+
+        """
+
+    @abstractmethod
+    def unstage(self, repository_path: str | Path, files: list[str]) -> None:
+        """Remove files from the index while keeping the working tree intact.
+
+        Equivalent to ``git reset HEAD -- <files>``.
+
+        Args:
+            repository_path: Path to the local repository.
+            files: Repository-relative (or absolute) paths to unstage.
+
+        Raises:
+            VersionerError: If the unstage operation fails.
+
+        """
+
+    @abstractmethod
+    def restore_files(self, repository_path: str | Path, files: list[str]) -> None:
+        """Restore working tree files from the index, discarding local edits.
+
+        Equivalent to ``git restore -- <files>``; replaces GitPython's
+        ``index.checkout(files, force=True)``.
+
+        Args:
+            repository_path: Path to the local repository.
+            files: Repository-relative (or absolute) paths to restore.
+
+        Raises:
+            VersionerError: If the restore operation fails.
+
+        """
+
+    @abstractmethod
+    def reset_hard(self, repository_path: str | Path, treeish: str = "HEAD") -> None:
+        """Reset HEAD, the index and the working tree to ``treeish``.
+
+        Equivalent to ``git reset --hard <treeish>``. Discards local changes.
+
+        Args:
+            repository_path: Path to the local repository.
+            treeish: Commit, tag or branch to reset to.
+
+        Raises:
+            VersionerError: If the reset operation fails.
+
+        """
+
+    @abstractmethod
+    def create_tag(
+        self,
+        repository_path: str | Path,
+        tag_name: str,
+        message: str | None = None,
+    ) -> None:
+        """Create a tag pointing at the current HEAD.
+
+        Args:
+            repository_path: Path to the local repository.
+            tag_name: Name of the tag to create.
+            message: Optional message. When provided an annotated tag is
+                created, otherwise a lightweight one.
+
+        Raises:
+            VersionerError: If the tag already exists or cannot be created.
+
+        """
+
+    @abstractmethod
+    def list_tags(self, repository_path: str | Path) -> list[str]:
+        """List tag names present in the repository.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            Sorted tag names.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
 
         """
 
@@ -124,12 +419,22 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    def commit(self, repository_path: str | Path, message: str) -> None:
+    def commit(
+        self,
+        repository_path: str | Path,
+        message: str,
+        author: Author | None = None,
+    ) -> str | None:
         """Commit staged changes.
 
         Args:
             repository_path: Path to the local repository.
             message: Commit message.
+            author: Identity to record as author and committer. Defaults to
+                the versioner's configured author.
+
+        Returns:
+            The new commit id, or None when there was nothing staged to commit.
 
         Raises:
             VersionerError: If the commit operation fails.
@@ -149,12 +454,15 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    def pull(self, repository_path: str | Path, branch: str) -> None:
+    def pull(self, repository_path: str | Path, branch: str) -> PullResult:
         """Pull latest changes from the remote repository.
 
         Args:
             repository_path: Path to the local repository.
             branch: Branch to pull from.
+
+        Returns:
+            The paths added, modified and deleted by the pull.
 
         Raises:
             VersionerError: If the pull operation fails.
@@ -188,7 +496,7 @@ class VersionerBase(ABC):
         """
 
     @abstractmethod
-    def safe_pull(self, repository_path: str | Path, branch: str) -> None:
+    def safe_pull(self, repository_path: str | Path, branch: str) -> PullResult:
         """Safely pull latest changes, stashing any local changes first.
 
         This method performs a safe pull by:
@@ -199,6 +507,9 @@ class VersionerBase(ABC):
         Args:
             repository_path: Path to the local repository.
             branch: Branch to pull from.
+
+        Returns:
+            The paths added, modified and deleted by the pull.
 
         Raises:
             VersionerError: If the safe pull operation fails.

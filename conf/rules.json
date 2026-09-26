@@ -6,6 +6,11 @@
         "includes": [
             "**/*.py",
             "**/*.so"
+        ],
+        "excludes": [
+            "RunBot.py",
+            "Learn.py",
+            "Load.py"
         ]
     },
     {
@@ -97,5 +102,11 @@
         "source": "tests",
         "target": "tests",
         "action": "link"
+    },
+    {
+        "source": ".",
+        "action": "link",
+        "recursive": false,
+        "includes": ["uninstall.sh"]
     }
 ]

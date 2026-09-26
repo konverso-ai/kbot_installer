@@ -125,6 +125,7 @@ class TestStart:
         with (
             patch("database.postgres_cluster.subprocess.run") as mock_run,
             patch("database.postgres_cluster.is_running", return_value=False),
+            patch("database.postgres_cluster._port_in_use", return_value=False),
         ):
             mock_run.return_value = CompletedProcess(args=[], returncode=1)
 
@@ -140,6 +141,7 @@ class TestStart:
         with (
             patch("database.postgres_cluster.subprocess.run") as mock_run,
             patch("database.postgres_cluster.is_running", return_value=False),
+            patch("database.postgres_cluster._port_in_use", return_value=False),
         ):
             mock_run.return_value = CompletedProcess(args=[], returncode=1)
 
@@ -155,6 +157,7 @@ class TestStart:
         with (
             patch("database.postgres_cluster.subprocess.run") as mock_run,
             patch("database.postgres_cluster.is_running", return_value=True),
+            patch("database.postgres_cluster._port_in_use", return_value=False),
         ):
             mock_run.return_value = CompletedProcess(args=[], returncode=0)
 
@@ -171,6 +174,7 @@ class TestStart:
         with (
             patch("database.postgres_cluster.subprocess.run") as mock_run,
             patch("database.postgres_cluster.is_running", return_value=True),
+            patch("database.postgres_cluster._port_in_use", return_value=False),
         ):
             mock_run.return_value = CompletedProcess(args=[], returncode=0)
 
@@ -179,6 +183,39 @@ class TestStart:
             called_args = mock_run.call_args.args[0]
             assert compare("in", f"-k{settings.socket_dir}", called_args)
             assert compare("eq", settings.socket_dir.is_dir(), True)  # noqa: FBT003
+
+    def test_start_invalid_raises_immediately_when_port_already_in_use(
+        self, settings: InternalDbSettings
+    ) -> None:
+        with (
+            patch("database.postgres_cluster.subprocess.run") as mock_run,
+            patch("database.postgres_cluster._port_in_use", return_value=True),
+            patch(
+                "database.postgres_cluster._find_port_owner_pid", return_value=1234
+            ),
+        ):
+            with pytest.raises(
+                postgres_cluster.PostgresClusterError, match="PID 1234"
+            ):
+                postgres_cluster.start(settings)
+
+            mock_run.assert_not_called()
+
+    def test_start_invalid_reports_port_in_use_without_pid_when_unknown(
+        self, settings: InternalDbSettings
+    ) -> None:
+        with (
+            patch("database.postgres_cluster.subprocess.run"),
+            patch("database.postgres_cluster._port_in_use", return_value=True),
+            patch(
+                "database.postgres_cluster._find_port_owner_pid", return_value=None
+            ),
+        ):
+            with pytest.raises(
+                postgres_cluster.PostgresClusterError,
+                match=f"port {settings.port}",
+            ):
+                postgres_cluster.start(settings)
 
 
 class TestStop:

@@ -123,6 +123,40 @@ def resolve_pg_dir(installer_path: Path) -> Path | None:
     return Path(pg_dir) if pg_dir else None
 
 
+def resolve_site_packages_dir(installer_path: Path) -> Path | None:
+    """Resolve the 3rdparty Python interpreter's ``site-packages`` directory.
+
+    Used to locate packages (e.g. ``drf_yasg``) as actually installed in the
+    bundled interpreter kbot runs against, rather than in whatever
+    environment happens to be running ``kbot-installer`` itself.
+
+    Args:
+        installer_path: Installer directory holding the downloaded products.
+
+    Returns:
+        The resolved ``site-packages`` path, or ``None`` when
+        ``versions.env`` is missing or does not define ``PYTHON_DIR``/a
+        usable Python version.
+
+    """
+    variables = _load_versions(installer_path)
+    if not variables:
+        return None
+
+    python_dir = variables.get("PYTHON_DIR")
+    if not python_dir:
+        return None
+
+    major_version = variables.get("PYTHON_MAJOR_VERSION")
+    if not major_version:
+        python_version = variables.get("PYTHON_VERSION")
+        if not python_version:
+            return None
+        major_version = ".".join(python_version.split(".")[:2])
+
+    return Path(python_dir) / "lib" / f"python{major_version}" / "site-packages"
+
+
 def thirdparty_ld_library_path(installer_path: Path) -> str | None:
     """Build the ``LD_LIBRARY_PATH`` value for the 3rdparty shared libraries.
 

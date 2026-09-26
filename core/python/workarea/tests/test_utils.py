@@ -393,49 +393,58 @@ class TestSetupProducts:
         assert not existing.is_symlink()
 
 
+def _write_versions_env(installer_root: Path) -> Path:
+    thirdparty = installer_root / "3rdparty"
+    thirdparty.mkdir(parents=True, exist_ok=True)
+    (thirdparty / "versions.env").write_text(
+        "PYTHON_VERSION=3.10.15\n"
+        "PYTHON_MAJOR_VERSION=3.10\n"
+        "THIRDPARTY_PATH=${THIRDPARTY_HOME}\n"
+        "PYTHON_DIR=${THIRDPARTY_PATH}/Python-${PYTHON_VERSION}\n",
+        encoding="utf-8",
+    )
+    return thirdparty / "Python-3.10.15" / "lib" / "python3.10" / "site-packages"
+
+
 class TestSetupDrfYasgStatic:
-    def test_symlinks_static_dir_when_source_exists(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_pkg_root = tmp_path / "drf_yasg"
-        fake_static = fake_pkg_root / "static"
+    def test_symlinks_static_dir_when_source_exists(self, tmp_path: Path) -> None:
+        site_packages = _write_versions_env(tmp_path)
+        fake_static = site_packages / "drf_yasg" / "static"
         fake_static.mkdir(parents=True)
-        monkeypatch.setattr("workarea.utils.files", lambda _pkg: fake_pkg_root)
 
         work_root = tmp_path / "work"
-        setup_drf_yasg_static(work_root)
+        setup_drf_yasg_static(work_root, tmp_path)
 
         link = work_root / "ui" / "web" / "static"
         assert link.is_symlink()
         assert link.resolve() == fake_static.resolve()
 
-    def test_noop_when_source_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "workarea.utils.files", lambda _pkg: tmp_path / "does_not_exist"
-        )
+    def test_noop_when_source_missing(self, tmp_path: Path) -> None:
+        _write_versions_env(tmp_path)
 
         work_root = tmp_path / "work"
-        setup_drf_yasg_static(work_root)
+        setup_drf_yasg_static(work_root, tmp_path)
 
         assert not (work_root / "ui").exists()
 
-    def test_noop_when_target_already_exists(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_pkg_root = tmp_path / "drf_yasg"
-        (fake_pkg_root / "static").mkdir(parents=True)
-        monkeypatch.setattr("workarea.utils.files", lambda _pkg: fake_pkg_root)
+    def test_noop_when_target_already_exists(self, tmp_path: Path) -> None:
+        site_packages = _write_versions_env(tmp_path)
+        (site_packages / "drf_yasg" / "static").mkdir(parents=True)
 
         work_root = tmp_path / "work"
         existing = work_root / "ui" / "web" / "static"
         existing.mkdir(parents=True)
 
-        setup_drf_yasg_static(work_root)
+        setup_drf_yasg_static(work_root, tmp_path)
 
         assert existing.is_dir()
         assert not existing.is_symlink()
+
+    def test_noop_when_versions_env_missing(self, tmp_path: Path) -> None:
+        work_root = tmp_path / "work"
+        setup_drf_yasg_static(work_root, tmp_path)
+
+        assert not (work_root / "ui").exists()
 
 
 class TestCleanupUnusedTestsDir:

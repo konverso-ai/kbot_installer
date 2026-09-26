@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+import types
 
 import pytest
 from errors import KB11111, LLM00001
@@ -13,6 +14,8 @@ from utils.Logger import (
     DataDogFormatter,
     KbotFormatter,
     KbotLogger,
+    UpdateLevel,
+    UpdateSupportedPackages,
     normalize_level,
     update_level,
     update_supported_packages,
@@ -375,8 +378,35 @@ class TestKbotLoggerBuildHandler:
             assert compare("eq", handler.level, logging.ERROR)
         formatters = {type(h.formatter) for h in instance.handlers}
         assert compare("eq", formatters, {DataDogFormatter, KbotFormatter})
-        assert compare("eq", (tmp_path / "logs" / "core.log").exists(), True)
-        assert compare("eq", (tmp_path / "logs" / "core.json").exists(), True)
+        assert compare("eq", (tmp_path / "logs" / "runbot.log").exists(), True)
+        assert compare("eq", (tmp_path / "logs" / "runbot.json").exists(), True)
+
+    def test_buildhandler_valid_runbot_names_files_after_kprocess_instance(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        """Test the RunBot log files are named after kbot's kprocess instance name."""
+        (tmp_path / "logs").mkdir()
+        monkeypatch.setattr(sys, "argv", ["RunBot.py"])
+        monkeypatch.setenv("KBOT_HOME", str(tmp_path))
+        monkeypatch.setitem(sys.modules, "kprocess", types.SimpleNamespace(instance_name="kbot2"))
+        instance = KbotLogger("test.buildhandler.runbot.kprocess")
+
+        instance.build_handler(logging.ERROR)
+
+        assert compare("eq", (tmp_path / "logs" / "kbot2.log").exists(), True)
+        assert compare("eq", (tmp_path / "logs" / "kbot2.json").exists(), True)
+
+    def test_buildhandler_valid_camelcase_alias_delegates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test the kbot-style buildHandler alias wires the same handlers."""
+        monkeypatch.setattr(sys, "argv", ["some_script.py"])
+        instance = KbotLogger("test.buildhandler.alias")
+
+        instance.buildHandler(logging.WARNING, "/ignored/path.log")
+
+        assert compare("eq", len(instance.handlers), 1)
+        assert compare("eq", type(instance.handlers[0]), logging.StreamHandler)
 
 
 class TestKbotPackageLogger:
@@ -490,6 +520,23 @@ class TestKbotPackageLogger:
         package_logger.one_time("warning", "message two")
 
         assert compare("eq", len(_records(kbot_logger)), 2)
+
+    def test_isenabledfor_valid_uses_package_level(self, kbot_logger: KbotLogger) -> None:
+        """Test isEnabledFor honors the package's own level override."""
+        kbot_logger.setLevel(logging.WARNING)
+        kbot_logger.add_package("storage", logging.DEBUG)
+
+        assert compare("eq", kbot_logger.get_package_logger("storage").isEnabledFor(logging.DEBUG), True)
+        assert compare("eq", kbot_logger.get_package_logger("other").isEnabledFor(logging.DEBUG), False)
+
+    def test_onetime_valid_camelcase_alias_delegates(
+        self, kbot_logger: KbotLogger, package_logger
+    ) -> None:
+        """Test the kbot-style oneTime alias shares one_time's de-duplication."""
+        package_logger.oneTime("warning", "Deprecated call %s", "foo")
+        package_logger.one_time("warning", "Deprecated call %s", "foo")
+
+        assert compare("eq", len(_records(kbot_logger)), 1)
 
 
 class TestKbotFormatter:
@@ -649,3 +696,17 @@ class TestModuleLevelSingleton:
         )
 
         assert compare("eq", update_supported_packages("add probe_pkg 3"), None)
+
+    def test_updatelevel_valid_camelcase_alias_delegates(self, restore_kbot_singleton) -> None:
+        """Test the kbot-style UpdateLevel alias updates the logger like update_level."""
+        UpdateLevel(3)  # DEBUG
+
+        assert compare("eq", logger.isEnabledFor(logging.DEBUG), True)
+
+    def test_updatesupportedpackages_valid_camelcase_alias_delegates(
+        self, restore_kbot_singleton
+    ) -> None:
+        """Test the kbot-style UpdateSupportedPackages alias applies the command."""
+        UpdateSupportedPackages("add probe_pkg 5")
+
+        assert compare("eq", logger.isEnabledFor(FINEST, "probe_pkg"), True)

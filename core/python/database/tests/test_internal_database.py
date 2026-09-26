@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from database import postgres_cluster
 from database.base import InternalDbSettings
 from database.internal_database import InternalDatabase
 from utils.utils_for_unit_tests import compare
@@ -254,3 +255,101 @@ class TestConfigureNewDatabase:
         assert compare("eq", len(max_conn_call.args), 1)
         assert compare("in", "max_connections", max_conn_sql)
         assert compare("in", "512", max_conn_sql)
+
+
+class TestBackup:
+    """Test cases for InternalDatabase.backup."""
+
+    def test_backup_valid_dumps_running_server(
+        self, db: InternalDatabase, settings: InternalDbSettings, tmp_path: Path
+    ) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=True),
+            patch("database.internal_database.postgres_cluster.is_running", return_value=True),
+            patch("database.internal_database.postgres_cluster.start") as mock_start,
+            patch("database.internal_database.dump_database") as mock_dump,
+        ):
+            assert compare("eq", db.backup(tmp_path / "dump.sql"), True)
+
+        mock_start.assert_not_called()
+        mock_dump.assert_called_once_with(settings, tmp_path / "dump.sql")
+
+    def test_backup_valid_starts_stopped_server_before_dumping(
+        self, db: InternalDatabase, settings: InternalDbSettings, tmp_path: Path
+    ) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=True),
+            patch("database.internal_database.postgres_cluster.is_running", return_value=False),
+            patch("database.internal_database.postgres_cluster.start") as mock_start,
+            patch("database.internal_database.dump_database") as mock_dump,
+        ):
+            db.backup(tmp_path / "dump.sql")
+
+        mock_start.assert_called_once_with(settings)
+        mock_dump.assert_called_once_with(settings, tmp_path / "dump.sql")
+
+    def test_backup_valid_returns_false_without_cluster(self, db: InternalDatabase, tmp_path: Path) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=False),
+            patch("database.internal_database.postgres_cluster.start") as mock_start,
+            patch("database.internal_database.dump_database") as mock_dump,
+        ):
+            assert compare("eq", db.backup(tmp_path / "dump.sql"), False)
+
+        mock_start.assert_not_called()
+        mock_dump.assert_not_called()
+
+
+class TestDestroy:
+    """Test cases for InternalDatabase.destroy."""
+
+    def test_destroy_valid_stops_running_server_and_deletes_data(
+        self, db: InternalDatabase, settings: InternalDbSettings
+    ) -> None:
+        settings.pg_data.mkdir(parents=True)
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=True),
+            patch("database.internal_database.postgres_cluster.is_running", side_effect=[True, False]),
+            patch("database.internal_database.postgres_cluster.stop") as mock_stop,
+        ):
+            db.destroy()
+
+        mock_stop.assert_called_once_with(settings)
+        assert compare("not", settings.pg_data.exists())
+
+    def test_destroy_valid_deletes_data_without_stopping_idle_server(
+        self, db: InternalDatabase, settings: InternalDbSettings
+    ) -> None:
+        settings.pg_data.mkdir(parents=True)
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=True),
+            patch("database.internal_database.postgres_cluster.is_running", return_value=False),
+            patch("database.internal_database.postgres_cluster.stop") as mock_stop,
+        ):
+            db.destroy()
+
+        mock_stop.assert_not_called()
+        assert compare("not", settings.pg_data.exists())
+
+    def test_destroy_valid_does_nothing_without_cluster(self, db: InternalDatabase) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=False),
+            patch("database.internal_database.postgres_cluster.stop") as mock_stop,
+        ):
+            db.destroy()
+
+        mock_stop.assert_not_called()
+
+    def test_destroy_invalid_keeps_data_when_server_does_not_stop(
+        self, db: InternalDatabase, settings: InternalDbSettings
+    ) -> None:
+        settings.pg_data.mkdir(parents=True)
+        with (
+            patch("database.internal_database.postgres_cluster.is_initialized", return_value=True),
+            patch("database.internal_database.postgres_cluster.is_running", return_value=True),
+            patch("database.internal_database.postgres_cluster.stop"),
+            pytest.raises(postgres_cluster.PostgresClusterError, match="still running"),
+        ):
+            db.destroy()
+
+        assert compare("eq", settings.pg_data.exists(), True)

@@ -1,6 +1,7 @@
 """KBot logger."""  # noqa: N999
 
 import datetime
+import importlib
 import io
 import logging
 import os
@@ -204,6 +205,10 @@ class KbotLogger(logging.Logger):
             self.__packages[name] = KbotPackageLogger(name, self)
         return self.__packages[name]
 
+    def getPackageLogger(self, name: str) -> "KbotPackageLogger":  # noqa: N802 - camelCase alias kept for the kbot callers
+        """Alias of :meth:`get_package_logger`, spelled the way kbot calls it."""
+        return self.get_package_logger(name)
+
     def add_package(self, name: str, level: int) -> None:
         """Log this package."""
         self.__filters[name] = level
@@ -231,8 +236,9 @@ class KbotLogger(logging.Logger):
             return
 
         if Path(sys.argv[0]).name.startswith("RunBot"):
+            instance_name = _instance_name()
             datadog_handler = RotatingFileHandler(
-                Path(os.environ["KBOT_HOME"]) / "logs" / "core.json",
+                Path(os.environ["KBOT_HOME"]) / "logs" / f"{instance_name}.json",
                 maxBytes=5 * 1024 * 1024,
                 backupCount=1,
             )
@@ -241,7 +247,7 @@ class KbotLogger(logging.Logger):
             self.addHandler(datadog_handler)
 
             kbot_handler = RotatingFileHandler(
-                Path(os.environ["KBOT_HOME"]) / "logs" / "core.log",
+                Path(os.environ["KBOT_HOME"]) / "logs" / f"{instance_name}.log",
                 maxBytes=5 * 1024 * 1024,
                 backupCount=10,
             )
@@ -254,6 +260,24 @@ class KbotLogger(logging.Logger):
         handler.setFormatter(KbotFormatter())
         handler.setLevel(level)
         self.addHandler(handler)
+
+    def buildHandler(self, level: int, path: str | None = None) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+        """Alias of :meth:`build_handler`, spelled the way kbot calls it."""
+        self.build_handler(level, path)
+
+
+def _instance_name() -> str:
+    """Return the name of the running kbot instance, used to name its log files.
+
+    kbot's ``kprocess`` module only exists inside a kbot workarea; elsewhere,
+    fall back to the same default it computes: the lowercased script name.
+    """
+    try:
+        # Resolved at runtime: kprocess is shipped by kbot, not by the installer.
+        kprocess = importlib.import_module("kprocess")
+    except ImportError:
+        return Path(sys.argv[0]).stem.lower()
+    return kprocess.instance_name
 
 
 class KbotLogEntry:
@@ -292,6 +316,13 @@ class KbotPackageLogger:
         # key: message hash
         # value: Instance of KbotLogEntry
         self.ONE_TIME_MESSAGES = {}
+
+    def isEnabledFor(self, level: int) -> bool:  # noqa: N802 - mirrors logging.Logger.isEnabledFor
+        """Tell whether a message at ``level`` would be emitted for this package.
+
+        Lets callers skip building costly log payloads when they would be dropped.
+        """
+        return self.logger.isEnabledFor(level, package=self.name)
 
     def fine(self, msg: str, *args, **kwargs) -> None:
         """Log a message at the FINE debug level for this package."""
@@ -408,6 +439,10 @@ class KbotPackageLogger:
 
             # Get the related level function ("def warn" for example) and call it
             getattr(self, level)(msg, *args, **kwargs)
+
+    def oneTime(self, level: str, msg: str, *args, **kwargs) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+        """Alias of :meth:`one_time`, spelled the way kbot calls it."""
+        self.one_time(level, msg, *args, **kwargs)
 
 
 def _derive_kmodule(record: logging.LogRecord) -> str:
@@ -547,3 +582,13 @@ def update_supported_packages(cmd: str) -> None:
     mode, packages, level = parsed
     for package in packages:
         _apply_debug_command(mode, package, level)
+
+
+def UpdateLevel(new_level: int) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+    """Alias of :func:`update_level`, spelled the way kbot calls it."""
+    update_level(new_level)
+
+
+def UpdateSupportedPackages(cmd: str) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+    """Alias of :func:`update_supported_packages`, spelled the way kbot calls it."""
+    update_supported_packages(cmd)
