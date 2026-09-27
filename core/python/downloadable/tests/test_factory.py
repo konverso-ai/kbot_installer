@@ -88,7 +88,10 @@ class TestBuildDownloadable:
                 include_dependencies=False,
             )
 
-            mock_selector.assert_called_once_with(provider_names=["storage", "github", "bitbucket"])
+            mock_selector.assert_called_once_with(
+                provider_names=["storage", "github", "bitbucket"],
+                storage_backend=StorageBackendEnum.NEXUS,
+            )
             _, kwargs = mock_product_cls.call_args
             assert kwargs["product"].name == "jira"
             assert kwargs["include_dependencies"] is False
@@ -110,4 +113,7 @@ class TestBuildDownloadable:
                 include_dependencies=True,
             )
 
-            mock_selector.assert_called_once_with(provider_names=["github", "bitbucket"])
+            mock_selector.assert_called_once_with(
+                provider_names=["github", "bitbucket"],
+                storage_backend=StorageBackendEnum.NEXUS,
+            )

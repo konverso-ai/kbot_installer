@@ -15,6 +15,7 @@ from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
 from git.versioner import add_versioner
+from storage.base import StorageBackendEnum
 from storage.factory import add_builtin_storage, add_storage_from_config
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
@@ -259,6 +260,7 @@ def _build_provider(
     config: ProvidersConfig,
     *,
     quiet: bool = False,
+    storage_backend: StorageBackendEnum = StorageBackendEnum.NEXUS,
 ) -> ProviderBase | None:
     """Build a single provider instance from configuration and available credentials.
 
@@ -268,6 +270,9 @@ def _build_provider(
         quiet: Currently unused for the "storage" provider (it no longer
             supports a quiet mode); kept for signature compatibility with
             :func:`add_selector_provider`.
+        storage_backend: Backend of the "storage" provider. Nexus uses the
+            configured repository and ``NEXUS_*`` credentials; other backends
+            read the ``artifacts`` area with their SDK default credentials.
 
     Returns:
         The built provider, or None if it is not configured or is missing
@@ -284,30 +289,36 @@ def _build_provider(
         log.warning("No configuration found for provider: %s", provider_name)
         return None
 
-    if provider_name not in _PROVIDERS_ALLOWING_ANONYMOUS_ACCESS and not _has_credentials(
-        provider_name, config
-    ):
-        log.debug("Missing credentials for provider '%s'", provider_name)
-        return None
-
-    auth = _resolve_auth(provider_name, config)
     params = provider_config.kwargs.copy()
-    if provider_name == "storage":
-        # All GitAuthProtocol implementations (auth.http, auth.ssh) also
-        # subclass httpx.Auth at runtime; the storage backend kwargs only
-        # need the httpx.Auth-compatible surface. build_storage builds the
-        # backend for non-nexus stores instead of instantiating the storage
-        # class with a missing backend argument.
-        storage = add_storage_from_config(
-            config.storage, "nexus", auth=cast("httpx.Auth | None", auth)
-        )
-        params["storage"] = storage
+    if provider_name == "storage" and storage_backend is not StorageBackendEnum.NEXUS:
+        # Azure/S3/OCI authenticate through their SDK default credential chain,
+        # so no NEXUS_* credentials are required.
+        params["storage"] = build_configured_storage(storage_backend.value, area="artifacts", config=config)
         params["branches"] = provider_config.branches
     else:
-        # Git providers (github, bitbucket) don't build their own Versioner:
-        # it is constructed here, already configured with the resolved auth,
-        # and injected into the provider.
-        params["versioner"] = add_versioner("dulwich", auth=auth)
+        if provider_name not in _PROVIDERS_ALLOWING_ANONYMOUS_ACCESS and not _has_credentials(
+            provider_name, config
+        ):
+            log.debug("Missing credentials for provider '%s'", provider_name)
+            return None
+
+        auth = _resolve_auth(provider_name, config)
+        if provider_name == "storage":
+            # All GitAuthProtocol implementations (auth.http, auth.ssh) also
+            # subclass httpx.Auth at runtime; the storage backend kwargs only
+            # need the httpx.Auth-compatible surface. build_storage builds the
+            # backend for non-nexus stores instead of instantiating the storage
+            # class with a missing backend argument.
+            storage = add_storage_from_config(
+                config.storage, "nexus", auth=cast("httpx.Auth | None", auth)
+            )
+            params["storage"] = storage
+            params["branches"] = provider_config.branches
+        else:
+            # Git providers (github, bitbucket) don't build their own Versioner:
+            # it is constructed here, already configured with the resolved auth,
+            # and injected into the provider.
+            params["versioner"] = add_versioner("dulwich", auth=auth)
 
     try:
         return add_provider(name=provider_name, **params)
@@ -329,6 +340,7 @@ def add_selector_provider(
     config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,
     *,
     quiet: bool = False,
+    storage_backend: StorageBackendEnum = StorageBackendEnum.NEXUS,
 ) -> ProviderBase:
     """Build a selector provider that tries each named provider in order.
 
@@ -343,6 +355,7 @@ def add_selector_provider(
             Defaults to :data:`git.provider.config.DEFAULT_PROVIDERS_CONFIG`.
         quiet: Forwarded to the resulting selector provider to suppress
             informational clone output.
+        storage_backend: Backend of the "storage" provider, if requested.
 
     Returns:
         A ``SelectorProvider`` wrapping every provider that could be built.
@@ -361,7 +374,7 @@ def add_selector_provider(
     providers = [
         provider
         for name in provider_names
-        if (provider := _build_provider(name, config, quiet=quiet)) is not None
+        if (provider := _build_provider(name, config, quiet=quiet, storage_backend=storage_backend)) is not None
     ]
     if not providers:
         msg = f"No provider could be built from: {provider_names}"

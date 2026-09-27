@@ -15,6 +15,7 @@ from utils.Logger import logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from typing import IO
 
     from oci.object_storage import ObjectStorageClient
 
@@ -132,12 +133,13 @@ class OciStorage(StorageBase):
         """Download a storage object to a local file or extract an archive to a directory."""
         path = Path(local_file_path)
         if path.is_dir():
-            download_and_extract_tar_gz(self._download_file, key, path)
+            download_and_extract_tar_gz(self._download_to, key, path)
             return
-        self._download_file(key, local_file_path)
+        with Path(local_file_path).open(mode="wb") as local_file:
+            self._download_to(key, local_file)
 
-    def _download_file(self, key: str, local_file_path: str) -> None:
-        """Download a storage object to a local file."""
+    def _download_to(self, key: str, stream: IO[bytes]) -> None:
+        """Write a storage object into a binary stream."""
         client = self._get_client()
         if not client:
             log.error(
@@ -147,10 +149,7 @@ class OciStorage(StorageBase):
             return
 
         response = client.get_object(self.namespace_name, self.bucket_name, key)
-        with Path(local_file_path).open(mode="wb") as local_file:
-            local_file.writelines(
-                response.data.raw.stream(1024 * 1024, decode_content=False)
-            )
+        stream.writelines(response.data.raw.stream(1024 * 1024, decode_content=False))
 
     @override
     def delete(self, key: str) -> None:

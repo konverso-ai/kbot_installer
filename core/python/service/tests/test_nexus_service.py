@@ -347,7 +347,7 @@ class TestNexusServiceDownloadAndExtract:
 
         with patch.object(
             NexusService,
-            "get_file",
+            "write_file",
             AsyncMock(side_effect=NexusHttpError(404, "Not found")),
         ):
             with pytest.raises(NexusHttpError):

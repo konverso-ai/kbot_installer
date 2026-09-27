@@ -19,6 +19,7 @@ from git.provider.factory import (
     ssh_bitbucket_provider,
     ssh_github_provider,
 )
+from storage.base import StorageBackendEnum
 
 
 class TestCreateProvider:
@@ -522,6 +523,29 @@ class TestBuildProvider:
             name="storage", storage=mock_storage, branches=["master", "dev"]
         )
 
+    def test_storage_provider_uses_requested_cloud_backend(self) -> None:
+        """Test that a non-Nexus storage provider needs no Nexus credentials."""
+        provider_config = MagicMock(kwargs={}, branches=["master", "dev"])
+        config = self._config_with(storage=provider_config)
+        mock_storage = MagicMock()
+
+        with (
+            patch("git.provider.factory._has_credentials", return_value=False) as mock_has_credentials,
+            patch("git.provider.factory.add_provider") as mock_create,
+            patch(
+                "git.provider.factory.build_configured_storage", return_value=mock_storage
+            ) as mock_build_configured_storage,
+        ):
+            mock_create.return_value = MagicMock()
+            result = _build_provider("storage", config, storage_backend=StorageBackendEnum.AZURE)
+
+        mock_has_credentials.assert_not_called()
+        mock_build_configured_storage.assert_called_once_with("azure", area="artifacts", config=config)
+        mock_create.assert_called_once_with(
+            name="storage", storage=mock_storage, branches=["master", "dev"]
+        )
+        assert result is mock_create.return_value
+
     def test_storage_provider_receives_auth_when_available(self) -> None:
         """Test that resolved auth is forwarded to the storage backend builder."""
         provider_config = MagicMock(kwargs={}, branches=["master", "dev"])
@@ -632,8 +656,8 @@ class TestAddSelectorProvider:
             result = add_selector_provider(["storage", "github"], config=mock_config)
 
             assert mock_build_provider.call_args_list == [
-                call("storage", mock_config, quiet=False),
-                call("github", mock_config, quiet=False),
+                call("storage", mock_config, quiet=False, storage_backend=StorageBackendEnum.NEXUS),
+                call("github", mock_config, quiet=False, storage_backend=StorageBackendEnum.NEXUS),
             ]
             mock_add_provider.assert_called_once_with(
                 name="selector",
@@ -695,8 +719,22 @@ class TestAddSelectorProvider:
             add_selector_provider(["storage"], config=mock_config, quiet=True)
 
             mock_build_provider.assert_called_once_with(
-                "storage", mock_config, quiet=True
+                "storage", mock_config, quiet=True, storage_backend=StorageBackendEnum.NEXUS
             )
             mock_add_provider.assert_called_once_with(
                 name="selector", providers=[mock_provider], quiet=True
             )
+
+    def test_forwards_storage_backend(self) -> None:
+        """Test that the storage backend is forwarded to _build_provider."""
+        mock_config = MagicMock()
+
+        with (
+            patch("git.provider.factory._build_provider") as mock_build_provider,
+            patch("git.provider.factory.add_provider"),
+        ):
+            add_selector_provider(["storage"], config=mock_config, storage_backend=StorageBackendEnum.S3)
+
+        mock_build_provider.assert_called_once_with(
+            "storage", mock_config, quiet=False, storage_backend=StorageBackendEnum.S3
+        )

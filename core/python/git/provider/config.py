@@ -38,9 +38,9 @@ def _resolve_default_providers_config_path() -> Path:
 
 DEFAULT_PROVIDERS_CONFIG_PATH = _resolve_default_providers_config_path()
 
-# The "storage" provider is always backed by Nexus: it is the only storage
-# backend with both authentication and branch semantics, which is what makes
-# it usable as a fallback git provider alongside github/bitbucket.
+# Credentials of the "storage" provider are Nexus ones: it is the default
+# backend of that provider and the only one needing explicit credentials
+# (Azure/S3/OCI rely on their SDK default credential chain).
 _STORAGE_PROVIDER_BACKEND = "nexus"
 
 
@@ -67,7 +67,7 @@ class ProvidersConfig(BaseModel):
 
         Args:
             provider_name: Name of the provider to resolve credentials for.
-                ``"storage"`` always resolves to Nexus credentials (see
+                ``"storage"`` resolves to Nexus credentials (see
                 :data:`_STORAGE_PROVIDER_BACKEND`).
 
         Returns:

@@ -16,6 +16,7 @@ from utils.Logger import logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from typing import IO
 
     from mypy_boto3_s3 import S3Client
     from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
@@ -160,12 +161,13 @@ class S3Storage(StorageBase):
         """Download a storage object to a local file or extract an archive to a directory."""
         path = Path(local_file_path)
         if path.is_dir():
-            download_and_extract_tar_gz(self._download_file, key, path)
+            download_and_extract_tar_gz(self._download_to, key, path)
             return
-        self._download_file(key, local_file_path)
+        with Path(local_file_path).open(mode="wb") as local_file:
+            self._download_to(key, local_file)
 
-    def _download_file(self, key: str, local_file_path: str) -> None:
-        """Download a storage object to a local file."""
+    def _download_to(self, key: str, stream: IO[bytes]) -> None:
+        """Write a storage object into a binary stream."""
         key = self._prefixed_key(key)
         s3_client = self._get_s3_client()
         if not s3_client:
@@ -175,8 +177,7 @@ class S3Storage(StorageBase):
             )
             return
 
-        with Path(local_file_path).open(mode="wb") as local_file:
-            s3_client.download_fileobj(self.bucket_name, key, local_file)
+        s3_client.download_fileobj(self.bucket_name, key, stream)
 
     @override
     def delete(self, key: str) -> None:

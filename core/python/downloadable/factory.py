@@ -88,7 +88,7 @@ def build_downloadable(
 
     product_obj = Product(name=product, build=Build(branch=version_to_branch(version)))
     selected_providers = list(provider) if provider else list(_DEFAULT_PROVIDER_NAMES)
-    selector = add_selector_provider(provider_names=selected_providers)
+    selector = add_selector_provider(provider_names=selected_providers, storage_backend=storage_backend)
     return ProductDownloadable(
         product=product_obj,
         provider=selector,

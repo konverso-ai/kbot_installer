@@ -1,14 +1,14 @@
 """Async Nexus repository service."""
 
 import asyncio
-import tempfile
 from pathlib import Path
+from typing import IO
 
 import httpx
 
 from service.errors import NexusHttpError
 from service.nexus_files import NexusFiles
-from storage.download_utils import extract_tar_gz_archive
+from storage.download_utils import download_and_extract_tar_gz
 from utils.async_api_client import AsyncAPIClient
 
 REST_PREFIX = "service/rest"
@@ -47,6 +47,22 @@ class NexusService:
                     target_file_path,
                     f"repository{repository_path}",
                 )
+        except httpx.HTTPStatusError as exc:
+            raise NexusHttpError(
+                exc.response.status_code,
+                f"Failed to load file '{repository_path}'",
+            ) from exc
+
+    async def write_file(self, repository_path: str, stream: IO[bytes]) -> None:
+        """Write a repository file into a binary stream."""
+        if not repository_path.startswith("/"):
+            repository_path = f"/{repository_path}"
+
+        try:
+            async with AsyncAPIClient(
+                self._base_url, prefix="", auth=self._auth
+            ) as client:
+                await client.download_to(stream, f"repository{repository_path}")
         except httpx.HTTPStatusError as exc:
             raise NexusHttpError(
                 exc.response.status_code,
@@ -120,18 +136,11 @@ class NexusService:
         if not repository_path.startswith("/"):
             repository_path = f"/{repository_path}"
 
-        target = Path(target_dir)
-        await asyncio.to_thread(target.mkdir, parents=True, exist_ok=True)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.gz") as temp_file:
-            temp_path = temp_file.name
-
-        try:
-            await self.get_file(repository_path, temp_path)
-            await asyncio.to_thread(
-                extract_tar_gz_archive,
-                Path(temp_path),
-                target,
-            )
-        finally:
-            await asyncio.to_thread(Path(temp_path).unlink, missing_ok=True)
+        # The extraction helper is synchronous: it runs in a worker thread, which
+        # drives each download with its own event loop.
+        await asyncio.to_thread(
+            download_and_extract_tar_gz,
+            lambda path, stream: asyncio.run(self.write_file(path, stream)),
+            repository_path,
+            Path(target_dir),
+        )

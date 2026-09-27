@@ -5,7 +5,7 @@ import tempfile
 from collections.abc import Coroutine, Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import IO, Any
 
 import aiofiles
 import httpx
@@ -274,6 +274,27 @@ class AsyncAPIClient:
             async with aiofiles.open(file_name, "wb") as fd:
                 async for chunk in response.aiter_bytes():
                     await fd.write(chunk)
+            return response
+
+    async def download_to(self, stream: IO[bytes], endpoint: str) -> httpx.Response:
+        """Stream an endpoint's response body into a binary stream.
+
+        Args:
+            stream: Binary stream the downloaded content is written into.
+            endpoint: API endpoint to fetch.
+
+        Returns:
+            The HTTP response whose body was streamed.
+
+        """
+        if not self.__client:
+            msg = "Client not initialized. Use 'async with'."
+            raise RuntimeError(msg)
+
+        async with self.__client.stream("GET", endpoint) as response:
+            response.raise_for_status()
+            async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                await asyncio.to_thread(stream.write, chunk)
             return response
 
     async def download_and_untar_file(

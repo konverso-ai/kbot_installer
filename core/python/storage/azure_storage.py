@@ -3,7 +3,7 @@
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import cast
+from typing import IO, cast
 
 from azure.core.exceptions import ClientAuthenticationError, ResourceNotFoundError
 from azure.storage.blob import (
@@ -129,12 +129,13 @@ class AzureStorage(StorageBase):
         """Download a storage object to a local file or extract an archive to a directory."""
         path = Path(local_file_path)
         if path.is_dir():
-            download_and_extract_tar_gz(self._download_file, key, path)
+            download_and_extract_tar_gz(self._download_to, key, path)
             return
-        self._download_file(key, local_file_path)
+        with Path(local_file_path).open(mode="wb") as local_file:
+            self._download_to(key, local_file)
 
-    def _download_file(self, key: str, local_file_path: str) -> None:
-        """Download a storage object to a local file."""
+    def _download_to(self, key: str, stream: IO[bytes]) -> None:
+        """Write a storage object into a binary stream."""
         container_client = self._get_container_client()
         if not container_client:
             log.error(
@@ -144,9 +145,7 @@ class AzureStorage(StorageBase):
             return
 
         blob_client = container_client.get_blob_client(key)
-        with Path(local_file_path).open(mode="wb") as local_file:
-            blob_data = blob_client.download_blob()
-            blob_data.readinto(local_file)
+        blob_client.download_blob().readinto(stream)
 
     @override
     def list(self, prefix: str = "") -> Iterator[str]:

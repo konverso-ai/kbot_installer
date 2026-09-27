@@ -319,6 +319,23 @@ async def test_downloadfile_valid_writes_streamed_content(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_downloadto_valid_writes_streamed_content() -> None:
+    stream = io.BytesIO()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/files/1":
+            return httpx.Response(200, content=b"file-content")
+        return httpx.Response(404)
+
+    with _patched_async_client(handler):
+        async with AsyncAPIClient("https://example.com", prefix="") as client:
+            response = await client.download_to(stream, "files/1")
+
+    assert compare("eq", response.status_code, 200)
+    assert compare("eq", stream.getvalue(), b"file-content")
+
+
+@pytest.mark.asyncio
 async def test_downloadanduntarfile_valid_extracts_streamed_archive(tmp_path: Path) -> None:
     target_dir = tmp_path / "extracted"
     archive = _build_tar_gz(b"hello", name="hello.txt")
@@ -377,6 +394,7 @@ async def test_downloadanduntarfile_invalid_raises_on_http_error(tmp_path: Path)
         ("post_multiple_batches", ([],)),
         ("upload_file", ("file.txt", "folder-1")),
         ("download_file", ("file.txt", "files/1")),
+        ("download_to", (io.BytesIO(), "files/1")),
         ("download_and_untar_file", ("/tmp/target", "archives/pkg.tar.gz")),
     ],
 )
