@@ -1451,6 +1451,15 @@ class TestCommandIntegration:
         assert "install" in result.output
         assert "update" in result.output
 
+    def test_cli_short_help_option(self) -> None:
+        """Test that -h is an alias for --help on the group and subcommands."""
+        for args in (["-h"], ["download", "-h"]):
+            short = self.runner.invoke(cli, args)
+            long = self.runner.invoke(cli, [*args[:-1], "--help"])
+            assert short.exit_code == 0
+            assert short.output == long.output
+            assert "-h, --help" in short.output
+
     def test_download_help(self) -> None:
         """Test download command help."""
         result = self.runner.invoke(cli, ["download", "--help"])

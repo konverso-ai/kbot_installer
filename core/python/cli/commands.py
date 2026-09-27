@@ -41,7 +41,10 @@ _HOW_CHOICES = click.Choice(
 )
 
 
-@click.group(invoke_without_command=True)
+@click.group(
+    invoke_without_command=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 @click.version_option(version="0.1.0", prog_name="kbot-installer")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
