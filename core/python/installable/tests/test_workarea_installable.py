@@ -1,11 +1,13 @@
 """Tests for WorkareaInstallable."""
 
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from installable.workarea_installable import WorkareaInstallable
+from utils.version import Version
 from workarea.rule_action import RuleAction
 from workarea.workarea import Workarea
 from workarea.workarea_rule import WorkareaRule
@@ -168,6 +170,73 @@ class TestRuntimeEnvironment:
 
         assert env["PYTHONPATH"] == wa.pythonpath()
         assert env["PATH"] == os.environ["PATH"]
+
+
+def _write_kbot(tmp_path: Path, version: str) -> Path:
+    kbot_dir = tmp_path / "installer" / "kbot"
+    kbot_dir.mkdir(parents=True)
+    (kbot_dir / "description.xml").write_text(
+        f'<product name="kbot" version="{version}" build="" date="" type="framework"/>'
+    )
+    return kbot_dir
+
+
+class TestKbotVersionLayout:
+    @pytest.fixture
+    def static_mocks(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
+        mocks = {"yasg": MagicMock(), "spectacular": MagicMock()}
+        monkeypatch.setattr("installable.workarea_installable.setup_drf_yasg_static", mocks["yasg"])
+        monkeypatch.setattr("installable.workarea_installable.setup_drf_spectacular_static", mocks["spectacular"])
+        return mocks
+
+    def test_kbot_version_reads_installed_kbot_description(self, tmp_path: Path) -> None:
+        _write_kbot(tmp_path, "2026.01")
+
+        assert _build(tmp_path).kbot_version() == Version("2026.01")
+
+    def test_kbot_version_is_empty_when_kbot_is_not_installed(self, tmp_path: Path) -> None:
+        assert _build(tmp_path).kbot_version() == Version.empty()
+
+    @pytest.mark.parametrize("version", ["2026.01", "2026.01.3", "2027.01"])
+    def test_from_2026_01_skips_products_and_conf_and_uses_drf_spectacular(
+        self, tmp_path: Path, static_mocks: dict[str, MagicMock], version: str
+    ) -> None:
+        _write_kbot(tmp_path, version)
+        wa = _build(tmp_path, products=[Path("kbot")])
+
+        wa.install()
+
+        work_root = tmp_path / "work"
+        assert not (work_root / "products").exists()
+        assert not (work_root / "conf").exists()
+        static_mocks["spectacular"].assert_called_once_with(work_root, tmp_path / "installer")
+        static_mocks["yasg"].assert_not_called()
+
+    def test_from_2026_01_writes_products_registry(self, tmp_path: Path, static_mocks: dict[str, MagicMock]) -> None:
+        """Regression: kbot's get_variable reads kbot.env only for products listed in var/products.json."""
+        kbot_dir = _write_kbot(tmp_path, "2026.01")
+        wa = _build(tmp_path, products=[Path("kbot")])
+
+        wa.install()
+
+        registry = json.loads((tmp_path / "work" / "var" / "products.json").read_text(encoding="utf-8"))
+        assert [entry["name"] for entry in registry] == ["kbot"]
+        assert registry[0]["path"] == str(kbot_dir)
+
+    def test_before_2026_01_uses_products_dir_conf_and_drf_yasg(
+        self, tmp_path: Path, static_mocks: dict[str, MagicMock]
+    ) -> None:
+        kbot_dir = _write_kbot(tmp_path, "2025.03")
+        wa = _build(tmp_path, products=[Path("kbot")])
+
+        wa.install()
+
+        work_root = tmp_path / "work"
+        assert (work_root / "products" / "kbot").resolve() == kbot_dir.resolve()
+        assert (work_root / "conf" / "kbot.conf").is_file()
+        assert not (work_root / "var" / "products.json").exists()
+        static_mocks["yasg"].assert_called_once_with(work_root, tmp_path / "installer")
+        static_mocks["spectacular"].assert_not_called()
 
 
 def test_default_update_mode_is_false(tmp_path: Path) -> None:

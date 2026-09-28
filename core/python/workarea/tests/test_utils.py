@@ -1,5 +1,6 @@
 """Tests for workarea.utils module."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -16,9 +17,11 @@ from workarea.utils import (
     matches_pattern,
     render_variables,
     repair_broken_links,
+    setup_drf_spectacular_static,
     setup_drf_yasg_static,
     setup_kbot_conf,
     setup_products,
+    setup_products_registry,
     setup_runtime_dirs,
     should_keep,
 )
@@ -393,6 +396,95 @@ class TestSetupProducts:
         assert not existing.is_symlink()
 
 
+def _write_product(installer_root: Path, name: str, parents: list[str] | None = None) -> Path:
+    product_root = installer_root / name
+    product_root.mkdir(parents=True)
+    parents_xml = "".join(f'<parent name="{parent}"/>' for parent in parents or [])
+    (product_root / "description.xml").write_text(
+        f'<product name="{name}" version="2026.01" build="" date="" type="solution">'
+        f"<parents>{parents_xml}</parents></product>"
+    )
+    return product_root
+
+
+def _read_registry(work_root: Path) -> list[dict[str, object]]:
+    return json.loads((work_root / "var" / "products.json").read_text(encoding="utf-8"))
+
+
+class TestSetupProductsRegistry:
+    def test_lists_products_children_first_like_legacy_deps(self, tmp_path: Path) -> None:
+        """Order must match the legacy utils/deps.py output: first kbot.env defining a variable wins."""
+        installer = tmp_path / "installer"
+        roots = [
+            _write_product(installer, "site", ["keys", "customer"]),
+            _write_product(installer, "customer", ["gsuite", "easyvista"]),
+            _write_product(installer, "easyvista", ["ithd"]),
+            _write_product(installer, "gsuite", ["ithd"]),
+            _write_product(installer, "ithd", ["kbot"]),
+            _write_product(installer, "keys", ["kbot"]),
+            _write_product(installer, "kbot", ["kbot_installer", "3rdparty"]),
+            _write_product(installer, "3rdparty"),
+            _write_product(installer, "kbot_installer"),
+        ]
+        work_root = tmp_path / "work"
+
+        setup_products_registry(work_root, sorted(roots))
+
+        assert [entry["name"] for entry in _read_registry(work_root)] == [
+            "site",
+            "customer",
+            "easyvista",
+            "gsuite",
+            "ithd",
+            "keys",
+            "kbot",
+            "3rdparty",
+            "kbot_installer",
+        ]
+
+    def test_entry_has_path_description_and_merged_json(self, tmp_path: Path) -> None:
+        product_root = _write_product(tmp_path / "installer", "kbot")
+        (product_root / "description.json").write_text(
+            json.dumps({"name": "kbot", "version": "2026.01", "date": "2026/09/25", "type": "solution"})
+        )
+        work_root = tmp_path / "work"
+
+        setup_products_registry(work_root, [product_root])
+
+        [entry] = _read_registry(work_root)
+        assert entry["path"] == str(product_root)
+        assert entry["description"] == str(product_root / "description.xml")
+        assert entry["date"] == "2026/09/25"
+        assert entry["parents"] == []
+
+    def test_ignores_roots_without_description_and_missing_parents(self, tmp_path: Path) -> None:
+        installer = tmp_path / "installer"
+        product_root = _write_product(installer, "site", ["not_installed"])
+        (installer / "no_description").mkdir()
+        work_root = tmp_path / "work"
+
+        setup_products_registry(work_root, [installer / "no_description", product_root])
+
+        assert [entry["name"] for entry in _read_registry(work_root)] == ["site"]
+
+    def test_overwrites_existing_registry(self, tmp_path: Path) -> None:
+        product_root = _write_product(tmp_path / "installer", "kbot")
+        work_root = tmp_path / "work"
+        (work_root / "var").mkdir(parents=True)
+        (work_root / "var" / "products.json").write_text("[]")
+
+        setup_products_registry(work_root, [product_root])
+
+        assert [entry["name"] for entry in _read_registry(work_root)] == ["kbot"]
+
+    def test_raises_on_circular_dependencies(self, tmp_path: Path) -> None:
+        installer = tmp_path / "installer"
+        roots = [_write_product(installer, "a", ["b"]), _write_product(installer, "b", ["a"])]
+
+        with pytest.raises(ValueError, match="Circular product dependency"):
+            setup_products_registry(tmp_path / "work", roots)
+
+
 def _write_versions_env(installer_root: Path) -> Path:
     thirdparty = installer_root / "3rdparty"
     thirdparty.mkdir(parents=True, exist_ok=True)
@@ -553,3 +645,28 @@ class TestRepairBrokenLinks:
         repair_broken_links(work_root.rglob("*"), interactive=True)
 
         assert not broken_link.exists()
+
+
+class TestSetupDrfSpectacularStatic:
+    def test_symlinks_sidecar_static_dir(self, tmp_path: Path) -> None:
+        """drf_spectacular has no static dir: the assets ship in drf_spectacular_sidecar."""
+        site_packages = _write_versions_env(tmp_path)
+        (site_packages / "drf_spectacular").mkdir(parents=True)
+        sidecar_static = site_packages / "drf_spectacular_sidecar" / "static"
+        sidecar_static.mkdir(parents=True)
+
+        work_root = tmp_path / "work"
+        setup_drf_spectacular_static(work_root, tmp_path)
+
+        link = work_root / "ui" / "web" / "static"
+        assert link.is_symlink()
+        assert link.resolve() == sidecar_static.resolve()
+
+    def test_noop_when_sidecar_missing(self, tmp_path: Path) -> None:
+        site_packages = _write_versions_env(tmp_path)
+        (site_packages / "drf_spectacular").mkdir(parents=True)
+
+        work_root = tmp_path / "work"
+        setup_drf_spectacular_static(work_root, tmp_path)
+
+        assert not (work_root / "ui").exists()

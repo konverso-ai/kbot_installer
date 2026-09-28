@@ -914,9 +914,10 @@ def uninstall(
     installer_path = Path(installer_dir)
     workarea_path = Path(workarea_dir)
 
-    # Guard the final 'rmtree' against pointing at anything but a kbot workarea.
-    if not (workarea_path / "products" / "kbot").is_dir():
-        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot')."
+    # Guard the final 'rmtree' against pointing at anything but a kbot workarea
+    # ('products/' is no longer laid out from kbot 2026.01 on).
+    if not (workarea_path / "products" / "kbot").is_dir() and not (workarea_path / "var" / "products.json").is_file():
+        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot' nor 'var/products.json')."
         raise click.UsageError(msg)
 
     backup_path = None if backup_file is None else _resolve_backup_path(Path(backup_file), workarea_path)

@@ -8,19 +8,28 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from utils.Logger import logger
+from utils.product.product import Product
+from utils.version import Version
 from workarea.utils import (
     apply_rules,
     cleanup_unused_tests_dir,
     clear_workarea,
     runtime_variables,
+    setup_drf_spectacular_static,
     setup_drf_yasg_static,
     setup_kbot_conf,
     setup_products,
+    setup_products_registry,
     setup_runtime_dirs,
 )
 from workarea.workarea import Workarea
 
 log = logger.get_package_logger("installable")
+
+# From this kbot version on, kbot discovers its products from `var/products.json`
+# instead of the workarea's `products/` symlinks, no longer reads `conf/`, and
+# serves the drf-spectacular static assets instead of the drf-yasg ones.
+KBOT_2026_01 = Version("2026.01")
 
 
 class WorkareaInstallable(BaseModel):
@@ -28,7 +37,8 @@ class WorkareaInstallable(BaseModel):
 
     Unlike `ProductInstallable`/`BundleInstallable`, this installable does not
     represent a single downloadable unit: it applies workarea rules for every
-    product already present under `workarea.installer_root`. Updating or
+    product already present under `workarea.installer_root`. The layout
+    depends on the installed kbot version (see `kbot_version`). Updating or
     repairing a workarea is done by instantiating `updatable.workarea_updatable.WorkareaUpdatable`
     directly with this installable's `workarea` and the desired strategy.
 
@@ -57,9 +67,12 @@ class WorkareaInstallable(BaseModel):
         """Build the workarea from scratch.
 
         Creates the work root, applies workarea rules for every existing
-        product, then sets up the kbot configuration, runtime directories,
-        product registry, and static assets, and removes unused test
-        directories.
+        product, then sets up the runtime directories, the product layout kbot
+        discovers its products from, and static assets, and removes unused
+        test directories. From kbot 2026.01 on, products are listed in
+        `var/products.json` and the static assets come from drf-spectacular;
+        before, products are symlinked under `products/` next to a default
+        `conf/kbot.conf`, and the static assets come from drf-yasg.
         """
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
@@ -74,15 +87,33 @@ class WorkareaInstallable(BaseModel):
                 runtime_variables=variables,
             )
 
-        setup_kbot_conf(self.workarea.work_root)
         setup_runtime_dirs(self.workarea.work_root)
-        setup_products(self.workarea.work_root, product_roots)
-        setup_drf_yasg_static(self.workarea.work_root, self.workarea.installer_root)
+        if self.kbot_version() >= KBOT_2026_01:
+            setup_products_registry(self.workarea.work_root, product_roots)
+            setup_drf_spectacular_static(self.workarea.work_root, self.workarea.installer_root)
+        else:
+            setup_kbot_conf(self.workarea.work_root)
+            setup_products(self.workarea.work_root, product_roots)
+            setup_drf_yasg_static(self.workarea.work_root, self.workarea.installer_root)
         cleanup_unused_tests_dir(
             self.workarea.work_root,
             product_roots,
             interactive=self.update_mode,
         )
+
+    def kbot_version(self) -> Version:
+        """Read the version of the kbot product installed under the installer root.
+
+        Returns:
+            The version declared in `kbot/description.xml`, or an empty version
+            (older than any release, hence the legacy layout) if kbot is not
+            installed.
+
+        """
+        description_xml = self.workarea.installer_root / "kbot" / "description.xml"
+        if not description_xml.exists():
+            return Version.empty()
+        return Product.from_xml_file(description_xml).version
 
     def clear(self) -> None:
         """Remove every file, symlink, and directory directly under the work root."""

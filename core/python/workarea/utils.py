@@ -1,18 +1,23 @@
 """Filesystem helpers for laying out and maintaining a product workarea."""
 
 import getpass
+import json
 import shutil
 from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from installer_support.thirdparty_env import resolve_site_packages_dir
+from utils.Logger import logger
+from utils.product.product import Product
 from workarea.rule_action import RuleAction
 from workarea.workarea_rule import WorkareaRule
 
 if TYPE_CHECKING:
     from workarea.workarea_rule import WorkAreaRule
+
+log = logger.get_package_logger("workarea")
 
 
 def _matches_glob(relative_parts: tuple[str, ...], pattern_parts: tuple[str, ...]) -> bool:
@@ -342,6 +347,100 @@ def setup_products(work_root: Path, products: Iterable[Path]) -> None:
         target.symlink_to(product_root)
 
 
+def _load_registry_entries(products: Iterable[Path]) -> dict[str, dict[str, Any]]:
+    entries: dict[str, dict[str, Any]] = {}
+    for product_root in products:
+        description_xml = product_root / "description.xml"
+        if not description_xml.exists():
+            continue
+
+        product = Product.from_xml_file(description_xml)
+        description_json = product_root / "description.json"
+        if description_json.exists():
+            product = Product.merge(product, Product.from_json_file(description_json))
+
+        entry = product.to_json()
+        entry["path"] = str(product_root.absolute())
+        entry["description"] = str(description_xml.absolute())
+        entries.setdefault(product.name, entry)
+    return entries
+
+
+def _order_registry_entries(entries: dict[str, dict[str, Any]]) -> list[str]:
+    """Order product names children first, parents last.
+
+    Depth-first post-order walk from each root product (one no other
+    installed product depends on), reversed, as the legacy `utils/deps.py` did.
+
+    Args:
+        entries: Registry entries keyed by product name.
+
+    Returns:
+        Product names in pipeline order.
+
+    Raises:
+        ValueError: If the product dependencies are circular.
+
+    """
+    depended_on = {parent for entry in entries.values() for parent in entry["parents"]}
+    roots = sorted(name for name in entries if name not in depended_on)
+    if len(roots) > 1:
+        log.warning("Several root products found: %s", ", ".join(roots))
+
+    ordered: list[str] = []
+    visiting: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in ordered:
+            return
+        if name in visiting:
+            msg = f"Circular product dependency involving '{name}'"
+            raise ValueError(msg)
+
+        visiting.add(name)
+        for parent in entries[name]["parents"]:
+            if parent in entries:
+                visit(parent)
+            else:
+                log.warning("Parent product '%s' of '%s' is not installed", parent, name)
+        visiting.remove(name)
+        ordered.append(name)
+
+    # Unreachable products can only be part of a cycle; visiting them raises.
+    for name in [*roots, *sorted(entries)]:
+        visit(name)
+    ordered.reverse()
+    return ordered
+
+
+def setup_products_registry(work_root: Path, products: Iterable[Path]) -> None:
+    """Write `var/products.json`, the product pipeline read by kbot at runtime.
+
+    kbot (`common.Product.ProductList.populate`, and `get_variable` in
+    `bin/env.sh` through `tools/GetProducts.py`) walks this list in order, so
+    the first product defining a file or a `kbot.env` variable wins: products
+    are listed children first, parents last.
+
+    The file is always rewritten, so an update picks up added or changed
+    products. Product roots without a `description.xml` are ignored, as are
+    declared parents that are not installed.
+
+    Args:
+        work_root: Root directory of the workarea.
+        products: Installed product root directories.
+
+    Raises:
+        ValueError: If the product dependencies are circular.
+
+    """
+    entries = _load_registry_entries(products)
+    ordered = _order_registry_entries(entries)
+
+    path = work_root / "var" / "products.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([entries[name] for name in ordered], indent=4), encoding="utf-8")
+
+
 def setup_drf_yasg_static(work_root: Path, installer_root: Path) -> None:
     """Symlink the `drf_yasg` package's static assets into the workarea.
 
@@ -362,22 +461,24 @@ def setup_drf_yasg_static(work_root: Path, installer_root: Path) -> None:
 
 
 def setup_drf_spectacular_static(work_root: Path, installer_root: Path) -> None:
-    """Symlink the `drf_spectacular` package's static assets into the workarea.
+    """Symlink the drf-spectacular static assets into the workarea.
 
-    The source directory is resolved from the 3rdparty interpreter kbot
-    actually runs against (via `installer_support.thirdparty_env`), not from
-    whatever `drf_spectacular` may be installed in kbot-installer's own
-    environment, so the served assets always match the version kbot ships.
+    `drf_spectacular` itself ships no static files: the Swagger UI / Redoc
+    assets live in the `drf_spectacular_sidecar` package. The source directory
+    is resolved from the 3rdparty interpreter kbot actually runs against (via
+    `installer_support.thirdparty_env`), not from whatever may be installed in
+    kbot-installer's own environment, so the served assets always match the
+    version kbot ships.
 
-    Does nothing if the `drf_spectacular` static directory cannot be found, or if a
-    target already exists at `work_root / "ui" / "web" / "static"`.
+    Does nothing if the `drf_spectacular_sidecar` static directory cannot be
+    found, or if a target already exists at `work_root / "ui" / "web" / "static"`.
 
     Args:
         work_root: Root directory of the workarea.
         installer_root: Installer directory holding the downloaded products.
 
     """
-    _setup_thirdparty_static(work_root, installer_root, "drf_spectacular")
+    _setup_thirdparty_static(work_root, installer_root, "drf_spectacular_sidecar")
 
 
 def _setup_thirdparty_static(work_root: Path, installer_root: Path, package: str) -> None:
