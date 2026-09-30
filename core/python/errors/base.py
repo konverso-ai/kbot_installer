@@ -47,3 +47,11 @@ class LLM00001(ErrorCode):
     level = "debug"
     code = "LLM00001"
     message = "Prompt blocked by a guardrail"
+
+
+class KB0002(ErrorCode):
+    level = "warning"
+    code = "KB0002"
+    message = "Call to Konverso File Manager failed"
+    documentation_link = ""
+
