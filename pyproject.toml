@@ -4,7 +4,7 @@ version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
 authors = []
-requires-python = ">=3.12"
+requires-python = "~=3.12.0"
 dependencies = [
     "defusedxml"
 ]
@@ -17,18 +17,8 @@ categories = []
 
 [tool.uv]
 environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64' and python_full_version >= '3.12' and python_full_version < '3.13'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
-
-[[tool.uv.index]]
-name = "konverso-aws-private"
-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
-publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
-
-[[tool.uv.index]]
-name = "konverso-aws-pypi-proxy"
-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
-default = true
 
 [tool.deptry]
 known_first_party = [
