@@ -958,12 +958,14 @@ class TestUpdateCommand:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
+    @patch("cli.commands.install_product_python_requirements")
     @patch("cli.commands.WorkareaUpdatable")
     @patch("cli.commands.build_workarea")
     def test_update_workarea_success(
         self,
         mock_build_workarea,
         mock_workarea_updatable,
+        mock_install_python_requirements,
         tmp_path,
     ) -> None:
         """--workarea builds the workarea and dispatches to WorkareaUpdatable with --how."""
@@ -993,13 +995,16 @@ class TestUpdateCommand:
             mode=UpdatableName.REPAIR,
         )
         mock_workarea_updatable.return_value.assert_called_once()
+        mock_install_python_requirements.assert_called_once_with(installer_dir)
 
+    @patch("cli.commands.install_product_python_requirements")
     @patch("cli.commands.WorkareaUpdatable")
     @patch("cli.commands.build_workarea")
     def test_update_workarea_defaults_how_to_smooth(
         self,
         mock_build_workarea,
         mock_workarea_updatable,
+        mock_install_python_requirements,
         tmp_path,
     ) -> None:
         """--how defaults to 'smooth' when not specified."""
@@ -1019,6 +1024,65 @@ class TestUpdateCommand:
 
         assert result.exit_code == 0, result.output
         assert mock_workarea_updatable.call_args.kwargs["mode"] == UpdatableName.SMOOTH
+
+    @patch("cli.commands.install_product_python_requirements")
+    @patch("cli.commands.WorkareaUpdatable")
+    @patch("cli.commands.build_workarea")
+    def test_update_skip_python_requirements(
+        self,
+        mock_build_workarea,
+        mock_workarea_updatable,
+        mock_install_python_requirements,
+        tmp_path,
+    ) -> None:
+        """--skip-python-requirements bypasses the pip3.sh installation step."""
+        mock_build_workarea.return_value = MagicMock()
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "update",
+                "--workarea",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+                "--skip-python-requirements",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        mock_workarea_updatable.return_value.assert_called_once()
+        mock_install_python_requirements.assert_not_called()
+
+    @patch("cli.commands.install_product_python_requirements")
+    @patch("cli.commands.WorkareaUpdatable")
+    @patch("cli.commands.build_workarea")
+    def test_update_python_requirements_failure_aborts(
+        self,
+        mock_build_workarea,
+        mock_workarea_updatable,
+        mock_install_python_requirements,
+        tmp_path,
+    ) -> None:
+        """A failing requirements installation makes the update fail."""
+        mock_build_workarea.return_value = MagicMock()
+        mock_install_python_requirements.side_effect = RuntimeError("Failed to install Python requirements for 'acme'")
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "update",
+                "--workarea",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "Failed to install Python requirements for 'acme'" in result.output
 
     def test_update_requires_a_target(self, tmp_path) -> None:
         """Update fails when no target (e.g. --workarea) is specified."""

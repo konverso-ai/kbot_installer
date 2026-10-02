@@ -636,17 +636,28 @@ def install(
     default=lambda: str(Path.home() / "dev" / "work"),
     help="Workarea directory (default: $HOME/dev/work)",
 )
+@click.option(
+    "--skip-python-requirements",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip installing each solution/customer product's requirements.txt "
+        "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
+    ),
+)
 def update(
     installer_dir: str,
     workarea_dir: str,
     *,
     workarea: bool = False,
     how: str = UpdatableName.SMOOTH.value,
+    skip_python_requirements: bool = False,
 ) -> None:
     """Update parts of an existing kbot installation.
 
     Currently supports ``--workarea`` to update the workarea in place, using
-    the strategy given by ``--how``.
+    the strategy given by ``--how``, then installs each solution/customer
+    product's ``requirements.txt`` (unless ``--skip-python-requirements``).
 
     Examples:
         kbot-installer update --workarea --how repair
@@ -664,6 +675,10 @@ def update(
         )
         installable.update_mode = True
         WorkareaUpdatable(installable=installable, mode=UpdatableName(how))()
+
+        if not skip_python_requirements:
+            install_product_python_requirements(Path(installer_dir))
+
         click.echo("Update completed successfully.")
 
     except click.UsageError:

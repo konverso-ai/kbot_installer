@@ -10,7 +10,7 @@ log = logger.get_package_logger("installer_support")
 
 # Product types whose root ``requirements.txt`` must be installed into the
 # 3rdparty Python (mirrors the legacy ``setup_workarea._UpdatePythonPackages``).
-_PYTHON_REQUIREMENTS_PRODUCT_TYPES = frozenset({"solution", "customer"})
+_PYTHON_REQUIREMENTS_PRODUCT_TYPES = frozenset({"framework", "solution", "customer"})
 
 
 def install_product_python_requirements(installer_path: Path) -> None:
@@ -36,13 +36,14 @@ def install_product_python_requirements(installer_path: Path) -> None:
 
     service = InstallerService(installer_path)
     for product in service.load_products_from_disk():
+        log.warning("%s, %s", product.name, product.type)
         if product.type not in _PYTHON_REQUIREMENTS_PRODUCT_TYPES:
             continue
         req_path = installer_path / product.name / "requirements.txt"
         if not req_path.is_file():
             continue
 
-        log.info("Installing Python requirements for '%s' into 3rdparty Python...", product.name)
+        log.warning("Installing Python requirements for '%s' into 3rdparty Python...", product.name)
         result = subprocess.run(  # noqa: S603
             [
                 str(pip3),
