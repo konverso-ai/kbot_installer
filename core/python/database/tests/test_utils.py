@@ -526,3 +526,15 @@ class TestSetAdminPassword:
         assert compare("ne", stored, "new-pwd")
         assert compare("eq", safe_encrypt("new-pwd", stored), stored)
         mock_conn.commit.assert_called_once()
+
+    def test_setadminpassword_invalid_raises_when_admin_account_is_missing(
+        self, settings: DbSettings, mock_conn: MagicMock
+    ) -> None:
+        """No updated row means the users load did not create 'admin': fail instead of committing."""
+        cur = mock_conn.cursor.return_value.__enter__.return_value
+        cur.rowcount = 0
+
+        with pytest.raises(RuntimeError, match="No 'admin' account"):
+            set_admin_password(settings, "new-pwd")
+
+        mock_conn.commit.assert_not_called()

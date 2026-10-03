@@ -15,7 +15,7 @@ from git.models import GitProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
-from installer_support.kbot_commands import run_kbot_command
+from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
@@ -282,9 +282,13 @@ def _load_and_learn(
     pg_dir: Path,
     with_load: bool,
     with_learn: bool,
-    no_admin_password: bool,
+    admin_password: str,
+    show_admin_password: bool = False,
 ) -> None:
-    """Load initial data and/or train ML models after an install, via 'kbot.sh'.
+    """Load data, set the kbot admin password and optionally train ML models after an install.
+
+    The 'admin' account is always created: without `with_load`, only the
+    identity and access management data (permissions, roles, users) is loaded.
 
     Args:
         workarea_path: Workarea directory holding 'bin/kbot.sh'.
@@ -294,29 +298,30 @@ def _load_and_learn(
         db_password: Postgres application password.
         db_name: Postgres database name.
         pg_dir: PostgreSQL installation directory, used to locate 'psql'.
-        with_load: Whether to load initial data and set the kbot admin password.
+        with_load: Whether to load all the initial data, instead of only the users.
         with_learn: Whether to train ML models.
-        no_admin_password: Whether to generate a random kbot admin password
-            instead of reading 'KBOT_ADMIN_PASSWORD' (used only with `with_load`).
+        admin_password: Clear-text password to set on the kbot 'admin' user.
+        show_admin_password: Whether to display `admin_password` once set (generated password).
 
     """
     if with_load:
-        admin_password, generated_admin_password = resolve_admin_password(no_password=no_admin_password)
-
         run_kbot_command(workarea_path, "load")
-        set_admin_password(
-            _app_db_settings(
-                db_host=db_host,
-                db_port=db_port,
-                db_user=db_user,
-                db_password=db_password,
-                db_name=db_name,
-                pg_dir=pg_dir,
-            ),
-            admin_password,
-        )
-        if generated_admin_password is not None:
-            click.echo(f"Generated kbot admin password: {generated_admin_password}")
+    else:
+        run_kbot_iam_load(workarea_path)
+
+    set_admin_password(
+        _app_db_settings(
+            db_host=db_host,
+            db_port=db_port,
+            db_user=db_user,
+            db_password=db_password,
+            db_name=db_name,
+            pg_dir=pg_dir,
+        ),
+        admin_password,
+    )
+    if show_admin_password:
+        click.echo(f"Generated kbot admin password: {admin_password}")
 
     if with_learn:
         run_kbot_command(workarea_path, "learn")
@@ -452,7 +457,10 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     "--with-load",
     is_flag=True,
     default=False,
-    help="Load initial data after installing (runs 'kbot.sh load').",
+    help=(
+        "Load all the initial data after installing (runs 'kbot.sh load'). "
+        "Without it, only the users, roles and permissions are loaded, so that the 'admin' account exists."
+    ),
 )
 @click.option(
     "--with-learn",
@@ -464,9 +472,7 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     "--no-admin-password",
     is_flag=True,
     default=False,
-    help=(
-        "Generate a random kbot admin password instead of reading 'KBOT_ADMIN_PASSWORD' (used only with --with-load)."
-    ),
+    help=("Generate a random kbot admin password instead of reading 'KBOT_ADMIN_PASSWORD'."),
 )
 @click.option(
     "-V",
@@ -512,23 +518,29 @@ def install(
     The installer directory is built first (download), then the workarea is
     laid out from it, then the database is prepared and initialized: every
     downloaded product's ``db/init/db_schema.sql`` is applied, in dependency
-    order (dependencies before the products that depend on them). If
-    ``--workarea-dir`` already exists, the installation is cancelled before
-    anything is downloaded or built, unless ``--force-recreate`` is given, in
-    which case the existing directory is deleted first.
+    order (dependencies before the products that depend on them). The users,
+    roles and permissions are then loaded (all the data with ``--with-load``)
+    and the 'admin' password is set from 'KBOT_ADMIN_PASSWORD' (or generated
+    with ``--no-admin-password``). If ``--workarea-dir`` already exists, the
+    installation is cancelled before anything is downloaded or built, unless
+    ``--force-recreate`` is given, in which case the existing directory is
+    deleted first.
 
     Examples:
-        kbot-installer install -b ev-basic-00018 -p site-konverso --with-load --with-learn \\
+        KBOT_ADMIN_PASSWORD='secret' kbot-installer install -b ev-basic-00018 -p site-konverso \\
+            --with-load --with-learn --workarea-dir ~/dev/work --installer-dir ~/dev/installer
+        KBOT_ADMIN_PASSWORD='secret' kbot-installer install -p site-konverso -v 2025.03-dev --with-load \\
             --workarea-dir ~/dev/work --installer-dir ~/dev/installer
-        kbot-installer install -p site-konverso -v 2025.03-dev --with-load \\
-            --workarea-dir ~/dev/work --installer-dir ~/dev/installer
-        kbot-installer install -p site-konverso -v 2025.03-dev --force-recreate \\
+        kbot-installer install -p site-konverso -v 2025.03-dev --force-recreate --no-admin-password \\
             --workarea-dir ~/dev/work --installer-dir ~/dev/installer
 
     """
     if not bundle and not version:
         msg = "Option '-v/--version' is required when installing a product without '-b/--bundle'."
         raise click.UsageError(msg)
+
+    # Resolved before anything is downloaded: the 'admin' account is created by every install
+    admin_password, generated_admin_password = resolve_admin_password(no_password=no_admin_password)
 
     installer_path = Path(installer_dir)
     workarea_path = Path(workarea_dir)
@@ -594,7 +606,8 @@ def install(
             pg_dir=pg_dir,
             with_load=with_load,
             with_learn=with_learn,
-            no_admin_password=no_admin_password,
+            admin_password=admin_password,
+            show_admin_password=generated_admin_password is not None,
         )
 
         click.echo("Installation completed successfully.")

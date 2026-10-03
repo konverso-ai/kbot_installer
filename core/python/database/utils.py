@@ -136,10 +136,17 @@ def set_admin_password(settings: DbSettings, password: str) -> None:
         settings: Connection settings.
         password: New clear-text password for the kbot 'admin' user.
 
+    Raises:
+        RuntimeError: If there is no 'admin' account to update.
+
     """
     query = "UPDATE users_im_account SET pwd = %s WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'admin')"
     with connect(settings) as conn, conn.cursor() as cur:
         cur.execute(query, (safe_encrypt(password),))
+        if not cur.rowcount:
+            # 'Load.py' only logs a failing step: without this check, a failed users load goes unnoticed
+            msg = "No 'admin' account found in the database: the users load (users.conf) did not create it."
+            raise RuntimeError(msg)
         conn.commit()
 
 

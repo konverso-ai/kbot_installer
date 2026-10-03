@@ -318,6 +318,19 @@ class TestInstallCommand:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
+    @pytest.fixture(autouse=True)
+    def _admin_account(self, monkeypatch):
+        """Every install creates the 'admin' account: provide its password, mock the users load and DB update.
+
+        Tests that check these steps patch them again with their own decorators, which take precedence.
+        """
+        monkeypatch.setenv("KBOT_ADMIN_PASSWORD", "K0nversOK!")
+        with (
+            patch("cli.commands.run_kbot_iam_load") as self.mock_run_kbot_iam_load,
+            patch("cli.commands.set_admin_password") as self.mock_set_admin_password,
+        ):
+            yield
+
     @patch("cli.commands.build_database")
     @patch("cli.commands.build_workarea")
     @patch("cli.commands.build_downloadable")
@@ -830,6 +843,7 @@ class TestInstallCommand:
 
         assert result.exit_code == 0, result.output
         mock_run_kbot_command.assert_called_once_with(workarea_dir, "load")
+        self.mock_run_kbot_iam_load.assert_not_called()
         mock_set_admin_password.assert_called_once()
         assert mock_set_admin_password.call_args.args[1] == "K0nversOK!"
 
@@ -844,7 +858,7 @@ class TestInstallCommand:
         tmp_path,
         monkeypatch,
     ) -> None:
-        """--with-load without KBOT_ADMIN_PASSWORD or --no-admin-password fails fast."""
+        """--with-load without KBOT_ADMIN_PASSWORD or --no-admin-password fails before downloading."""
         monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
         monkeypatch.delenv("KBOT_ADMIN_PASSWORD", raising=False)
         mock_build_downloadable.return_value = MagicMock()
@@ -868,6 +882,107 @@ class TestInstallCommand:
 
         assert result.exit_code != 0
         assert "KBOT_ADMIN_PASSWORD" in result.output
+        mock_build_downloadable.assert_not_called()
+
+    @patch("cli.commands.run_kbot_command")
+    @patch("cli.commands.build_database")
+    @patch("cli.commands.build_workarea")
+    @patch("cli.commands.build_downloadable")
+    def test_install_without_load_loads_users_and_sets_admin_password(
+        self,
+        mock_build_downloadable,
+        mock_build_workarea,
+        mock_build_database,
+        mock_run_kbot_command,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        """Without --with-load, only the users are loaded ('core.sh load -p') so that 'admin' exists."""
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
+        mock_build_downloadable.return_value = MagicMock()
+        mock_build_workarea.return_value = MagicMock()
+        workarea_dir = tmp_path / "work"
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(workarea_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        self.mock_run_kbot_iam_load.assert_called_once_with(workarea_dir)
+        mock_run_kbot_command.assert_not_called()
+        self.mock_set_admin_password.assert_called_once()
+        assert self.mock_set_admin_password.call_args.args[1] == "K0nversOK!"
+
+    @patch("cli.commands.build_downloadable")
+    def test_install_without_load_requires_admin_password(self, mock_build_downloadable, tmp_path, monkeypatch) -> None:
+        """Even without --with-load, a missing admin password fails before downloading."""
+        monkeypatch.delenv("KBOT_ADMIN_PASSWORD", raising=False)
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "KBOT_ADMIN_PASSWORD" in result.output
+        mock_build_downloadable.assert_not_called()
+
+    @patch("cli.commands.build_database")
+    @patch("cli.commands.build_workarea")
+    @patch("cli.commands.build_downloadable")
+    def test_install_fails_when_admin_account_is_missing(
+        self,
+        mock_build_downloadable,
+        mock_build_workarea,
+        mock_build_database,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        """If the users load did not create 'admin', the install fails instead of reporting success."""
+        monkeypatch.setenv("PG_DIR", str(tmp_path / "pg"))
+        mock_build_downloadable.return_value = MagicMock()
+        mock_build_workarea.return_value = MagicMock()
+        self.mock_set_admin_password.side_effect = RuntimeError("No 'admin' account found in the database")
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(tmp_path / "work"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "No 'admin' account found" in result.output
+        assert "Installation completed successfully." not in result.output
 
     @patch("cli.commands.set_admin_password")
     @patch("cli.commands.run_kbot_command")
