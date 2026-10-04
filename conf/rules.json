@@ -99,6 +99,13 @@
         "action": "copy"
     },
     {
+        "source": "conf",
+        "target": "var",
+        "action": "link",
+        "recursive": false,
+        "includes": ["license.key"]
+    },
+    {
         "source": "tests",
         "target": "tests",
         "action": "link"

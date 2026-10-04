@@ -76,6 +76,36 @@ class TestLoadDefaultRules:
             assert target.is_file()
             assert not target.is_symlink()
 
+    def test_conf_license_key_is_linked_into_var(self, tmp_path: Path) -> None:
+        """Regression: the product `conf/license.key` must be exposed as `var/license.key`.
+
+        kbot's `utils.License` validates `$KBOT_HOME/var/license.key` by default.
+        No other product `conf` entry is laid out: kbot reads them in place from
+        the installer directory, so the workarea has no `conf` directory.
+        """
+        product_root = tmp_path / "product"
+        conf = product_root / "conf"
+        (conf / "classifiers").mkdir(parents=True)
+        (conf / "classifiers" / "c.json").write_text("{}\n")
+        (conf / "license.key").write_text("key\n")
+        (conf / "kbot.conf").write_text("# product conf\n")
+
+        work_root = tmp_path / "work"
+
+        apply_rules(
+            product_root=product_root,
+            work_root=work_root,
+            rules=load_default_rules(),
+            runtime_variables={},
+        )
+
+        license_key = work_root / "var" / "license.key"
+        assert license_key.is_symlink()
+        assert license_key.resolve() == (conf / "license.key").resolve()
+        assert not (work_root / "conf").exists()
+        assert not (work_root / "var" / "kbot.conf").exists()
+        assert not (work_root / "var" / "classifiers").exists()
+
 
 class TestResolveDefaultRulesPath:
     def test_finds_dev_layout_rules_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
