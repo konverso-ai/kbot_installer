@@ -60,6 +60,35 @@
         "placeholders": ["__KBOT_HOME__", "__KBOT_USER__"]
     },
     {
+        "source": "conf",
+        "target": "conf",
+        "action": "link",
+        "includes": [
+            "classifiers/**",
+            "csvs/**",
+            "tests/**",
+            "scripts/**",
+            "clusters/**",
+            "json/**",
+            "automations/**",
+            "push_campaigns/**",
+            "devops-tasks/**",
+            "tools/**",
+            "tool_groups/**",
+            "agents/**",
+            "assistants/**",
+            "connections/**",
+            "categorization_tests.conf",
+            "tests.conf",
+            "editable_files*.json",
+            "km_*.conf",
+            "actions_ordering.conf",
+            "roles_custom.conf",
+            "tenants.json",
+            "application_assistant.conf"
+        ]
+    },
+    {
         "source": "ui",
         "target": "ui",
         "action": "link",
@@ -107,6 +136,6 @@
         "source": ".",
         "action": "link",
         "recursive": false,
-        "includes": ["uninstall.sh"]
+        "includes": ["uninstall.sh", "license.key"]
     }
 ]

@@ -76,6 +76,48 @@ class TestLoadDefaultRules:
             assert target.is_file()
             assert not target.is_symlink()
 
+    def test_conf_layout_matches_legacy_setup_conf(self, tmp_path: Path) -> None:
+        """Regression: product `conf` entries are laid out like legacy `_SetupConf`.
+
+        Whitelisted `conf` subdirectories are mirrored with per-file symlinks,
+        whitelisted top-level files (including globs) are symlinked, and every
+        other `conf` entry (e.g. `kbot.conf`, `entities/`) stays in the product,
+        read in place through `products/`. The product root `license.key` is
+        symlinked at the work root, where `Bot.GetLicenseFile` looks first.
+        """
+        product_root = tmp_path / "product"
+        conf = product_root / "conf"
+        (conf / "classifiers" / "nested").mkdir(parents=True)
+        (conf / "classifiers" / "nested" / "c.json").write_text("{}\n")
+        (conf / "entities").mkdir()
+        (conf / "entities" / "e.conf").write_text("# entity\n")
+        for name in ("editable_files_kbot.json", "km_tests.conf", "kbot.conf", "httpd.conf"):
+            (conf / name).write_text(f"# {name}\n")
+        (product_root / "license.key").write_text("key\n")
+
+        work_root = tmp_path / "work"
+
+        apply_rules(
+            product_root=product_root,
+            work_root=work_root,
+            rules=load_default_rules(),
+            runtime_variables={},
+        )
+
+        work_conf = work_root / "conf"
+        classifier = work_conf / "classifiers" / "nested" / "c.json"
+        assert classifier.is_symlink()
+        assert not (work_conf / "classifiers").is_symlink()
+        assert (work_conf / "editable_files_kbot.json").is_symlink()
+        assert (work_conf / "km_tests.conf").is_symlink()
+        assert not (work_conf / "kbot.conf").exists()
+        assert not (work_conf / "httpd.conf").exists()
+        assert not (work_conf / "entities").exists()
+
+        license_key = work_root / "license.key"
+        assert license_key.is_symlink()
+        assert license_key.resolve() == (product_root / "license.key").resolve()
+
 
 class TestResolveDefaultRulesPath:
     def test_finds_dev_layout_rules_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
