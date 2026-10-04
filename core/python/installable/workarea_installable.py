@@ -56,15 +56,20 @@ class WorkareaInstallable(BaseModel):
     def install(self) -> None:
         """Build the workarea from scratch.
 
-        Creates the work root, applies workarea rules for every existing
-        product, then sets up the kbot configuration, runtime directories,
-        product registry, and static assets, and removes unused test
-        directories.
+        Creates the work root and the product symlinks under `products/`,
+        applies workarea rules for every existing product, then sets up the
+        kbot configuration, runtime directories, and static assets, and removes
+        unused test directories.
+
+        The product symlinks are written first: `products/kbot` is what marks
+        the directory as a kbot workarea for `uninstall`, so a layout failing
+        midway still leaves a workarea that can be uninstalled.
         """
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
         variables = runtime_variables(self.workarea.work_root)
         product_roots = list(self._iter_product_roots())
+        setup_products(self.workarea.work_root, product_roots)
 
         for product_root in product_roots:
             apply_rules(
@@ -76,7 +81,6 @@ class WorkareaInstallable(BaseModel):
 
         setup_kbot_conf(self.workarea.work_root)
         setup_runtime_dirs(self.workarea.work_root)
-        setup_products(self.workarea.work_root, product_roots)
         setup_drf_yasg_static(self.workarea.work_root, self.workarea.installer_root)
         cleanup_unused_tests_dir(
             self.workarea.work_root,

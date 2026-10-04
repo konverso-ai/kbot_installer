@@ -143,6 +143,21 @@ class TestInstall:
 
         cleanup_mock.assert_called_once_with(tmp_path / "work", [], interactive=True)
 
+    def test_failed_layout_still_leaves_the_uninstall_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: 'uninstall' only removes a directory holding 'products/kbot', so a failed install must keep it."""
+        (tmp_path / "installer" / "kbot").mkdir(parents=True)
+        wa = _build(tmp_path, products=[Path("kbot")])
+        monkeypatch.setattr(
+            "installable.workarea_installable.apply_rules", MagicMock(side_effect=OSError("layout failed"))
+        )
+
+        with pytest.raises(OSError, match="layout failed"):
+            wa.install()
+
+        assert (tmp_path / "work" / "products" / "kbot").is_dir()
+
 
 class TestClear:
     def test_removes_files_symlinks_and_directories(self, tmp_path: Path) -> None:
