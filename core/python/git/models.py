@@ -2,12 +2,21 @@
 
 import json
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from utils.product import Product
-from utils.settings import Settings
+
+
+class RepoSettings(Protocol):
+    """Repository settings exportable to conf and JSON formats."""
+
+    def to_conf(self) -> str:
+        """Return settings as a kbot.conf string."""
+
+    def to_json(self) -> str | dict[str, Any]:
+        """Return settings as a JSON string or dictionary."""
 
 
 class GitProtocol(Enum):
@@ -52,7 +61,7 @@ class GitRepo(BaseModel):
         }
 
 
-def _settings_json(settings: Settings) -> str:
+def _settings_json(settings: RepoSettings) -> str:
     """Serialize settings to a JSON string for file export."""
     content = settings.to_json()
     if isinstance(content, str):
