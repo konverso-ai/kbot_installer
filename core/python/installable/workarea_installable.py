@@ -66,18 +66,28 @@ class WorkareaInstallable(BaseModel):
     def install(self) -> None:
         """Build the workarea from scratch.
 
-        Creates the work root, applies workarea rules for every existing
-        product, then sets up the runtime directories, the product layout kbot
-        discovers its products from, and static assets, and removes unused
+        Creates the work root and the product layout kbot discovers its
+        products from, applies workarea rules for every existing product, then
+        sets up the runtime directories and static assets, and removes unused
         test directories. From kbot 2026.01 on, products are listed in
         `var/products.json` and the static assets come from drf-spectacular;
         before, products are symlinked under `products/` next to a default
         `conf/kbot.conf`, and the static assets come from drf-yasg.
+
+        The product layout is written first: it is what marks the directory as
+        a kbot workarea for `uninstall`, so a layout failing midway still
+        leaves a workarea that can be uninstalled.
         """
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
         variables = runtime_variables(self.workarea.work_root)
         product_roots = list(self._iter_product_roots())
+        uses_products_registry = self.kbot_version() >= KBOT_2026_01
+
+        if uses_products_registry:
+            setup_products_registry(self.workarea.work_root, product_roots)
+        else:
+            setup_products(self.workarea.work_root, product_roots)
 
         for product_root in product_roots:
             apply_rules(
@@ -88,12 +98,10 @@ class WorkareaInstallable(BaseModel):
             )
 
         setup_runtime_dirs(self.workarea.work_root)
-        if self.kbot_version() >= KBOT_2026_01:
-            setup_products_registry(self.workarea.work_root, product_roots)
+        if uses_products_registry:
             setup_drf_spectacular_static(self.workarea.work_root, self.workarea.installer_root)
         else:
             setup_kbot_conf(self.workarea.work_root)
-            setup_products(self.workarea.work_root, product_roots)
             setup_drf_yasg_static(self.workarea.work_root, self.workarea.installer_root)
         cleanup_unused_tests_dir(
             self.workarea.work_root,
