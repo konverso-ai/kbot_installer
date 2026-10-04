@@ -65,6 +65,28 @@ class TestInstall:
         assert link.is_symlink()
         assert link.resolve() == (product_dir / "core" / "file.py").resolve()
 
+    def test_relative_roots_produce_valid_links(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Regression: a relative installer root (e.g. `--installer-dir installer`) must not yield broken links."""
+        product_dir = tmp_path / "installer" / "productA"
+        (product_dir / "core").mkdir(parents=True)
+        (product_dir / "core" / "file.py").write_text("data")
+        monkeypatch.chdir(tmp_path)
+
+        rule = WorkareaRule(source=Path("core"), action=RuleAction.LINK)
+        wa = WorkareaInstallable(
+            workarea=Workarea(
+                installer_root=Path("installer"),
+                work_root=Path("work"),
+                products=[Path("productA")],
+                rules=[rule],
+            ),
+        )
+
+        wa.install()
+
+        assert (tmp_path / "work" / "core" / "file.py").read_text() == "data"
+        assert (tmp_path / "work" / "products" / "productA" / "core" / "file.py").exists()
+
     def test_skips_products_missing_from_installer_root(self, tmp_path: Path) -> None:
         rule = WorkareaRule(source=Path("core"), action=RuleAction.LINK)
         wa = _build(tmp_path, products=[Path("missing")], rules=[rule])
