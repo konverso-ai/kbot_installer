@@ -14,6 +14,7 @@ from git.provider.storage_provider import StorageProvider
 from installer_support.installation_table import InstallationTable
 from utils.bundle import Bundle
 from utils.Logger import logger
+from utils.version import Version
 from writer.factory import add_writer
 
 if TYPE_CHECKING:
@@ -27,6 +28,46 @@ log = logger.get_package_logger("installable")
 # product convention of a fixed "description.xml"/"description.json" name
 # per install location rather than a name+version-derived one.
 LOCAL_BUNDLE_FILE_NAME = "bundle.json"
+
+
+def find_latest_bundle_name(storage: StorageBase, current: Bundle) -> str:
+    """Find the latest published bundle sharing the name and ``major.minor`` of current.
+
+    Only top-level ``<name>-<version>.json`` descriptors are considered;
+    versions are compared once parsed (``2025.3.0018`` > ``2025.03.0016``).
+
+    Args:
+        storage: Storage scoped to the ``bundles`` area.
+        current: Bundle currently installed.
+
+    Returns:
+        The storage key stem of the latest bundle, i.e. the ``name`` to pass
+        to :class:`BundleDownloadable`.
+
+    Raises:
+        ValueError: If no bundle with the same name and ``major.minor`` exists.
+
+    """
+    prefix = f"{current.name}-"
+    candidates: list[tuple[Version, str]] = []
+    for key in storage.list(""):
+        if "/" in key or not key.endswith(".json"):
+            continue
+        stem = key.removesuffix(".json")
+        if not stem.startswith(prefix):
+            continue
+        try:
+            version = Version.parse(stem.removeprefix(prefix))
+        except (ValueError, TypeError):
+            continue
+        if not version:
+            continue
+        if (version.major, version.minor) == (current.version.major, current.version.minor):
+            candidates.append((version, stem))
+    if not candidates:
+        msg = f"No bundle '{current.name}' {current.version.major}.{current.version.minor:02d}.* found in storage"
+        raise ValueError(msg)
+    return max(candidates, key=lambda candidate: candidate[0])[1]
 
 
 class BundleDownloadable(DownloadableBase):

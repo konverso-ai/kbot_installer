@@ -88,9 +88,22 @@ class InstallerService:
             The products discovered in the installer directory.
 
         """
-        products: list[Product] = []
+        return [product for _, product in self.load_product_dirs()]
+
+    def load_product_dirs(self) -> list[tuple[Path, Product]]:
+        """Load products from the installer directory along with their folder.
+
+        Each immediate subdirectory holding a ``description.xml`` is loaded as a
+        product; a sibling ``description.json`` is merged when present. The
+        folder name may differ from the product name.
+
+        Returns:
+            ``(folder, product)`` pairs sorted by folder path.
+
+        """
+        entries: list[tuple[Path, Product]] = []
         if not self.installer_dir.exists():
-            return products
+            return entries
 
         for item in sorted(self.installer_dir.iterdir()):
             description_xml = item / "description.xml"
@@ -106,6 +119,6 @@ class InstallerService:
             except Exception as e:
                 log.debug("Failed to load product from %s: %s", item, e)
                 continue
-            products.append(product)
+            entries.append((item, product))
 
-        return products
+        return entries

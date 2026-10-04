@@ -4,12 +4,22 @@ from typing import TYPE_CHECKING, cast
 
 from auth.http.factory import add_http_auth
 from auth.ssh.factory import add_ssh_auth
+from credentials import add_credentials
 from git.auth_factory import add_auth_for_url
+from git.remote_url import RemoteScheme, detect_remote_scheme
 from git.versioner.author import Author
 from git.versioner.base import VersionerBase
 from git.versioner.errors import RemoteNotFoundError, VersionerError
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from credentials.base import AuthCredentialsBase
+
+# Hosts of HTTP remotes mapped to the provider whose credentials authenticate them.
+_HTTP_HOST_PROVIDERS = {"github.com": "github", "bitbucket.org": "bitbucket"}
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -155,6 +165,46 @@ def add_dulwich_versioner_for_repository(
         author=author,
         **ssh_kwargs,
     )
+
+
+def add_versioner_for_repository_remote(repository_path: str | Path) -> VersionerBase:
+    """Create a Dulwich versioner authenticated from a clone's ``origin`` remote.
+
+    Unlike :func:`add_dulwich_versioner_for_repository`, credentials are not
+    supplied by the caller: SSH remotes use the ``~/.ssh`` keys/agent, local
+    paths need no authentication, and HTTP remotes on GitHub/Bitbucket use the
+    basic credentials of that provider from the environment. A clone without
+    ``origin``, or an HTTP remote without matching credentials, yields an
+    anonymous versioner (remote operations then fail with a clear error, or
+    succeed on public repositories).
+
+    Args:
+        repository_path: Path to the local repository.
+
+    Returns:
+        A Dulwich versioner able to fetch/pull from the clone's remote.
+
+    Raises:
+        ValueError: If the remote URL uses an unsupported scheme.
+
+    """
+    probe = add_versioner(name="dulwich")
+    try:
+        url = probe.remote_url(repository_path)
+    except (RemoteNotFoundError, VersionerError):
+        return probe
+
+    if detect_remote_scheme(url) is not RemoteScheme.HTTP:
+        return add_dulwich_versioner_for_url(url)
+
+    provider_name = next((name for host, name in _HTTP_HOST_PROVIDERS.items() if host in url), None)
+    if provider_name is None:
+        return probe
+    credentials = cast("AuthCredentialsBase", add_credentials(provider_name, auth_type="basic"))
+    kwargs = credentials.auth_kwargs()
+    if not kwargs:
+        return probe
+    return add_dulwich_versioner_for_url(url, username=str(kwargs["username"]), password=str(kwargs["password"]))
 
 
 def _build_dulwich_versioner(

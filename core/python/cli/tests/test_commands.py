@@ -1136,7 +1136,7 @@ class TestUpdateCommand:
         assert mock_workarea_updatable.call_args.kwargs["mode"] == UpdatableName.SMOOTH
 
     def test_update_requires_a_target(self, tmp_path) -> None:
-        """Update fails when no target (e.g. --workarea) is specified."""
+        """Update fails when no target (--installer or --workarea) is specified."""
         result = self.runner.invoke(
             cli,
             [
@@ -1150,6 +1150,56 @@ class TestUpdateCommand:
 
         assert result.exit_code != 0
         assert "Nothing to update" in result.output
+
+    @patch("cli.commands.install_product_python_requirements")
+    @patch("cli.commands.WorkareaUpdatable")
+    @patch("cli.commands.InstallerUpdatable")
+    def test_update_installer_success(
+        self,
+        mock_installer_updatable,
+        mock_workarea_updatable,
+        mock_install_python_requirements,
+        tmp_path,
+    ) -> None:
+        """--installer runs InstallerUpdatable with --storage/-V, without touching the workarea."""
+        installer_dir = tmp_path / "installer"
+        mock_installer_updatable.return_value.return_value = []
+
+        result = self.runner.invoke(
+            cli,
+            ["update", "--installer", "--storage", "s3", "-V", "--installer-dir", str(installer_dir)],
+        )
+
+        assert result.exit_code == 0, result.output
+        mock_installer_updatable.assert_called_once_with(
+            installer_path=installer_dir,
+            storage_backend=StorageBackendEnum.S3,
+            verbose=True,
+        )
+        mock_installer_updatable.return_value.assert_called_once()
+        mock_install_python_requirements.assert_called_once_with(installer_dir)
+        mock_workarea_updatable.assert_not_called()
+        assert "Update completed successfully." in result.output
+
+    @patch("cli.commands.install_product_python_requirements")
+    @patch("cli.commands.InstallerUpdatable")
+    def test_update_installer_failures_exit_non_zero(
+        self,
+        mock_installer_updatable,
+        mock_install_python_requirements,
+        tmp_path,
+    ) -> None:
+        """Products that failed to update are listed and the command fails."""
+        mock_installer_updatable.return_value.return_value = ["qakeys"]
+
+        result = self.runner.invoke(
+            cli,
+            ["update", "--installer", "--installer-dir", str(tmp_path / "installer")],
+        )
+
+        assert result.exit_code != 0
+        assert "Update finished with errors for: qakeys" in result.output
+        mock_install_python_requirements.assert_called_once()
 
 
 class TestLoadCommand:
