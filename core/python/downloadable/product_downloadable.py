@@ -15,6 +15,10 @@ from utils.product.product import Product
 
 log = logger.get_package_logger("downloadable")
 
+LOCAL_SYMLINK = "local symlink"
+LOCAL_GIT_WORKING_COPY = "local git working copy"
+LOCAL_BUILD = "local build"
+
 
 class ProductDownloadable(DownloadableBase):
     """Orchestrate downloading a Product through a ProviderBase.
@@ -22,7 +26,7 @@ class ProductDownloadable(DownloadableBase):
     A product already present in the target installer folder is skipped when
     up to date, and removed then downloaded again when outdated (e.g. after a
     version change). User-managed copies (manual builds, git working copies,
-    symlinks) are never replaced: see `_local_copy_kind`.
+    symlinks) are never replaced: see `local_copy_kind`.
     """
 
     __product: Product
@@ -72,7 +76,7 @@ class ProductDownloadable(DownloadableBase):
         When the product pins a commit, the product is re-downloaded whenever
         the commit recorded in the existing ``description.json`` no longer
         matches; the outdated folder is removed first. User-managed copies (see
-        `_local_copy_kind`) are always kept, even when outdated.
+        `local_copy_kind`) are always kept, even when outdated.
 
         Args:
             product: Product to clone.
@@ -84,7 +88,7 @@ class ProductDownloadable(DownloadableBase):
         """
         self.__table.begin_installation(product.name)
         pinned_commit = product.build.commit if product.build else None
-        local_copy = self._local_copy_kind(path)
+        local_copy = self.local_copy_kind(path)
         if local_copy is not None:
             details = f"Kept {local_copy}"
             if pinned_commit and not self._is_up_to_date(path, pinned_commit):
@@ -131,7 +135,7 @@ class ProductDownloadable(DownloadableBase):
         )
 
     @staticmethod
-    def _local_copy_kind(path: Path) -> str | None:
+    def local_copy_kind(path: Path) -> str | None:
         """Tell whether path holds a user-managed copy the installer must never replace.
 
         Such copies are left untouched even when outdated, since replacing them
@@ -147,18 +151,18 @@ class ProductDownloadable(DownloadableBase):
             path: Directory the product would be downloaded into.
 
         Returns:
-            A short description of the local copy, or None if path is absent or
-            holds a regular download that may be replaced.
+            ``LOCAL_SYMLINK``, ``LOCAL_GIT_WORKING_COPY`` or ``LOCAL_BUILD``, or
+            None if path is absent or holds a regular download that may be replaced.
 
         """
         if path.is_symlink():
-            return "local symlink"
+            return LOCAL_SYMLINK
         if not path.is_dir():
             return None
         if (path / ".git").exists():
-            return "local git working copy"
+            return LOCAL_GIT_WORKING_COPY
         if (path / "description.xml").exists() and not (path / "description.json").exists():
-            return "local build"
+            return LOCAL_BUILD
         return None
 
     @staticmethod

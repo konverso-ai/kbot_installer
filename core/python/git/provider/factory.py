@@ -335,6 +335,34 @@ def _build_provider(
         return None
 
 
+def build_storage_provider(
+    storage_backend: StorageBackendEnum,
+    config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,
+) -> ProviderBase:
+    """Build the storage provider for a backend, without any fallback provider.
+
+    Unlike :func:`add_selector_provider`, no other provider or branch is tried
+    when a download fails, so callers get the exact branch they ask for.
+
+    Args:
+        storage_backend: Backend holding the product artifacts.
+        config: Providers configuration to read connection settings from.
+
+    Returns:
+        The storage provider.
+
+    Raises:
+        ProviderError: If the storage provider is not configured, lacks
+            credentials, or fails to instantiate.
+
+    """
+    provider = _build_provider("storage", config, storage_backend=storage_backend)
+    if provider is None:
+        msg = f"Storage provider '{storage_backend.value}' is not configured or lacks credentials"
+        raise ProviderError(msg)
+    return provider
+
+
 def add_selector_provider(
     provider_names: list[str],
     config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,

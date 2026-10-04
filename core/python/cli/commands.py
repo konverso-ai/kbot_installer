@@ -21,6 +21,7 @@ from installer_support.python_requirements import install_product_python_require
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
 from storage.base import StorageBackendEnum
 from updatable.factory import UpdatableName
+from updatable.installer_updatable import InstallerUpdatable
 from updatable.workarea_updatable import WorkareaUpdatable
 
 # Setup logging from configuration file
@@ -623,6 +624,17 @@ def install(
 
 @cli.command(name="update")
 @click.option(
+    "--installer",
+    is_flag=True,
+    default=False,
+    help=(
+        "Update the installer directory: move a bundle install to the latest bundle "
+        "of the same name and major.minor, otherwise download the latest storage "
+        "artifact of each product's branch; git working copies are checked out on "
+        "their version branch and pulled (they must have no uncommitted changes)."
+    ),
+)
+@click.option(
     "--workarea",
     is_flag=True,
     default=False,
@@ -650,6 +662,13 @@ def install(
     help="Workarea directory (default: $HOME/dev/work)",
 )
 @click.option(
+    "--storage",
+    type=_STORAGE_CHOICES,
+    default=StorageBackendEnum.NEXUS.value,
+    show_default=True,
+    help="Storage backend holding bundles/artifacts for '--installer'.",
+)
+@click.option(
     "--skip-python-requirements",
     is_flag=True,
     default=False,
@@ -658,47 +677,77 @@ def install(
         "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
     ),
 )
+@click.option(
+    "-V",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show detailed output (skipped products, provider download details).",
+)
 def update(
     installer_dir: str,
     workarea_dir: str,
     *,
+    installer: bool = False,
     workarea: bool = False,
     how: str = UpdatableName.SMOOTH.value,
+    storage: str = StorageBackendEnum.NEXUS.value,
     skip_python_requirements: bool = False,
+    verbose: bool = False,
 ) -> None:
     """Update parts of an existing kbot installation.
 
-    Currently supports ``--workarea`` to update the workarea in place, using
-    the strategy given by ``--how``, then installs each solution/customer
-    product's ``requirements.txt`` (unless ``--skip-python-requirements``).
+    ``--installer`` updates the products of the installer directory: a bundle
+    install moves to the latest bundle of the same name and ``major.minor``,
+    any other install downloads the latest storage artifact of each product's
+    build branch, and git working copies are checked out on their version
+    branch then pulled (a working copy with uncommitted changes is reported as
+    an error and left untouched). ``--workarea`` updates the workarea in place,
+    using the strategy given by ``--how``. Each solution/customer product's
+    ``requirements.txt`` is then installed (unless ``--skip-python-requirements``).
+    The command fails when any product could not be updated.
 
     Examples:
+        kbot-installer update --installer
+        kbot-installer update --installer --workarea --storage s3 -i ~/dev/installer -w ~/dev/work
         kbot-installer update --workarea --how repair
-        kbot-installer update --workarea --how smooth -i ~/dev/installer -w ~/dev/work
 
     """
-    if not workarea:
-        msg = "Nothing to update: specify what to update (e.g. '--workarea')."
+    if not installer and not workarea:
+        msg = "Nothing to update: specify what to update ('--installer' and/or '--workarea')."
         raise click.UsageError(msg)
 
+    installer_path = Path(installer_dir)
+    failed: list[str] = []
     try:
-        installable = build_workarea(
-            installer_path=Path(installer_dir),
-            workarea_path=Path(workarea_dir),
-        )
-        installable.update_mode = True
-        WorkareaUpdatable(installable=installable, mode=UpdatableName(how))()
+        if installer:
+            failed = InstallerUpdatable(
+                installer_path=installer_path,
+                storage_backend=StorageBackendEnum(storage),
+                verbose=verbose,
+            )()
+
+        if workarea:
+            installable = build_workarea(
+                installer_path=installer_path,
+                workarea_path=Path(workarea_dir),
+            )
+            installable.update_mode = True
+            WorkareaUpdatable(installable=installable, mode=UpdatableName(how))()
 
         if not skip_python_requirements:
-            install_product_python_requirements(Path(installer_dir))
-
-        click.echo("Update completed successfully.")
+            install_product_python_requirements(installer_path)
 
     except click.UsageError:
         raise
     except Exception as e:
-        click.echo(f"Error updating workarea: {e}", err=True)
+        click.echo(f"Error updating: {e}", err=True)
         raise click.Abort from e
+
+    if failed:
+        click.echo(f"Update finished with errors for: {', '.join(failed)}", err=True)
+        raise click.Abort
+    click.echo("Update completed successfully.")
 
 
 @cli.command(name="load")
