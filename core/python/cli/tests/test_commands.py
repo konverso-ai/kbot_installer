@@ -320,12 +320,13 @@ class TestInstallCommand:
 
     @pytest.fixture(autouse=True)
     def _admin_account(self, monkeypatch):
-        """Every install creates the 'admin' account: provide its password, mock the users load and DB update.
+        """Every install creates the 'admin' account: provide its password, mock the license check, users load and DB update.
 
         Tests that check these steps patch them again with their own decorators, which take precedence.
         """
         monkeypatch.setenv("KBOT_ADMIN_PASSWORD", "K0nversOK!")
         with (
+            patch("cli.commands.validate_license") as self.mock_validate_license,
             patch("cli.commands.run_kbot_iam_load") as self.mock_run_kbot_iam_load,
             patch("cli.commands.set_admin_password") as self.mock_set_admin_password,
         ):
@@ -378,6 +379,41 @@ class TestInstallCommand:
         assert mock_build_database.call_args.kwargs["schema_paths"] == [
             installer_dir / "jira" / "db" / "init" / "db_schema.sql"
         ]
+
+    @patch("cli.commands.build_database")
+    @patch("cli.commands.build_workarea")
+    @patch("cli.commands.build_downloadable")
+    def test_install_invalid_license_aborts_before_database(
+        self,
+        mock_build_downloadable,
+        mock_build_workarea,
+        mock_build_database,
+        tmp_path,
+    ) -> None:
+        """An invalid workarea license stops the install before the database is touched."""
+        self.mock_validate_license.side_effect = RuntimeError("Invalid license 'x/license.key': LICENSE is expired.")
+        workarea_dir = tmp_path / "work"
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "install",
+                "--product",
+                "jira",
+                "--version",
+                "2025.03-dev",
+                "--installer-dir",
+                str(tmp_path / "installer"),
+                "--workarea-dir",
+                str(workarea_dir),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "LICENSE is expired" in result.output
+        mock_build_workarea.return_value.install.assert_called_once()
+        self.mock_validate_license.assert_called_once_with(workarea_dir)
+        mock_build_database.assert_not_called()
 
     @patch("cli.commands.build_database")
     @patch("cli.commands.build_workarea")
