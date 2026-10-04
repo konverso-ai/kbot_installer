@@ -6,7 +6,6 @@ import sys
 import types
 
 import pytest
-from errors import KB11111, LLM00001
 
 from utils.Logger import (
     FINE,
@@ -36,6 +35,18 @@ class _RecordingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.records.append(record)
+
+
+class _SampleError(BaseException):
+    """Duck-typed stand-in for kbot's ``errors.base.ErrorCode``, which kbot_installer does not ship."""
+
+    code = "TEST00001"
+    message = "Sample error"
+    level = "warning"
+
+
+class _DebugSampleError(_SampleError):
+    level = "debug"
 
 
 @pytest.fixture
@@ -359,8 +370,25 @@ class TestKbotLoggerBuildHandler:
         assert compare("eq", len(instance.handlers), 1)
         handler = instance.handlers[0]
         assert compare("eq", type(handler), logging.StreamHandler)
-        assert compare("eq", handler.level, logging.WARNING)
         assert compare("eq", type(handler.formatter), KbotFormatter)
+
+    def test_buildhandler_valid_package_override_more_verbose_than_global_is_emitted(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test a 'debug add <pkg> <level>' override is not cut by the global level at the handler."""
+        monkeypatch.setattr(sys, "argv", ["some_script.py"])
+        instance = KbotLogger("test.buildhandler.override")
+        instance.propagate = False
+        instance.build_handler(logging.WARNING)
+        instance.setLevel(logging.WARNING)
+        instance.add_package("storage", logging.DEBUG)
+
+        instance.debug("override visible", package="storage")
+        instance.debug("global hidden")
+
+        out = capsys.readouterr().out
+        assert compare("in", "override visible", out)
+        assert compare("not_in", "global hidden", out)
 
     def test_buildhandler_valid_runbot_uses_two_rotating_handlers(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
@@ -374,8 +402,6 @@ class TestKbotLoggerBuildHandler:
         instance.build_handler(logging.ERROR)
 
         assert compare("eq", len(instance.handlers), 2)
-        for handler in instance.handlers:
-            assert compare("eq", handler.level, logging.ERROR)
         formatters = {type(h.formatter) for h in instance.handlers}
         assert compare("eq", formatters, {DataDogFormatter, KbotFormatter})
         assert compare("eq", (tmp_path / "logs" / "runbot.log").exists(), True)
@@ -388,7 +414,9 @@ class TestKbotLoggerBuildHandler:
         (tmp_path / "logs").mkdir()
         monkeypatch.setattr(sys, "argv", ["RunBot.py"])
         monkeypatch.setenv("KBOT_HOME", str(tmp_path))
-        monkeypatch.setitem(sys.modules, "kprocess", types.SimpleNamespace(instance_name="kbot2"))
+        monkeypatch.setitem(
+            sys.modules, "kprocess", types.SimpleNamespace(get_instance_name=lambda: "kbot2")
+        )
         instance = KbotLogger("test.buildhandler.runbot.kprocess")
 
         instance.build_handler(logging.ERROR)
@@ -469,7 +497,7 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log uses the ErrorCode's own level and message by default."""
-        error = LLM00001()
+        error = _DebugSampleError()
 
         package_logger.log(error)
 
@@ -481,7 +509,7 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log honors explicit message/level overrides."""
-        error = KB11111()
+        error = _SampleError()
 
         package_logger.log(error, message="custom", level="error")
 
@@ -493,9 +521,9 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log_and_raise emits a record and then raises the same error."""
-        error = KB11111()
+        error = _SampleError()
 
-        with pytest.raises(KB11111):
+        with pytest.raises(_SampleError):
             package_logger.log_and_raise(error)
 
         assert compare("eq", len(_records(kbot_logger)), 1)
@@ -633,15 +661,20 @@ class TestModuleLevelSingleton:
         assert compare("eq", mylogger.name, "utils")
         assert compare("eq", mylogger.logger, logger)
 
-    def test_updatelevel_valid_updates_logger_and_handlers(self, restore_kbot_singleton) -> None:
-        """Test update_level updates both the logger and every attached handler."""
+    def test_updatelevel_valid_sets_global_level_and_keeps_package_overrides(
+        self, restore_kbot_singleton
+    ) -> None:
+        """Test update_level changes the global level without muting a more verbose package override."""
         handler = _RecordingHandler()
         logger.addHandler(handler)
+        update_supported_packages("add probe_pkg 5")  # FINEST
 
-        update_level(3)  # DEBUG
+        update_level(1)  # WARNING
+        logger.get_package_logger("probe_pkg").finest("override visible")
+        logger.debug("global hidden")
 
-        assert compare("eq", handler.level, logging.DEBUG)
-        assert compare("eq", logger.isEnabledFor(logging.DEBUG), True)
+        assert compare("eq", logger.isEnabledFor(logging.DEBUG), False)
+        assert compare("eq", [r.getMessage() for r in handler.records], ["override visible"])
 
     def test_updatesupportedpackages_valid_add_sets_package_level(
         self, restore_kbot_singleton

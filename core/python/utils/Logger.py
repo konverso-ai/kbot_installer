@@ -18,7 +18,7 @@ from pythonjsonlogger.json import JsonFormatter
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from errors import ErrorCode
+    from errors.base import ErrorCode
 
 try:
     glevel = int(os.environ["KBOTDEBUG"])
@@ -219,7 +219,15 @@ class KbotLogger(logging.Logger):
             return
         self.__filters.pop(name, None)
 
-    def build_handler(self, level: int, _path: str | None = None) -> None:
+    def addPackage(self, name: str, level: int) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+        """Alias of :meth:`add_package`, spelled the way kbot callers use it."""
+        self.add_package(name, level)
+
+    def remPackage(self, name: str) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
+        """Alias of :meth:`rem_package`, spelled the way kbot callers use it."""
+        self.rem_package(name)
+
+    def build_handler(self, _level: int, _path: str | None = None) -> None:
         """Build handlers according the entry point.
 
         GetProducts generates a side effect, the logs are deactivated
@@ -230,6 +238,10 @@ class KbotLogger(logging.Logger):
             one for datadog with 1 backup file
 
         In any other cases a simple streamer is done
+
+        Handlers carry no level: filtering is done per package by
+        :meth:`isEnabledFor`, so a package override more verbose than the
+        global level (``debug add <pkg> <level>``) still reaches the output.
         """
         if Path(sys.argv[0]).name.startswith("GetProduct"):
             self.addHandler(logging.NullHandler())
@@ -243,7 +255,6 @@ class KbotLogger(logging.Logger):
                 backupCount=1,
             )
             datadog_handler.setFormatter(DataDogFormatter())
-            datadog_handler.setLevel(level)
             self.addHandler(datadog_handler)
 
             kbot_handler = RotatingFileHandler(
@@ -252,13 +263,11 @@ class KbotLogger(logging.Logger):
                 backupCount=10,
             )
             kbot_handler.setFormatter(KbotFormatter())
-            kbot_handler.setLevel(level)
             self.addHandler(kbot_handler)
             return
 
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(KbotFormatter())
-        handler.setLevel(level)
         self.addHandler(handler)
 
     def buildHandler(self, level: int, path: str | None = None) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
@@ -277,7 +286,7 @@ def _instance_name() -> str:
         kprocess = importlib.import_module("kprocess")
     except ImportError:
         return Path(sys.argv[0]).stem.lower()
-    return cast("str", kprocess.instance_name)
+    return cast("str", kprocess.get_instance_name())
 
 
 class KbotLogEntry:
@@ -512,11 +521,8 @@ mylogger = logger.get_package_logger("utils")
 
 
 def update_level(new_level: int) -> None:
-    """Update level for logging."""
-    new_value = levels[normalize_level(new_level)]
-    logger.setLevel(new_value)
-    for h in log.handlers[:]:
-        h.setLevel(new_value)
+    """Update the global ('all') logging level; per-package overrides are kept."""
+    logger.setLevel(levels[normalize_level(new_level)])
 
 
 _ADD_COMMAND_TOKEN_COUNT = 2
@@ -582,6 +588,11 @@ def update_supported_packages(cmd: str) -> None:
     mode, packages, level = parsed
     for package in packages:
         _apply_debug_command(mode, package, level)
+
+
+def NormalizeLevel(level: int) -> int:  # noqa: N802 - camelCase alias kept for the kbot callers
+    """Alias of :func:`normalize_level`, spelled the way kbot callers use it."""
+    return normalize_level(level)
 
 
 def UpdateLevel(new_level: int) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
