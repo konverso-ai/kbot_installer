@@ -15,7 +15,7 @@ from git.models import GitProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load
+from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, validate_license
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
@@ -517,7 +517,8 @@ def install(
     bundle descriptor; ``-p`` then defines the top level product.
 
     The installer directory is built first (download), then the workarea is
-    laid out from it, then the database is prepared and initialized: every
+    laid out from it and its 'license.key' is validated (the installation
+    stops on a missing or invalid license), then the database is prepared and initialized: every
     downloaded product's ``db/init/db_schema.sql`` is applied, in dependency
     order (dependencies before the products that depend on them). The users,
     roles and permissions are then loaded (all the data with ``--with-load``)
@@ -571,6 +572,7 @@ def install(
         downloadable.download(installer_path)
 
         build_workarea(installer_path=installer_path, workarea_path=workarea_path).install()
+        validate_license(workarea_path)
 
         if not skip_python_requirements:
             install_product_python_requirements(installer_path)

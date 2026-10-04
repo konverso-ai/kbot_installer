@@ -1,4 +1,4 @@
-"""Run 'kbot.sh' subcommands (load, learn) and the IAM-only load against an installed workarea."""
+"""Run 'kbot.sh' subcommands (load, learn), the IAM-only load and the license check against an installed workarea."""
 
 import subprocess
 from pathlib import Path
@@ -29,6 +29,37 @@ def run_kbot_command(workarea_path: Path, command: str) -> None:
     result = subprocess.run([str(kbot_sh), command], check=False)  # noqa: S603
     if result.returncode:
         msg = f"'{kbot_sh} {command}' failed (exit {result.returncode})."
+        raise RuntimeError(msg)
+
+
+def validate_license(workarea_path: Path) -> None:
+    """Validate the workarea's 'license.key' with kbot's own license checker.
+
+    Runs 'bin/python.sh -m utils.License': kbot's 'utils.License' module
+    validates '$KBOT_HOME/license.key' (host, end date, signed key), the file
+    'Bot.Init' validates at startup, so an invalid license fails the install
+    instead of the first kbot start (mirrors the legacy
+    'setup_workarea._ValidateLicense').
+
+    Args:
+        workarea_path: Workarea directory holding 'bin/python.sh'.
+
+    Raises:
+        RuntimeError: If the license is missing or invalid.
+
+    """
+    python_sh = workarea_path / "bin" / "python.sh"
+    license_key = workarea_path / "license.key"
+    log.info("Validating license '%s'...", license_key)
+    result = subprocess.run(  # noqa: S603
+        [str(python_sh), "-m", "utils.License"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        detail = (result.stdout + result.stderr).strip()
+        msg = f"Invalid license '{license_key}': {detail}"
         raise RuntimeError(msg)
 
 

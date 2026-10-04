@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load
+from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, validate_license
 
 
 class TestRunKbotCommand:
@@ -29,6 +29,29 @@ class TestRunKbotCommand:
             pytest.raises(RuntimeError, match="learn"),
         ):
             run_kbot_command(tmp_path, "learn")
+
+
+def _write_python_sh(workarea_path: Path, *, output: str, exit_code: int) -> None:
+    """Write a stand-in 'bin/python.sh' printing `output` and exiting with `exit_code`."""
+    python_sh = workarea_path / "bin" / "python.sh"
+    python_sh.parent.mkdir(parents=True)
+    python_sh.write_text(f"#!/bin/sh\necho '{output}'\nexit {exit_code}\n")
+    python_sh.chmod(0o755)
+
+
+class TestValidateLicense:
+    """Tests for validate_license."""
+
+    def test_validatelicense_valid_returns(self, tmp_path: Path) -> None:
+        _write_python_sh(tmp_path, output="Valid LICENSE", exit_code=0)
+
+        validate_license(tmp_path)
+
+    def test_validatelicense_invalid_raises_with_checker_reason(self, tmp_path: Path) -> None:
+        _write_python_sh(tmp_path, output="ERROR : LICENSE is expired.", exit_code=1)
+
+        with pytest.raises(RuntimeError, match=r"license\.key.*LICENSE is expired"):
+            validate_license(tmp_path)
 
 
 class TestRunKbotIamLoad:
