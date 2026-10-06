@@ -11,6 +11,7 @@ from click.testing import CliRunner
 from cli.commands import cli
 from storage.base import StorageBackendEnum
 from updatable.factory import UpdatableName
+from upgradable.errors import UpgradeError
 
 
 def _write_product(
@@ -47,13 +48,14 @@ class TestCLI:
         assert "version" in options
 
     def test_only_expected_commands_are_exposed(self) -> None:
-        """Only the download, list, install, update, uninstall, load, learn, and set-admin-password commands are exposed."""
+        """Only the download, list, install, update, upgrade, uninstall, load, learn, and set-admin-password commands are exposed."""
         commands = {cmd.name for cmd in cli.commands.values()}
         assert commands == {
             "download",
             "list",
             "install",
             "update",
+            "upgrade",
             "uninstall",
             "load",
             "learn",
@@ -1633,6 +1635,197 @@ class TestUninstallCommand:
         assert result.exit_code != 0
         assert "Error uninstalling workarea: still running" in result.output
         assert workarea_dir.exists()
+
+
+class TestUpgradeCommand:
+    """Test cases for the 'upgrade' command."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        self.runner = CliRunner()
+
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch) -> None:
+        """Restore KBOT_INSTALLER, which the command exports for the kbot scripts."""
+        monkeypatch.delenv("KBOT_INSTALLER", raising=False)
+
+    @pytest.fixture
+    def dirs(self, tmp_path: Path) -> tuple[Path, Path]:
+        """Create an installer directory and a kbot workarea."""
+        installer_dir = tmp_path / "installer"
+        installer_dir.mkdir()
+        workarea_dir = tmp_path / "work"
+        (workarea_dir / "products" / "kbot").mkdir(parents=True)
+        return installer_dir, workarea_dir
+
+    @pytest.fixture
+    def mocks(self):
+        """Patch every side-effecting dependency of 'upgrade', attached to one manager to check call order."""
+        names = (
+            "InstallerUpgradable",
+            "run_workarea_script",
+            "run_kbot_command",
+            "build_workarea",
+            "WorkareaUpdatable",
+            "install_product_python_requirements",
+        )
+        manager = MagicMock()
+        patchers = [patch(f"cli.commands.{name}") for name in names]
+        for name, patcher in zip(names, patchers, strict=True):
+            manager.attach_mock(patcher.start(), name)
+        outcome = manager.InstallerUpgradable.return_value.apply.return_value
+        outcome.added, outcome.removed, outcome.moved_dir = [], [], None
+        manager.InstallerUpgradable.return_value.target = "product site 2026.01"
+        yield manager
+        for patcher in patchers:
+            patcher.stop()
+
+    @staticmethod
+    def _args(installer_dir: Path, workarea_dir: Path, *extra: str) -> list[str]:
+        return ["upgrade", "-i", str(installer_dir), "-w", str(workarea_dir), *extra]
+
+    @staticmethod
+    def _script_calls(manager: MagicMock) -> list[tuple[str, ...]]:
+        """Return the scripts run, in order, as ('<script>', *args) or ('kbot.sh', command)."""
+        calls: list[tuple[str, ...]] = []
+        for name, args, _ in manager.mock_calls:
+            if name == "run_workarea_script":
+                calls.append(tuple(args[1:]))
+            elif name == "run_kbot_command":
+                calls.append(("kbot.sh", args[1]))
+            elif name == "InstallerUpgradable().apply":
+                calls.append(("apply",))
+            elif name == "WorkareaUpdatable":
+                calls.append(("relink",))
+            elif name == "install_product_python_requirements":
+                calls.append(("requirements",))
+        return calls
+
+    def test_upgrade_runs_steps_in_order(self, dirs, mocks) -> None:
+        """Backup, stop, products, relink, requirements, DB scripts, load and restart run in that order."""
+        installer_dir, workarea_dir = dirs
+
+        result = self.runner.invoke(cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y"))
+
+        assert result.exit_code == 0, result.output
+        mocks.InstallerUpgradable.assert_called_once_with(
+            installer_path=installer_dir,
+            storage_backend=StorageBackendEnum.NEXUS,
+            product="site",
+            version="2026.01",
+            bundle=None,
+            provider=(),
+            verbose=False,
+        )
+        calls = self._script_calls(mocks)
+        assert calls[1][:2] == ("dump_db.sh", "-f")
+        assert re.fullmatch(re.escape(str(installer_dir.resolve())) + r"/backup_\d{8}_\d{6}\.sql", calls[1][2])
+        assert calls[:1] + calls[2:] == [
+            ("pg.sh", "start"),
+            ("kbot.sh", "stop"),
+            ("apply",),
+            ("relink",),
+            ("requirements",),
+            ("pg.sh", "start"),
+            ("redis.sh", "start"),
+            ("upgrade_db.sh",),
+            ("upgrade_patch.sh",),
+            ("kbot.sh", "load"),
+            ("kbot.sh", "restart"),
+        ]
+        assert mocks.WorkareaUpdatable.call_args.kwargs["mode"] == UpdatableName.REPAIR
+        assert os.environ["KBOT_INSTALLER"] == str(installer_dir.resolve())
+        assert "Upgrade completed successfully." in result.output
+
+    def test_upgrade_with_learn_runs_learn_after_load(self, dirs, mocks) -> None:
+        """'--with-learn' trains the models between 'load' and 'restart'."""
+        installer_dir, workarea_dir = dirs
+
+        result = self.runner.invoke(
+            cli,
+            self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y", "--no-backup", "--with-learn"),
+        )
+
+        assert result.exit_code == 0, result.output
+        assert self._script_calls(mocks)[-3:] == [("kbot.sh", "load"), ("kbot.sh", "learn"), ("kbot.sh", "restart")]
+
+    def test_upgrade_check_failure_changes_nothing(self, dirs, mocks) -> None:
+        """A failed pre-check aborts before the backup, the stop and the product changes."""
+        installer_dir, workarea_dir = dirs
+        mocks.InstallerUpgradable.return_value.check.side_effect = UpgradeError("Installer is not ready: demo dirty")
+
+        result = self.runner.invoke(cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y"))
+
+        assert result.exit_code != 0
+        assert "Installer is not ready: demo dirty" in result.output
+        assert self._script_calls(mocks) == []
+
+    @pytest.mark.parametrize(
+        ("extra", "bundle_installed", "message"),
+        [
+            (("-b", "ev-basic-2026.01.0003", "-v", "2026.01"), False, "'-b/--bundle' names the exact bundle"),
+            (("-p", "site", "-v", "2026.01", "--backup-file", "x.sql", "--no-backup"), False, "mutually exclusive"),
+            (("-p", "site", "-v", "2026.01"), True, "was installed from a bundle"),
+            (("-p", "site"), False, "Options '-p/--product' and '-v/--version' are required"),
+            ((), True, "Option '-v/--version' is required."),
+        ],
+    )
+    def test_upgrade_rejects_inconsistent_options(self, dirs, mocks, extra, bundle_installed, message) -> None:
+        """Inconsistent target or backup options are usage errors, raised before any check."""
+        installer_dir, workarea_dir = dirs
+        if bundle_installed:
+            (installer_dir / "bundle.json").write_text("{}")
+
+        result = self.runner.invoke(cli, self._args(installer_dir, workarea_dir, *extra, "-y"))
+
+        assert result.exit_code == 2
+        assert message in result.output
+        mocks.InstallerUpgradable.assert_not_called()
+
+    def test_upgrade_interactive_backup_uses_default_file(self, dirs, mocks) -> None:
+        """Accepting the backup prompt with its default dumps into '<installer>/backup_<timestamp>.sql'."""
+        installer_dir, workarea_dir = dirs
+
+        result = self.runner.invoke(
+            cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01"), input="y\ny\n\n"
+        )
+
+        assert result.exit_code == 0, result.output
+        dump = self._script_calls(mocks)[1]
+        assert re.fullmatch(re.escape(str(installer_dir.resolve())) + r"/backup_\d{8}_\d{6}\.sql", dump[2])
+
+    def test_upgrade_declined_backup_skips_dump(self, dirs, mocks) -> None:
+        """Declining the backup prompt runs no dump."""
+        installer_dir, workarea_dir = dirs
+
+        result = self.runner.invoke(
+            cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01"), input="y\nn\n"
+        )
+
+        assert result.exit_code == 0, result.output
+        assert not [call for call in self._script_calls(mocks) if call[0] == "dump_db.sh"]
+
+    def test_upgrade_failure_reports_backup(self, dirs, mocks) -> None:
+        """A failing DB upgrade aborts and points at the backup taken before."""
+        installer_dir, workarea_dir = dirs
+
+        def _run(_workarea, script, *_args):
+            if script == "upgrade_db.sh":
+                msg = "'upgrade_db.sh' failed (exit 1)."
+                raise RuntimeError(msg)
+
+        mocks.run_workarea_script.side_effect = _run
+        backup = installer_dir / "kbot.sql"
+
+        result = self.runner.invoke(
+            cli,
+            self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y", "--backup-file", str(backup)),
+        )
+
+        assert result.exit_code != 0
+        assert "Error upgrading: 'upgrade_db.sh' failed (exit 1)." in result.output
+        assert f"The database backup is '{backup.resolve()}'" in result.output
+        assert ("kbot.sh", "restart") not in self._script_calls(mocks)
 
 
 class TestCommandIntegration:

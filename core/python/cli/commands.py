@@ -10,12 +10,13 @@ import click
 from database.base import DbSettings
 from database.factory import build_database, create_database
 from database.utils import resolve_admin_password, resolve_db_password, set_admin_password
+from downloadable.bundle_downloadable import LOCAL_BUNDLE_FILE_NAME
 from downloadable.factory import build_downloadable
 from git.models import GitProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, validate_license
+from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, run_workarea_script, validate_license
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
@@ -23,6 +24,8 @@ from storage.base import StorageBackendEnum
 from updatable.factory import UpdatableName
 from updatable.installer_updatable import InstallerUpdatable
 from updatable.workarea_updatable import WorkareaUpdatable
+from upgradable.errors import UpgradeError
+from upgradable.installer_upgradable import InstallerUpgradable
 
 # Setup logging from configuration file
 setup_logging()
@@ -270,6 +273,21 @@ def _resolve_backup_path(backup_file: Path, workarea_path: Path) -> Path:
         msg = f"Backup file '{path}' must be outside the workarea '{workarea_path}', which is removed."
         raise click.UsageError(msg)
     return path
+
+
+def _check_kbot_workarea(workarea_path: Path) -> None:
+    """Check workarea_path is a kbot workarea before acting on it.
+
+    Args:
+        workarea_path: Workarea directory given by the user.
+
+    Raises:
+        click.UsageError: If the directory has no 'products/kbot'.
+
+    """
+    if not (workarea_path / "products" / "kbot").is_dir():
+        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot')."
+        raise click.UsageError(msg)
 
 
 def _load_and_learn(
@@ -752,6 +770,334 @@ def update(
     click.echo("Update completed successfully.")
 
 
+@cli.command(name="upgrade")
+@click.option(
+    "-p",
+    "--product",
+    type=str,
+    default=None,
+    help="Installed product to upgrade, with all its dependencies (installs not made from a bundle).",
+)
+@click.option(
+    "-v",
+    "--version",
+    type=str,
+    default=None,
+    help=(
+        "Version to upgrade to (e.g., '2026.01'). With a bundle install, the latest bundle "
+        "of the installed bundle's name for that version is used."
+    ),
+)
+@click.option(
+    "-b",
+    "--bundle",
+    type=str,
+    default=None,
+    help="Exact bundle descriptor to upgrade to (e.g. 'ev-basic-2026.01.0003').",
+)
+@click.option(
+    "-i",
+    "--installer-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "installer"),
+    help="Installer directory (default: $HOME/dev/installer)",
+)
+@click.option(
+    "-w",
+    "--workarea-dir",
+    type=click.Path(),
+    default=lambda: str(Path.home() / "dev" / "work"),
+    help="Workarea directory (default: $HOME/dev/work)",
+)
+@click.option(
+    "--provider",
+    type=_PROVIDER_CHOICES,
+    multiple=True,
+    help=("Specify which providers to download products with. If not specified, all providers will be tried in order."),
+)
+@click.option(
+    "--storage",
+    type=_STORAGE_CHOICES,
+    default=StorageBackendEnum.NEXUS.value,
+    show_default=True,
+    help="Storage backend holding bundles/artifacts.",
+)
+@click.option(
+    "--backup-file",
+    type=click.Path(),
+    default=None,
+    help="File to back up the database into before upgrading (default: '<installer-dir>/backup_<timestamp>.sql').",
+)
+@click.option(
+    "--no-backup",
+    is_flag=True,
+    default=False,
+    help="Do not back up the database before upgrading.",
+)
+@click.option(
+    "--with-learn",
+    is_flag=True,
+    default=False,
+    help="Train ML models after upgrading (runs 'kbot.sh learn').",
+)
+@click.option(
+    "--skip-python-requirements",
+    is_flag=True,
+    default=False,
+    help=(
+        "Skip installing each solution/customer product's requirements.txt "
+        "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
+    ),
+)
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    default=False,
+    help="Do not ask for confirmation; back up the database to the default file unless --backup-file/--no-backup.",
+)
+@click.option(
+    "-V",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show detailed output (skipped products, provider download details).",
+)
+def upgrade(
+    installer_dir: str,
+    workarea_dir: str,
+    product: str | None,
+    version: str | None,
+    bundle: str | None,
+    *,
+    provider: tuple[str, ...] = (),
+    storage: str = StorageBackendEnum.NEXUS.value,
+    backup_file: str | None = None,
+    no_backup: bool = False,
+    with_learn: bool = False,
+    skip_python_requirements: bool = False,
+    yes: bool = False,
+    verbose: bool = False,
+) -> None:
+    r"""Upgrade a kbot installation to a newer release (e.g. 2025.03 → 2026.01).
+
+    The target is either an installed product and its whole new dependency
+    closure (``-p``/``-v``), the latest bundle of the installed bundle's name
+    for ``-v``, or the exact bundle ``-b``. Steps:
+
+    \b
+    1. Check the installer, without modifying it: symlinked or locally built
+       products, and git working copies with uncommitted changes or without
+       the 'release-<version>-dev' branch, cancel the upgrade.
+    2. Back up the database ('bin/dump_db.sh').
+    3. Stop kbot ('kbot.sh stop').
+    4. Check out the git working copies on the release branch, download the
+       storage products again, and remove the products no longer needed
+       (git working copies are moved to '<installer-dir>/.removed_<timestamp>/').
+    5. Relink the workarea (repair strategy) and install the python requirements.
+    6. Upgrade the database ('upgrade_db.sh', then 'upgrade_patch.sh'), then
+       'kbot.sh load' (and 'kbot.sh learn' with --with-learn).
+    7. Restart kbot ('kbot.sh restart').
+
+    Examples:
+        kbot-installer upgrade -p site-konverso -v 2026.01
+        kbot-installer upgrade -v 2026.01 -y
+        kbot-installer upgrade -b ev-basic-2026.01.0003 --backup-file ~/backups/kbot.sql
+
+    """
+    installer_path = Path(installer_dir)
+    workarea_path = Path(workarea_dir)
+    _check_upgrade_options(installer_path, product, version, bundle, backup_file, no_backup=no_backup)
+    _check_kbot_workarea(workarea_path)
+
+    # The kbot scripts ('upgrade_db.sh', 'upgrade_patch.sh', ...) find the products through it.
+    os.environ["KBOT_INSTALLER"] = str(installer_path.resolve())
+
+    upgradable = InstallerUpgradable(
+        installer_path=installer_path,
+        storage_backend=StorageBackendEnum(storage),
+        product=product,
+        version=version,
+        bundle=bundle,
+        provider=provider,
+        verbose=verbose,
+    )
+    try:
+        upgradable.check()
+    except UpgradeError as e:
+        click.echo(str(e), err=True)
+        raise click.Abort from e
+    click.echo(f"Upgrading '{installer_path}' and '{workarea_path}' to {upgradable.target}.")
+    if not yes:
+        click.confirm("Continue with upgrade?", abort=True)
+
+    backup_path = _resolve_upgrade_backup_path(installer_path, backup_file, no_backup=no_backup, yes=yes)
+
+    try:
+        _run_upgrade(
+            upgradable,
+            installer_path,
+            workarea_path,
+            backup_path,
+            skip_python_requirements=skip_python_requirements,
+            with_learn=with_learn,
+        )
+    except click.UsageError:
+        raise
+    except click.Abort:
+        raise
+    except Exception as e:
+        click.echo(f"Error upgrading: {e}", err=True)
+        if backup_path is not None:
+            click.echo(f"The database backup is '{backup_path}' (restore it with 'bin/restore_db.sh').", err=True)
+        raise click.Abort from e
+    click.echo("Upgrade completed successfully.")
+
+
+def _check_upgrade_options(
+    installer_path: Path,
+    product: str | None,
+    version: str | None,
+    bundle: str | None,
+    backup_file: str | None,
+    *,
+    no_backup: bool,
+) -> None:
+    """Check the 'upgrade' options select exactly one target.
+
+    Args:
+        installer_path: Installer directory; a 'bundle.json' marks a bundle install.
+        product: '-p/--product' value.
+        version: '-v/--version' value.
+        bundle: '-b/--bundle' value.
+        backup_file: '--backup-file' value.
+        no_backup: '--no-backup' flag.
+
+    Raises:
+        click.UsageError: If the options are inconsistent or incomplete.
+
+    """
+    bundle_installed = (installer_path / LOCAL_BUNDLE_FILE_NAME).is_file()
+    if backup_file and no_backup:
+        msg = "Options '--backup-file' and '--no-backup' are mutually exclusive."
+        raise click.UsageError(msg)
+    if bundle and (product or version):
+        msg = (
+            "'-b/--bundle' names the exact bundle to upgrade to: "
+            "do not combine it with '-p/--product' or '-v/--version'."
+        )
+        raise click.UsageError(msg)
+    if bundle:
+        return
+    if bundle_installed and product:
+        msg = (
+            f"'{installer_path}' was installed from a bundle: "
+            "upgrade it with '-v/--version' or '-b/--bundle', without '-p/--product'."
+        )
+        raise click.UsageError(msg)
+    if bundle_installed and not version:
+        msg = "Option '-v/--version' is required."
+        raise click.UsageError(msg)
+    if not bundle_installed and not (product and version):
+        msg = "Options '-p/--product' and '-v/--version' are required to upgrade a product installation."
+        raise click.UsageError(msg)
+
+
+def _resolve_upgrade_backup_path(
+    installer_path: Path,
+    backup_file: str | None,
+    *,
+    no_backup: bool,
+    yes: bool,
+) -> Path | None:
+    """Choose the file the database is backed up into before upgrading.
+
+    Args:
+        installer_path: Installer directory holding the default backup file.
+        backup_file: '--backup-file' value.
+        no_backup: '--no-backup' flag.
+        yes: '-y/--yes' flag: use the default file without asking.
+
+    Returns:
+        The absolute backup file, or None to skip the backup.
+
+    """
+    default_backup = installer_path / f"backup_{datetime.now().astimezone():%Y%m%d_%H%M%S}.sql"
+    backup: str | Path | None
+    if no_backup:
+        backup = None
+    elif backup_file:
+        backup = backup_file
+    elif yes:
+        backup = default_backup
+    elif click.confirm("Back up the database before upgrading?", default=True):
+        backup = click.prompt("Backup file", default=str(default_backup))
+    else:
+        backup = None
+    return None if backup is None else Path(backup).expanduser().resolve()
+
+
+def _run_upgrade(
+    upgradable: InstallerUpgradable,
+    installer_path: Path,
+    workarea_path: Path,
+    backup_path: Path | None,
+    *,
+    skip_python_requirements: bool,
+    with_learn: bool,
+) -> None:
+    """Run the 'upgrade' steps once the installer has been checked.
+
+    Args:
+        upgradable: Checked installer upgrade.
+        installer_path: Installer directory.
+        workarea_path: Workarea directory.
+        backup_path: File to back up the database into, or None to skip the backup.
+        skip_python_requirements: Whether to skip installing the products' python requirements.
+        with_learn: Whether to run 'kbot.sh learn' after loading.
+
+    """
+    if backup_path is not None:
+        run_workarea_script(workarea_path, "pg.sh", "start")
+        click.echo(f"Backing up database to '{backup_path}'...")
+        run_workarea_script(workarea_path, "dump_db.sh", "-f", str(backup_path))
+
+    click.echo("Stopping kbot services...")
+    try:
+        run_kbot_command(workarea_path, "stop")
+    except (RuntimeError, OSError) as e:
+        # 'upgrade_db.sh' itself refuses to run if core/apache are still up.
+        click.echo(f"Warning: {e}", err=True)
+
+    outcome = upgradable.apply()
+    if outcome.added:
+        click.echo(f"Added products: {', '.join(outcome.added)}")
+    if outcome.removed:
+        click.echo(f"Removed products: {', '.join(outcome.removed)}")
+    if outcome.moved_dir is not None:
+        click.echo(f"Removed git working copies moved to '{outcome.moved_dir}'.")
+
+    installable = build_workarea(installer_path=installer_path, workarea_path=workarea_path)
+    installable.update_mode = True
+    WorkareaUpdatable(installable=installable, mode=UpdatableName.REPAIR)()
+
+    # Before the database step: patch scripts may import the new requirements.
+    if not skip_python_requirements:
+        install_product_python_requirements(installer_path)
+
+    run_workarea_script(workarea_path, "pg.sh", "start")
+    run_workarea_script(workarea_path, "redis.sh", "start")
+    run_workarea_script(workarea_path, "upgrade_db.sh")
+    run_workarea_script(workarea_path, "upgrade_patch.sh")
+
+    # Refreshes the 'products' table versions, so the patches are not applied again.
+    run_kbot_command(workarea_path, "load")
+    if with_learn:
+        run_kbot_command(workarea_path, "learn")
+
+    run_kbot_command(workarea_path, "restart")
+
+
 @cli.command(name="load")
 @click.option(
     "-w",
@@ -993,10 +1339,7 @@ def uninstall(
     installer_path = Path(installer_dir)
     workarea_path = Path(workarea_dir)
 
-    # Guard the final 'rmtree' against pointing at anything but a kbot workarea.
-    if not (workarea_path / "products" / "kbot").is_dir():
-        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot')."
-        raise click.UsageError(msg)
+    _check_kbot_workarea(workarea_path)
 
     backup_path = None if backup_file is None else _resolve_backup_path(Path(backup_file), workarea_path)
 

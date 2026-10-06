@@ -5,7 +5,30 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, validate_license
+from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, run_workarea_script, validate_license
+
+
+class TestRunWorkareaScript:
+    """Tests for run_workarea_script."""
+
+    def test_runworkareascript_valid_invokes_bin_script_with_args(self, tmp_path: Path) -> None:
+        with patch(
+            "installer_support.kbot_commands.subprocess.run",
+            return_value=MagicMock(returncode=0),
+        ) as mock_run:
+            run_workarea_script(tmp_path, "dump_db.sh", "-f", "/tmp/x.sql")
+
+        mock_run.assert_called_once_with([str(tmp_path / "bin" / "dump_db.sh"), "-f", "/tmp/x.sql"], check=False)
+
+    def test_runworkareascript_invalid_raises_with_exit_code(self, tmp_path: Path) -> None:
+        with (
+            patch(
+                "installer_support.kbot_commands.subprocess.run",
+                return_value=MagicMock(returncode=2),
+            ),
+            pytest.raises(RuntimeError, match=r"upgrade_db\.sh' failed \(exit 2\)"),
+        ):
+            run_workarea_script(tmp_path, "upgrade_db.sh")
 
 
 class TestRunKbotCommand:
