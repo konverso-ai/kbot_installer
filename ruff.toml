@@ -133,6 +133,7 @@ known-first-party = [
     "service",
     "storage",
     "updatable",
+    "upgradable",
     "utils",
     "workarea",
     "writer",

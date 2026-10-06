@@ -99,6 +99,22 @@ def _select_target_branch(versioner: VersionerBase, path: Path, product: Product
     return selected
 
 
+def format_uncommitted_changes(changed: list[str]) -> str:
+    """Describe the uncommitted changes of a git working copy.
+
+    Args:
+        changed: Staged and unstaged changed paths.
+
+    Returns:
+        ``"Uncommitted changes: a, b"``, listing at most a few paths followed by ``" (+N more)"``.
+
+    """
+    message = f"Uncommitted changes: {', '.join(changed[:_MAX_LISTED_CHANGES])}"
+    if len(changed) > _MAX_LISTED_CHANGES:
+        message += f" (+{len(changed) - _MAX_LISTED_CHANGES} more)"
+    return message
+
+
 class InstallerUpdatable:
     """Update every product of an installer directory.
 
@@ -191,10 +207,7 @@ class InstallerUpdatable:
             versioner = add_versioner_for_repository_remote(path)
             changed = versioner.status(path).changed
             if changed:
-                message = f"Uncommitted changes: {', '.join(changed[:_MAX_LISTED_CHANGES])}"
-                if len(changed) > _MAX_LISTED_CHANGES:
-                    message += f" (+{len(changed) - _MAX_LISTED_CHANGES} more)"
-                return self._report_error(table, path, _GIT_PROVIDER_NAME, message)
+                return self._report_error(table, path, _GIT_PROVIDER_NAME, format_uncommitted_changes(changed))
 
             versioner.fetch(path)
             try:
@@ -290,7 +303,9 @@ class InstallerUpdatable:
     def _update_bundle(self) -> None:
         """Install the latest bundle sharing the name and ``major.minor`` of the cached one."""
         current = Bundle.from_json((self.installer_path / LOCAL_BUNDLE_FILE_NAME).read_text(encoding="utf-8"))
-        latest = find_latest_bundle_name(build_configured_storage(self.storage_backend.value, area="bundles"), current)
+        latest = find_latest_bundle_name(
+            build_configured_storage(self.storage_backend.value, area="bundles"), current.name, current.version
+        )
         log.info("Updating bundle %s %s to %s", current.name, current.version.to_json_str(), latest)
         BundleDownloadable(
             storage_name=self.storage_backend,

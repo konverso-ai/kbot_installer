@@ -1,4 +1,4 @@
-"""Run 'kbot.sh' subcommands (load, learn), the IAM-only load and the license check against an installed workarea."""
+"""Run workarea 'bin/' scripts ('kbot.sh' subcommands, DB upgrade scripts), the IAM-only load and the license check."""
 
 import subprocess
 from pathlib import Path
@@ -6,6 +6,29 @@ from pathlib import Path
 from utils.Logger import logger
 
 log = logger.get_package_logger("installer_support")
+
+
+def run_workarea_script(workarea_path: Path, script: str, *args: str) -> None:
+    """Run a script of the workarea's 'bin/' directory.
+
+    The workarea scripts source their own 'env.sh', which sets up the runtime
+    environment (database, paths) before doing their work.
+
+    Args:
+        workarea_path: Workarea directory holding 'bin/<script>'.
+        script: Script file name (e.g. 'upgrade_db.sh').
+        *args: Arguments passed to the script.
+
+    Raises:
+        RuntimeError: If the script exits with a non-zero status.
+
+    """
+    cmd = [str(workarea_path / "bin" / script), *args]
+    log.info("Running '%s'...", " ".join(cmd))
+    result = subprocess.run(cmd, check=False)  # noqa: S603
+    if result.returncode:
+        msg = f"'{' '.join(cmd)}' failed (exit {result.returncode})."
+        raise RuntimeError(msg)
 
 
 def run_kbot_command(workarea_path: Path, command: str) -> None:
@@ -24,12 +47,7 @@ def run_kbot_command(workarea_path: Path, command: str) -> None:
         RuntimeError: If the command exits with a non-zero status.
 
     """
-    kbot_sh = workarea_path / "bin" / "kbot.sh"
-    log.info("Running '%s %s'...", kbot_sh, command)
-    result = subprocess.run([str(kbot_sh), command], check=False)  # noqa: S603
-    if result.returncode:
-        msg = f"'{kbot_sh} {command}' failed (exit {result.returncode})."
-        raise RuntimeError(msg)
+    run_workarea_script(workarea_path, "kbot.sh", command)
 
 
 def validate_license(workarea_path: Path) -> None:
@@ -78,9 +96,4 @@ def run_kbot_iam_load(workarea_path: Path) -> None:
         RuntimeError: If the command exits with a non-zero status.
 
     """
-    core_sh = workarea_path / "bin" / "core.sh"
-    log.info("Running '%s load -p'...", core_sh)
-    result = subprocess.run([str(core_sh), "load", "-p"], check=False)  # noqa: S603
-    if result.returncode:
-        msg = f"'{core_sh} load -p' failed (exit {result.returncode})."
-        raise RuntimeError(msg)
+    run_workarea_script(workarea_path, "core.sh", "load", "-p")
