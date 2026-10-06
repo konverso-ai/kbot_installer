@@ -244,7 +244,7 @@ class TestBundleInstall:
 
         assert compare("eq", failed, [])
         build_storage.assert_called_once_with("nexus", area="bundles")
-        assert compare("eq", find_latest.call_args.args[1].name, "ev-basic")
+        assert compare("eq", find_latest.call_args.args[1], "ev-basic")
         bundle_downloadable.assert_called_once_with(
             storage_name=StorageBackendEnum.NEXUS,
             name="ev-basic-2025.03.0017",

@@ -114,6 +114,7 @@ known_first_party = [
     "service",
     "storage",
     "updatable",
+    "upgradable",
     "utils",
     "vault",
     "workarea",

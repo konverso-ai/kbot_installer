@@ -30,25 +30,26 @@ log = logger.get_package_logger("installable")
 LOCAL_BUNDLE_FILE_NAME = "bundle.json"
 
 
-def find_latest_bundle_name(storage: StorageBase, current: Bundle) -> str:
-    """Find the latest published bundle sharing the name and ``major.minor`` of current.
+def find_latest_bundle_name(storage: StorageBase, name: str, version: Version) -> str:
+    """Find the latest published bundle named name for the ``major.minor`` of version.
 
     Only top-level ``<name>-<version>.json`` descriptors are considered;
     versions are compared once parsed (``2025.3.0018`` > ``2025.03.0016``).
 
     Args:
         storage: Storage scoped to the ``bundles`` area.
-        current: Bundle currently installed.
+        name: Bundle name, without version (e.g. ``ev-basic``).
+        version: Version whose ``major.minor`` the bundle must match.
 
     Returns:
         The storage key stem of the latest bundle, i.e. the ``name`` to pass
         to :class:`BundleDownloadable`.
 
     Raises:
-        ValueError: If no bundle with the same name and ``major.minor`` exists.
+        ValueError: If no bundle with that name and ``major.minor`` exists.
 
     """
-    prefix = f"{current.name}-"
+    prefix = f"{name}-"
     candidates: list[tuple[Version, str]] = []
     for key in storage.list(""):
         if "/" in key or not key.endswith(".json"):
@@ -57,15 +58,15 @@ def find_latest_bundle_name(storage: StorageBase, current: Bundle) -> str:
         if not stem.startswith(prefix):
             continue
         try:
-            version = Version.parse(stem.removeprefix(prefix))
+            candidate_version = Version.parse(stem.removeprefix(prefix))
         except (ValueError, TypeError):
             continue
-        if not version:
+        if not candidate_version:
             continue
-        if (version.major, version.minor) == (current.version.major, current.version.minor):
-            candidates.append((version, stem))
+        if (candidate_version.major, candidate_version.minor) == (version.major, version.minor):
+            candidates.append((candidate_version, stem))
     if not candidates:
-        msg = f"No bundle '{current.name}' {current.version.major}.{current.version.minor:02d}.* found in storage"
+        msg = f"No bundle '{name}' {version.major}.{version.minor:02d}.* found in storage"
         raise ValueError(msg)
     return max(candidates, key=lambda candidate: candidate[0])[1]
 

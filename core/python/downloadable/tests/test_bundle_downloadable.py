@@ -190,11 +190,15 @@ class TestFindLatestBundleName:
         """Versions are compared once parsed; other names, majors, folders and extensions are ignored."""
         current = Bundle(name="ev-basic", version="2025.03.0016", versions=[])
 
-        assert compare("eq", find_latest_bundle_name(self._storage(self.KEYS), current), "ev-basic-2025.3.0018")
+        assert compare(
+            "eq",
+            find_latest_bundle_name(self._storage(self.KEYS), current.name, current.version),
+            "ev-basic-2025.3.0018",
+        )
 
     def test_raises_when_no_bundle_matches(self) -> None:
         """No bundle with the same major.minor raises a ValueError."""
         current = Bundle(name="ev-basic", version="2024.01.0001", versions=[])
 
         with pytest.raises(ValueError, match=r"No bundle 'ev-basic' 2024\.01\.\* found in storage"):
-            find_latest_bundle_name(self._storage(self.KEYS), current)
+            find_latest_bundle_name(self._storage(self.KEYS), current.name, current.version)
