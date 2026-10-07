@@ -4,7 +4,7 @@ This module implements the DulwichVersioner class that handles full git
 operations using Dulwich for any git repository.
 """
 import shutil
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -139,7 +139,7 @@ class DulwichVersioner(StrReprMixin):
             raise NotAGitRepositoryError(error_msg) from e
 
     @contextmanager
-    def _open_repository(self, repository_path: str | Path) -> Iterator[Repo]:
+    def _open_repository(self, repository_path: str | Path) -> Generator[Repo, None, None]:
         """Open a repository and guarantee it is closed afterwards.
 
         Dulwich keeps packfiles open on the ``Repo`` object; leaving them
