@@ -392,9 +392,7 @@ class KbotPackageLogger:
         # Log messages are NOT DESIGNED TO BE EXCLUDED
         # Not checking for the isEnabledFor
 
-        level = level or error.level
-        message = message or error.message
-        self._log(level, message, *args, exc_info=exc_info, **kwargs)
+        self._log(level or error.level, message or error.message, *args, exc_info=exc_info, **kwargs)
 
     def log_and_raise(
         self,

@@ -33,6 +33,9 @@ exclude = [
     "**/__init__.py"
 ]
 
+# 'utils' has no __init__.py: it is an implicit namespace package
+namespace-packages = ["core/python/utils"]
+
 # output-format = "grouped"
 
 # Ruff configuration: stricte + complète
