@@ -54,15 +54,16 @@ _HOW_CHOICES = click.Choice(
 def cli(ctx: click.Context) -> None:
     """Kbot Installer - A tool for installing and managing kbot products.
 
-    This CLI provides commands to download and list kbot products
-    and their dependencies.
+    This CLI downloads kbot products (with their dependencies), builds and
+    updates the installer and workarea directories, upgrades or uninstalls an
+    installation, and manages its database (load, learn, admin password).
     """
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         ctx.exit()
 
 
-@cli.command(name="download")
+@cli.command(name="download", short_help="Download a product or a bundle into the installer dir.")
 @click.option(
     "-b",
     "--bundle",
@@ -92,7 +93,7 @@ def cli(ctx: click.Context) -> None:
     "--installer-dir",
     type=click.Path(),
     default=lambda: str(Path.home() / "dev" / "installer"),
-    help="Installation directory (default: $HOME/dev/installer)",
+    help="Installer directory (default: $HOME/dev/installer)",
 )
 @click.option(
     "-r",
@@ -134,12 +135,13 @@ def download(
 ) -> None:
     """Download kbot products from a product version or a bundle descriptor.
 
-    Without ``-b``, downloads the specified product at the given version.
-    With ``-b``, downloads products pinned in the bundle descriptor from storage.
-    ``-p`` is then required and defines the highest product level to install.
+    Without '-b', downloads the specified product at the given version.
+    With '-b', downloads products pinned in the bundle descriptor from storage.
+    '-p' is then required and defines the highest product level to install.
 
-    By default, dependencies are downloaded unless ``--no-rec`` is used.
+    By default, dependencies are downloaded unless '--no-rec' is used.
 
+    \b
     Examples:
         kbot-installer download -v 2025.03 -p jira
         kbot-installer download -v dev -p jira --no-rec
@@ -369,7 +371,7 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     return [installer_path / name / "db" / "init" / "db_schema.sql" for name in graph.get_topological_order()]
 
 
-@cli.command(name="install")
+@cli.command(name="install", short_help="Install a product or bundle: installer, workarea and DB.")
 @click.option(
     "-b",
     "--bundle",
@@ -528,24 +530,25 @@ def install(
     verbose: bool = False,
     force_recreate: bool = False,
 ) -> None:
-    r"""Install a kbot product or bundle: build the installer, workarea, and database.
+    """Install a kbot product or bundle: build the installer, workarea, and database.
 
-    Without ``-b``, installs the given product at ``-v/--version`` together with
-    all of its dependencies. With ``-b``, installs every product pinned by the
-    bundle descriptor; ``-p`` then defines the top level product.
+    Without '-b', installs the given product at '-v/--version' together with
+    all of its dependencies. With '-b', installs every product pinned by the
+    bundle descriptor; '-p' then defines the top level product.
 
     The installer directory is built first (download), then the workarea is
     laid out from it and its 'license.key' is validated (the installation
-    stops on a missing or invalid license), then the database is prepared and initialized: every
-    downloaded product's ``db/init/db_schema.sql`` is applied, in dependency
-    order (dependencies before the products that depend on them). The users,
-    roles and permissions are then loaded (all the data with ``--with-load``)
-    and the 'admin' password is set from 'KBOT_ADMIN_PASSWORD' (or generated
-    with ``--no-admin-password``). If ``--workarea-dir`` already exists, the
-    installation is cancelled before anything is downloaded or built, unless
-    ``--force-recreate`` is given, in which case the existing directory is
-    deleted first.
+    stops on a missing or invalid license), then the database is prepared and
+    initialized: every downloaded product's 'db/init/db_schema.sql' is applied,
+    in dependency order (dependencies before the products that depend on them).
+    The users, roles and permissions are then loaded (all the data with
+    '--with-load') and the 'admin' password is set from 'KBOT_ADMIN_PASSWORD'
+    (or generated with '--no-admin-password'). If '--workarea-dir' already
+    exists, the installation is cancelled before anything is downloaded or
+    built, unless '--force-recreate' is given, in which case the existing
+    directory is deleted first.
 
+    \b
     Examples:
         KBOT_ADMIN_PASSWORD='secret' kbot-installer install -b ev-basic-00018 -p site-konverso \\
             --with-load --with-learn --workarea-dir ~/dev/work --installer-dir ~/dev/installer
@@ -717,16 +720,17 @@ def update(
 ) -> None:
     """Update parts of an existing kbot installation.
 
-    ``--installer`` updates the products of the installer directory: a bundle
-    install moves to the latest bundle of the same name and ``major.minor``,
+    '--installer' updates the products of the installer directory: a bundle
+    install moves to the latest bundle of the same name and 'major.minor',
     any other install downloads the latest storage artifact of each product's
     build branch, and git working copies are checked out on their version
     branch then pulled (a working copy with uncommitted changes is reported as
-    an error and left untouched). ``--workarea`` updates the workarea in place,
-    using the strategy given by ``--how``. Each solution/customer product's
-    ``requirements.txt`` is then installed (unless ``--skip-python-requirements``).
+    an error and left untouched). '--workarea' updates the workarea in place,
+    using the strategy given by '--how'. Each solution/customer product's
+    'requirements.txt' is then installed (unless '--skip-python-requirements').
     The command fails when any product could not be updated.
 
+    \b
     Examples:
         kbot-installer update --installer
         kbot-installer update --installer --workarea --storage s3 -i ~/dev/installer -w ~/dev/work
@@ -770,7 +774,7 @@ def update(
     click.echo("Update completed successfully.")
 
 
-@cli.command(name="upgrade")
+@cli.command(name="upgrade", short_help="Upgrade an installation to a newer release.")
 @click.option(
     "-p",
     "--product",
@@ -879,11 +883,11 @@ def upgrade(
     yes: bool = False,
     verbose: bool = False,
 ) -> None:
-    r"""Upgrade a kbot installation to a newer release (e.g. 2025.03 → 2026.01).
+    """Upgrade a kbot installation to a newer release (e.g. 2025.03 to 2026.01).
 
     The target is either an installed product and its whole new dependency
-    closure (``-p``/``-v``), the latest bundle of the installed bundle's name
-    for ``-v``, or the exact bundle ``-b``. Steps:
+    closure ('-p'/'-v'), the latest bundle of the installed bundle's name
+    for '-v', or the exact bundle '-b'. Steps:
 
     \b
     1. Check the installer, without modifying it: symlinked or locally built
@@ -899,6 +903,7 @@ def upgrade(
        'kbot.sh load' (and 'kbot.sh learn' with --with-learn).
     7. Restart kbot ('kbot.sh restart').
 
+    \b
     Examples:
         kbot-installer upgrade -p site-konverso -v 2026.01
         kbot-installer upgrade -v 2026.01 -y
@@ -1109,8 +1114,9 @@ def _run_upgrade(
 def load(workarea_dir: str) -> None:
     """Load initial data into a workarea's database.
 
-    Runs the installed workarea's own ``bin/kbot.sh load``.
+    Runs the installed workarea's own 'bin/kbot.sh load'.
 
+    \b
     Examples:
         kbot-installer load -w ~/dev/work
 
@@ -1135,8 +1141,9 @@ def load(workarea_dir: str) -> None:
 def learn(workarea_dir: str) -> None:
     """Train ML models for a workarea.
 
-    Runs the installed workarea's own ``bin/kbot.sh learn``.
+    Runs the installed workarea's own 'bin/kbot.sh learn'.
 
+    \b
     Examples:
         kbot-installer learn -w ~/dev/work
 
@@ -1210,9 +1217,10 @@ def set_admin_password_command(
     """Set the kbot 'admin' user's password in the database.
 
     Reads the password from 'KBOT_ADMIN_PASSWORD', or generates and displays a
-    random one with ``--no-admin-password``. The data must already be loaded
-    (see ``load``), since only the existing 'admin' user is updated.
+    random one with '--no-admin-password'. The data must already be loaded
+    (see 'load'), since only the existing 'admin' user is updated.
 
+    \b
     Examples:
         KBOT_ADMIN_PASSWORD='secret' kbot-installer set-admin-password
         kbot-installer set-admin-password --no-admin-password --db-host db.example.com
@@ -1244,7 +1252,7 @@ def set_admin_password_command(
         raise click.Abort from e
 
 
-@cli.command(name="uninstall")
+@cli.command(name="uninstall", short_help="Stop a workarea, then delete its database and directory.")
 @click.option(
     "-i",
     "--installer-dir",
@@ -1323,12 +1331,13 @@ def uninstall(
     """Uninstall a kbot workarea: stop its services, then delete its database and directory.
 
     Mirrors the legacy 'uninstall.sh': dumps the database into
-    ``--backup-file`` (only when given), runs ``bin/kbot.sh stop``,
+    '--backup-file' (only when given), runs 'bin/kbot.sh stop',
     then deletes the database (the internal cluster under the workarea, or,
-    with ``--db-host``, every object owned by ``--db-user`` in the external
+    with '--db-host', every object owned by '--db-user' in the external
     database), and finally removes the workarea directory. Nothing is removed
     if the backup fails.
 
+    \b
     Examples:
         kbot-installer uninstall -w ~/dev/work
         kbot-installer uninstall -w ~/dev/work --backup-file ~
@@ -1407,7 +1416,7 @@ def uninstall(
     "--installer-dir",
     type=click.Path(),
     default=lambda: str(Path.home() / "dev" / "installer"),
-    help="Installation directory (default: $HOME/dev/installer)",
+    help="Installer directory (default: $HOME/dev/installer)",
 )
 @click.option(
     "-v",
@@ -1420,7 +1429,7 @@ def list_products(*, tree: bool = False, installer_dir: str, verbose: bool = Fal
 
     This command displays a list of all products that are currently installed
     in the installer directory, including their versions and status.
-    Use --tree to show as dependency tree.
+    Use '--tree' to show them as a dependency tree.
     """
     try:
         service = InstallerService(installer_dir)
