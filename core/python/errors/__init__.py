@@ -1,6 +1,8 @@
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from typing_extensions import override
+
+ErrorLevel: TypeAlias = Literal["critical", "error", "warning", "info", "debug"]
 
 
 class ErrorCode(BaseException):
@@ -10,13 +12,13 @@ class ErrorCode(BaseException):
     # Default message, which may be overriden at runtime
     message: str = ''
 
-    level: Literal["critical", "error", "warning"] = "warning"
+    level: ErrorLevel = "warning"
 
     def __init__(
         self,
         *,
         message: str | None = None,
-        level: Literal["critical", "error", "warning"] | None = None,
+        level: ErrorLevel | None = None,
     ):
         """Create a new error, using the level and message defined in the class
            or in the overidden constructor parameters.
