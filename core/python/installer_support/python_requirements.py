@@ -9,12 +9,14 @@ from utils.Logger import logger
 log = logger.get_package_logger("installer_support")
 
 # Product types whose root ``requirements.txt`` must be installed into the
-# 3rdparty Python (mirrors the legacy ``setup_workarea._UpdatePythonPackages``).
-_PYTHON_REQUIREMENTS_PRODUCT_TYPES = frozenset({"solution", "customer"})
+# 3rdparty Python: the legacy ``setup_workarea._UpdatePythonPackages`` types
+# (solution, customer), plus framework since ``kbot_installer``'s modules are
+# linked into the workarea and imported by kbot at runtime.
+_PYTHON_REQUIREMENTS_PRODUCT_TYPES = frozenset({"framework", "solution", "customer"})
 
 
 def install_product_python_requirements(installer_path: Path) -> None:
-    """Install each solution/customer product's ``requirements.txt`` into 3rdparty Python.
+    """Install each framework/solution/customer product's ``requirements.txt`` into 3rdparty Python.
 
     Reuses the downloaded ``kbot/bin/pip3.sh`` wrapper, which sources
     ``kbot/bin/env.sh`` and handles the 3rdparty Python relocation

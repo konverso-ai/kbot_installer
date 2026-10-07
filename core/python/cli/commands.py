@@ -470,7 +470,7 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
     is_flag=True,
     default=False,
     help=(
-        "Skip installing each solution/customer product's requirements.txt "
+        "Skip installing each framework/solution/customer product's requirements.txt "
         "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
     ),
 )
@@ -697,7 +697,7 @@ def install(
     is_flag=True,
     default=False,
     help=(
-        "Skip installing each solution/customer product's requirements.txt "
+        "Skip installing each framework/solution/customer product's requirements.txt "
         "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
     ),
 )
@@ -729,8 +729,8 @@ def update(
     version branch then pulled (a working copy with uncommitted changes is
     reported as an error and left untouched). Products left unchanged are
     reported as up to date. '--workarea' updates the workarea in place,
-    using the strategy given by '--how'. Each solution/customer product's
-    'requirements.txt' is then installed (unless '--skip-python-requirements').
+    using the strategy given by '--how'. Each framework/solution/customer
+    product's 'requirements.txt' is then installed (unless '--skip-python-requirements').
     The command fails when any product could not be updated.
 
     \b
@@ -852,7 +852,7 @@ def update(
     is_flag=True,
     default=False,
     help=(
-        "Skip installing each solution/customer product's requirements.txt "
+        "Skip installing each framework/solution/customer product's requirements.txt "
         "into the 3rdparty Python (via the downloaded kbot/bin/pip3.sh)."
     ),
 )
