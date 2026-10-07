@@ -152,9 +152,11 @@ def setup_logging(config_path: Path | None = None) -> None:
         _quiet_noisy_third_party_loggers()
         return
 
-    # Load configuration from file
+    # Load configuration from file. The log file path is absolute so the log
+    # always lands next to the config file, whatever the current directory.
     logging.config.fileConfig(
         str(config_path),
+        defaults={"log_file": str(config_path.resolve().parent / "kbot_installer.log")},
         disable_existing_loggers=False,
     )
 
