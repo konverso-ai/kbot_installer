@@ -654,8 +654,9 @@ def install(
     help=(
         "Update the installer directory: move a bundle install to the latest bundle "
         "of the same name and major.minor, otherwise download the latest storage "
-        "artifact of each product's branch; git working copies are checked out on "
-        "their version branch and pulled (they must have no uncommitted changes)."
+        "artifact of each product's branch (skipped when it holds the installed commit); "
+        "git working copies are checked out on their version branch and pulled "
+        "(they must have no uncommitted changes)."
     ),
 )
 @click.option(
@@ -724,9 +725,11 @@ def update(
     '--installer' updates the products of the installer directory: a bundle
     install moves to the latest bundle of the same name and 'major.minor',
     any other install downloads the latest storage artifact of each product's
-    build branch, and git working copies are checked out on their version
-    branch then pulled (a working copy with uncommitted changes is reported as
-    an error and left untouched). '--workarea' updates the workarea in place,
+    build branch, unless the description published next to the artifact shows
+    the installed commit, and git working copies are checked out on their
+    version branch then pulled (a working copy with uncommitted changes is
+    reported as an error and left untouched). Products left unchanged are
+    reported as up to date. '--workarea' updates the workarea in place,
     using the strategy given by '--how'. Each solution/customer product's
     'requirements.txt' is then installed (unless '--skip-python-requirements').
     The command fails when any product could not be updated.

@@ -88,6 +88,7 @@ class BundleDownloadable(DownloadableBase):
         installer_dir: Path,
         *,
         verbose: bool = False,
+        table: InstallationTable | None = None,
     ) -> None:
         """Initialize the installable by fetching the bundle descriptor.
 
@@ -95,7 +96,8 @@ class BundleDownloadable(DownloadableBase):
             storage_name: Storage backend holding the bundle descriptor and artifacts.
             name: Name of the bundle to fetch.
             installer_dir: Directory the bundle descriptor is cached into.
-            verbose: Whether to enable verbose logging.
+            verbose: Whether to enable verbose logging; ignored when table is given.
+            table: Table the downloads are reported to. Defaults to a new table.
 
         """
         self.__storage_backend = storage_name.value
@@ -105,7 +107,7 @@ class BundleDownloadable(DownloadableBase):
         self.__artifact_storage = build_configured_storage(
             storage_name.value, area="artifacts"
         )
-        self.__table = InstallationTable(verbose=verbose)
+        self.__table = table or InstallationTable(verbose=verbose)
         self.__bundle = self._get_bundle(name=name, path=installer_dir)
         self.__provider = StorageProvider(storage=self.__artifact_storage)
 
@@ -141,6 +143,7 @@ class BundleDownloadable(DownloadableBase):
             path: Directory that will contain the downloaded products.
 
         """
+        self.__table.fit_product_names(product.name for product in self.__bundle.versions)
         for product in self.__bundle.versions:
             ProductDownloadable(
                 product=product,
