@@ -14,7 +14,7 @@ from installer_support.installer_utils import extract_tar_member
 from utils.Logger import logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
 log = logger.get_package_logger("storage")
 
@@ -55,7 +55,7 @@ def _extract_tar_gz_with_python(archive_path: Path, target_dir: Path) -> None:
 
 
 @contextmanager
-def system_tar_gz_extractor(tar_bin: str, target_dir: Path) -> Iterator[IO[bytes]]:
+def system_tar_gz_extractor(tar_bin: str, target_dir: Path) -> Generator[IO[bytes], None, None]:
     """Yield a pipe whose ``.tar.gz`` content is extracted on the fly by ``tar``.
 
     Extraction overlaps with the download and no temporary archive is written
