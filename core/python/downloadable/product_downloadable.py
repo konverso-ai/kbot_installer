@@ -220,6 +220,8 @@ class ProductDownloadable(DownloadableBase):
                 self.__product = product
 
             queue.extend(parent_name for parent_name in product.parent_names if parent_name not in processed)
+            # Size the product column for the names discovered so far, before printing their rows.
+            self.__table.fit_product_names(queue)
 
     def _get_product(self, path: Path, name: str) -> Product:
         """Load the product description from its downloaded folder.

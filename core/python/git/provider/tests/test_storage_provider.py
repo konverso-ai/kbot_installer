@@ -58,6 +58,35 @@ class TestStorageProvider:
             with pytest.raises(ProviderError, match="Failed to clone repository"):
                 provider.clone_and_checkout("my-repo", "/tmp/target", branch="dev")
 
+    def test_get_latest_build_reads_description_next_to_latest_archive(self) -> None:
+        """The latest build comes from description_latest.json, without downloading the archive."""
+        storage = MagicMock()
+        storage.get.return_value = '{"name": "my-repo", "build": {"branch": "dev", "commit": "abc123"}}'
+        provider = StorageProvider(storage=storage)
+
+        build = provider.get_latest_build("my-repo", "dev")
+
+        storage.get.assert_called_once_with("dev/my-repo/description_latest.json")
+        storage.download.assert_not_called()
+        assert build is not None
+        assert build.commit == "abc123"
+
+    @pytest.mark.parametrize("content", [None, "not json"])
+    def test_get_latest_build_unknown_when_description_missing_or_invalid(self, content: str | None) -> None:
+        """A missing or unreadable description yields None, so callers fall back to downloading."""
+        storage = MagicMock()
+        storage.get.return_value = content
+
+        assert StorageProvider(storage=storage).get_latest_build("my-repo", "dev") is None
+
+    def test_get_latest_build_wraps_storage_errors(self) -> None:
+        """A storage failure is reported as a ProviderError."""
+        storage = MagicMock()
+        storage.get.side_effect = RuntimeError("network down")
+
+        with pytest.raises(ProviderError, match="network down"):
+            StorageProvider(storage=storage).get_latest_build("my-repo", "dev")
+
     def test_nexus_backend_check_remote_repository_exists(self) -> None:
         """Test existence check uses storage.exists when available."""
 

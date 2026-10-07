@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.cells import cell_len
 
 from installer_support.installation_table import (
     InstallationResult,
@@ -440,3 +441,42 @@ class TestInstallationTable:
         installation_table.add_result("ithd", "storage", "success")
 
         assert installation_table.get_summary() == "Installation complete: 1 successful, 1 kept (local)"
+
+    @patch("installer_support.installation_table.Console")
+    def test_skipped_shown_as_up_to_date_with_show_unchanged(self, mock_console_class) -> None:
+        """In an update, products left unchanged are shown as up to date even without verbose."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=False, show_unchanged=True)
+
+        installation_table.begin_installation("ithd")
+        installation_table.complete_installation("ithd", "storage", "skipped", details="dev already at abc123")
+
+        line = mock_console.print.call_args[0][0]
+        assert "✔ Up to date" in line
+        assert "dev already at abc123" in line
+        assert installation_table.results[0].status == "up_to_date"
+        assert installation_table.get_summary() == "Installation complete: 1 up to date"
+
+    @patch("installer_support.installation_table.Console")
+    def test_rows_stay_aligned_with_long_names_and_icons(self, mock_console_class) -> None:
+        """Every column starts at the same terminal cell, whatever the name length or status icon."""
+        mock_console = MagicMock()
+        mock_console_class.return_value = mock_console
+        installation_table = InstallationTable(verbose=True)
+        long_name = "qa-ev-202503.customer-site.konverso.ai"
+        installation_table.fit_product_names(["kbot", long_name])
+
+        installation_table.complete_installation("kbot", "local", "kept", details="DETAILS")
+        installation_table.complete_installation(long_name, "bitbucket (cached)", "skipped", details="DETAILS")
+        installation_table.complete_installation("ithd", "storage", "success", details="DETAILS")
+        installation_table.complete_installation("gsuite", "storage", "error", error_message="DETAILS")
+
+        lines = [call.args[0] for call in mock_console.print.call_args_list]
+        status_columns = {
+            cell_len(line[: line.index(icon)]) for line, icon in zip(lines, ["📌", "⏭️", "✅", "❌"], strict=True)
+        }
+        details_columns = {cell_len(line[: line.index("DETAILS")]) for line in lines}
+        assert len(status_columns) == 1
+        assert len(details_columns) == 1
+        assert lines[1].startswith(f"{long_name}  bitbucket (cached)  ")
