@@ -3,7 +3,9 @@
 Git working copies are checked out on the branch of their product version and
 pulled. The other products are refreshed from storage: a bundle install moves to
 the latest bundle of the same name and ``major.minor``, any other install
-re-downloads the latest artifact of each product's build branch.
+downloads the latest artifact of each product's build branch, unless the
+description published next to it shows the installed commit. Products left
+unchanged are reported as up to date.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ from utils.Logger import logger
 from utils.product.product import Product
 
 if TYPE_CHECKING:
-    from git.provider.base import ProviderBase
+    from git.provider.storage_provider import StorageProvider
     from git.versioner.base import VersionerBase
     from storage.base import StorageBackendEnum
 
@@ -146,7 +148,7 @@ class InstallerUpdatable:
         self.installer_path = installer_path
         self.storage_backend = storage_backend
         self.verbose = verbose
-        self._storage_provider: ProviderBase | None = None
+        self._storage_provider: StorageProvider | None = None
 
     def __call__(self) -> list[str]:
         """Update the git working copies, then the storage-backed products.
@@ -159,8 +161,9 @@ class InstallerUpdatable:
                 bundle descriptor can be resolved or fetched.
 
         """
-        table = InstallationTable(verbose=self.verbose)
+        table = InstallationTable(verbose=self.verbose, show_unchanged=True)
         entries = InstallerService(self.installer_path).load_product_dirs()
+        table.fit_product_names(path.name for path, _ in entries)
         failed: list[str] = []
 
         for path, product in entries:
@@ -170,7 +173,7 @@ class InstallerUpdatable:
                 failed.append(path.name)
 
         if (self.installer_path / LOCAL_BUNDLE_FILE_NAME).exists():
-            self._update_bundle()
+            self._update_bundle(table)
             return failed
 
         for path, product in entries:
@@ -244,7 +247,10 @@ class InstallerUpdatable:
     def _update_storage_artifact(self, path: Path, product: Product, table: InstallationTable) -> bool:
         """Replace a storage download with the latest artifact of its build branch.
 
-        The existing folder is kept until the new artifact is fully downloaded.
+        The artifact is not downloaded when the description published next to
+        it shows the installed commit. Otherwise, the existing folder is kept
+        until the new artifact is fully downloaded, and also when it turns out
+        to hold the installed commit.
 
         Args:
             path: Product folder.
@@ -264,6 +270,10 @@ class InstallerUpdatable:
             if self._storage_provider is None:
                 self._storage_provider = build_storage_provider(self.storage_backend)
 
+            latest_build = self._storage_provider.get_latest_build(path.name, branch)
+            if old_commit and latest_build is not None and latest_build.commit == old_commit:
+                return self._report_up_to_date(table, path, branch, old_commit)
+
             # Download next to the products (same filesystem, so rename works);
             # without a top-level description.xml, product discovery ignores it.
             with tempfile.TemporaryDirectory(dir=self.installer_path, prefix=".update-") as tmp:
@@ -278,14 +288,9 @@ class InstallerUpdatable:
                 new_build = Product.from_json_file(new_description).build if new_description.exists() else None
                 new_commit = new_build.commit if new_build else ""
 
+                # Reached when no description is published next to the archive.
                 if new_commit and new_commit == old_commit:
-                    table.complete_installation(
-                        product_name=path.name,
-                        provider_name=_STORAGE_PROVIDER_NAME,
-                        status="skipped",
-                        details=f"{branch} already at {old_commit[:10]}",
-                    )
-                    return True
+                    return self._report_up_to_date(table, path, branch, old_commit)
 
                 shutil.rmtree(path)
                 new_dir.rename(path)
@@ -300,8 +305,35 @@ class InstallerUpdatable:
         )
         return True
 
-    def _update_bundle(self) -> None:
-        """Install the latest bundle sharing the name and ``major.minor`` of the cached one."""
+    @staticmethod
+    def _report_up_to_date(table: InstallationTable, path: Path, branch: str, commit: str) -> bool:
+        """Record a storage download already at the latest commit of its branch.
+
+        Args:
+            table: Table the outcome is reported to.
+            path: Product folder.
+            branch: Build branch of the product.
+            commit: Installed commit.
+
+        Returns:
+            Always True, so callers can return it directly.
+
+        """
+        table.complete_installation(
+            product_name=path.name,
+            provider_name=_STORAGE_PROVIDER_NAME,
+            status="skipped",
+            details=f"{branch} already at {commit[:10]}",
+        )
+        return True
+
+    def _update_bundle(self, table: InstallationTable) -> None:
+        """Install the latest bundle sharing the name and ``major.minor`` of the cached one.
+
+        Args:
+            table: Table the bundle products are reported to.
+
+        """
         current = Bundle.from_json((self.installer_path / LOCAL_BUNDLE_FILE_NAME).read_text(encoding="utf-8"))
         latest = find_latest_bundle_name(
             build_configured_storage(self.storage_backend.value, area="bundles"), current.name, current.version
@@ -311,7 +343,7 @@ class InstallerUpdatable:
             storage_name=self.storage_backend,
             name=latest,
             installer_dir=self.installer_path,
-            verbose=self.verbose,
+            table=table,
         ).download(self.installer_path)
 
     @staticmethod

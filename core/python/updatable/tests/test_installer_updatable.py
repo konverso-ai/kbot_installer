@@ -6,7 +6,7 @@ so checkout/fetch/pull run the actual code path without any authentication.
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from dulwich import porcelain
@@ -168,8 +168,16 @@ class TestStorageArtifacts:
         (path / "description.xml").write_text('<product name="acme"/>', encoding="utf-8")
         (path / "description.json").write_text(json.dumps(product.to_json()), encoding="utf-8")
 
-    def _provider_writing(self, commit: str) -> MagicMock:
+    def _provider_writing(self, commit: str, latest_commit: str | None = None) -> MagicMock:
+        """Build a provider whose artifact holds commit.
+
+        latest_commit is the commit published next to the artifact, None when
+        no description is published (the commit is then read after download).
+        """
         provider = MagicMock()
+        provider.get_latest_build.return_value = (
+            None if latest_commit is None else Build(branch="release-2026.01-dev", commit=latest_commit)
+        )
 
         def _clone(_name: str, target: Path, **_kwargs: object) -> None:
             self._write_download(Path(target), commit)
@@ -208,6 +216,39 @@ class TestStorageArtifacts:
         assert compare("eq", failed, [])
         assert compare("eq", (acme / "marker").read_text(encoding="utf-8"), "kept")
         assert compare("eq", [p.name for p in installer.iterdir()], ["acme"])
+
+    def test_published_installed_commit_skips_download(
+        self, installer: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A latest artifact published at the installed commit is not downloaded and is shown up to date."""
+        monkeypatch.setenv("COLUMNS", "200")  # rich wraps captured output at 80 columns otherwise
+        acme = installer / "acme"
+        self._write_download(acme, "old")
+        provider = self._provider_writing("old", latest_commit="old")
+
+        with patch("updatable.installer_updatable.build_storage_provider", return_value=provider):
+            failed = _updatable(installer)()
+
+        assert compare("eq", failed, [])
+        provider.get_latest_build.assert_called_once_with("acme", "release-2026.01-dev")
+        provider.clone_and_checkout.assert_not_called()
+        assert compare("eq", [p.name for p in installer.iterdir()], ["acme"])
+        # The in-progress line and its final row share a terminal line ('\r'): keep the final one.
+        row = [line for line in capsys.readouterr().out.splitlines() if line.startswith("acme")][-1]
+        assert "Up to date" in row
+        assert "release-2026.01-dev already at old" in row
+
+    def test_published_newer_commit_is_downloaded(self, installer: Path) -> None:
+        """A latest artifact published at another commit is downloaded."""
+        acme = installer / "acme"
+        self._write_download(acme, "old")
+        provider = self._provider_writing("new", latest_commit="new")
+
+        with patch("updatable.installer_updatable.build_storage_provider", return_value=provider):
+            failed = _updatable(installer)()
+
+        assert compare("eq", failed, [])
+        assert compare("eq", Product.from_json_file(acme / "description.json").build.commit, "new")
 
     def test_local_build_never_needs_storage(self, installer: Path) -> None:
         """A manual build (no description.json) is kept without building a storage provider."""
@@ -249,7 +290,7 @@ class TestBundleInstall:
             storage_name=StorageBackendEnum.NEXUS,
             name="ev-basic-2025.03.0017",
             installer_dir=installer,
-            verbose=False,
+            table=ANY,
         )
         bundle_downloadable.return_value.download.assert_called_once_with(installer)
         build_provider.assert_not_called()

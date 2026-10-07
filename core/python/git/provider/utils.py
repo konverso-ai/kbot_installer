@@ -48,3 +48,21 @@ def build_object_key(repository_name: str, branch: str | None, commit_id: str | 
     branch_name = branch or "master"
     suffix = commit_id or "latest"
     return f"{branch_name}/{repository_name}/{repository_name}_{suffix}.tar.gz"
+
+
+def build_latest_description_key(repository_name: str, branch: str | None) -> str:
+    """Build the key of the description published next to the "latest" archive of a branch.
+
+    Every archive ``<name>_<suffix>.tar.gz`` is published with a
+    ``description_<suffix>.json`` holding its build information, so the commit
+    of the "latest" archive can be read without downloading it.
+
+    Args:
+        repository_name: Name of the repository/product.
+        branch: Branch the archive was built from. Defaults to "master".
+
+    Returns:
+        The object key identifying the description in storage.
+
+    """
+    return f"{branch or 'master'}/{repository_name}/description_latest.json"

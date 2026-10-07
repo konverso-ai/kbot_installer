@@ -4,18 +4,26 @@ This module provides a clean table display for installation results,
 showing product name, provider used, and installation status.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
+from rich.cells import cell_len
 from rich.console import Console
 from rich.table import Table
 
-InstallationStatus = Literal["success", "error", "skipped", "kept", "in_progress"]
+InstallationStatus = Literal["success", "error", "skipped", "up_to_date", "kept", "in_progress"]
 FinalStatus = Literal["success", "error", "skipped", "kept"]
 
 _PRODUCT_WIDTH = 22
-_PROVIDER_WIDTH = 18
+_PROVIDER_WIDTH = 20
 _STATUS_WIDTH = 18
+_COLUMN_GAP = 2
+
+
+def _pad(text: str, width: int) -> str:
+    """Pad text with spaces up to width terminal cells (emoji take two cells)."""
+    return text + " " * max(0, width - cell_len(text))
 
 
 @dataclass
@@ -25,8 +33,10 @@ class InstallationResult:
     Attributes:
         product_name: Name of the product installed.
         provider_name: Name of the provider used for installation.
-        status: Installation status ('success', 'error', 'skipped', 'kept', 'in_progress').
-            'kept' means a local copy (e.g. a manual build) was deliberately left untouched.
+        status: Installation status ('success', 'error', 'skipped', 'up_to_date', 'kept',
+            'in_progress'). 'kept' means a local copy (e.g. a manual build) was deliberately
+            left untouched; 'up_to_date' is a 'skipped' product reported by a table built
+            with ``show_unchanged``.
         error_message: Error message if status is 'error'.
         details: Free-form details shown instead of the default ones.
 
@@ -46,18 +56,37 @@ class InstallationTable:
     showing product name, provider used, and installation status.
     """
 
-    def __init__(self, *, verbose: bool = False) -> None:
+    def __init__(self, *, verbose: bool = False, show_unchanged: bool = False) -> None:
         """Initialize the installation table.
 
         Args:
             verbose: When True, show skipped products and extra details.
+            show_unchanged: When True (update context), report 'skipped' products as
+                'up_to_date' rows, shown even without verbose.
 
         """
         self.verbose = verbose
+        self.show_unchanged = show_unchanged
         self.console = Console()
         self.results: list[InstallationResult] = []
         self._progress_product: str | None = None
         self._progress_line_width = 0
+        self._product_width = _PRODUCT_WIDTH
+        self._provider_width = _PROVIDER_WIDTH
+
+    def fit_product_names(self, names: Iterable[str]) -> None:
+        """Widen the product column so that every given name fits.
+
+        Call it before the first row when the product names are known upfront:
+        the column otherwise only widens when a longer name is printed, which
+        leaves the rows already printed narrower.
+
+        Args:
+            names: Product names the table will show.
+
+        """
+        for name in names:
+            self._product_width = max(self._product_width, cell_len(name) + _COLUMN_GAP)
 
     def begin_installation(self, product_name: str) -> None:
         """Display an in-progress line for a product being installed.
@@ -67,8 +96,8 @@ class InstallationTable:
 
         """
         self._progress_product = product_name
-        line = self._format_line(product_name, "-", "⏳ In progress", "")
-        self._progress_line_width = len(line)
+        line = self._format_line(product_name, "-", self._get_status_text("in_progress"), "")
+        self._progress_line_width = cell_len(line)
         self.console.print(line, end="\r", highlight=False)
 
     def complete_installation(
@@ -92,13 +121,13 @@ class InstallationTable:
         result = InstallationResult(
             product_name=product_name,
             provider_name=provider_name,
-            status=status,
+            status=self._recorded_status(status),
             error_message=error_message,
             details=details,
         )
         self.results.append(result)
 
-        if status == "skipped" and not self.verbose:
+        if result.status == "skipped" and not self.verbose:
             self._clear_progress_line()
             return
 
@@ -136,10 +165,16 @@ class InstallationTable:
             InstallationResult(
                 product_name=product_name,
                 provider_name=provider_name,
-                status=status,
+                status=self._recorded_status(status),
                 error_message=error_message,
             )
         )
+
+    def _recorded_status(self, status: FinalStatus) -> InstallationStatus:
+        """Return the status recorded for status, given show_unchanged."""
+        if status == "skipped" and self.show_unchanged:
+            return "up_to_date"
+        return status
 
     def display(self) -> None:
         """Display the installation results table."""
@@ -158,8 +193,7 @@ class InstallationTable:
                 continue
 
             status_style = self._get_status_style(result.status)
-            status_icon = self._get_status_icon(result.status)
-            status_text = f"{status_icon} {result.status.replace('_', ' ').title()}"
+            status_text = self._get_status_text(result.status)
 
             details = self._get_details(result)
 
@@ -175,19 +209,16 @@ class InstallationTable:
 
     def _print_result_line(self, result: InstallationResult) -> None:
         """Print a single formatted result line."""
-        status_icon = self._get_status_icon(result.status)
-        status_text = f"{status_icon} {result.status.replace('_', ' ').title()}"
-        details = self._get_details(result)
         line = self._format_line(
             result.product_name,
             result.provider_name,
-            status_text,
-            details,
+            self._get_status_text(result.status),
+            self._get_details(result),
         )
 
         if self._progress_product == result.product_name:
-            padded_line = line.ljust(max(self._progress_line_width, len(line)))
-            self.console.print(padded_line, highlight=False)
+            # Overwrite the whole in-progress line, which may be the longer one.
+            self.console.print(_pad(line, self._progress_line_width), highlight=False)
             self._progress_product = None
             self._progress_line_width = 0
             return
@@ -209,10 +240,24 @@ class InstallationTable:
         status_text: str,
         details: str,
     ) -> str:
-        """Format one installation row as fixed-width text."""
+        """Format one installation row as fixed-width text.
+
+        Columns are padded by terminal cells, not characters, so that rows
+        stay aligned whatever the width of their status icon. A product or
+        provider name too long for its column widens it for the next rows.
+        """
+        self._product_width = max(self._product_width, cell_len(product_name) + _COLUMN_GAP)
+        self._provider_width = max(self._provider_width, cell_len(provider_name) + _COLUMN_GAP)
         return (
-            f"{product_name:<{_PRODUCT_WIDTH}}{provider_name:<{_PROVIDER_WIDTH}}{status_text:<{_STATUS_WIDTH}}{details}"
+            _pad(product_name, self._product_width)
+            + _pad(provider_name, self._provider_width)
+            + _pad(status_text, _STATUS_WIDTH)
+            + details
         )
+
+    def _get_status_text(self, status: str) -> str:
+        """Return the icon and label shown in the status column (e.g. '✔ Up to date')."""
+        return f"{self._get_status_icon(status)} {status.replace('_', ' ').capitalize()}"
 
     def _get_details(self, result: InstallationResult) -> str:
         """Return the details column for a result."""
@@ -220,7 +265,7 @@ class InstallationTable:
             return result.details
         if result.status == "error" and result.error_message:
             return result.error_message
-        if result.status == "skipped":
+        if result.status in ("skipped", "up_to_date"):
             return "Already installed"
         return ""
 
@@ -238,6 +283,7 @@ class InstallationTable:
             "success": "green",
             "error": "red",
             "skipped": "yellow",
+            "up_to_date": "green",
             "kept": "cyan",
             "in_progress": "blue",
         }
@@ -257,6 +303,7 @@ class InstallationTable:
             "success": "✅",
             "error": "❌",
             "skipped": "⏭️",
+            "up_to_date": "✔",
             "kept": "📌",
             "in_progress": "⏳",
         }
@@ -275,6 +322,7 @@ class InstallationTable:
         success_count = sum(1 for r in self.results if r.status == "success")
         error_count = sum(1 for r in self.results if r.status == "error")
         skipped_count = sum(1 for r in self.results if r.status == "skipped")
+        up_to_date_count = sum(1 for r in self.results if r.status == "up_to_date")
         kept_count = sum(1 for r in self.results if r.status == "kept")
 
         summary_parts = []
@@ -282,6 +330,8 @@ class InstallationTable:
             summary_parts.append(f"{success_count} successful")
         if error_count > 0:
             summary_parts.append(f"{error_count} failed")
+        if up_to_date_count > 0:
+            summary_parts.append(f"{up_to_date_count} up to date")
         if kept_count > 0:
             summary_parts.append(f"{kept_count} kept (local)")
         if skipped_count > 0 and self.verbose:

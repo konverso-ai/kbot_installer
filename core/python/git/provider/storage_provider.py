@@ -9,11 +9,13 @@ from typing_extensions import override
 
 from git.provider.base import ProviderBase
 from git.provider.errors import ProviderError
-from git.provider.utils import build_object_key
+from git.provider.utils import build_latest_description_key, build_object_key
 from utils.Logger import logger
+from utils.product.product import Product
 
 if TYPE_CHECKING:
     from storage.base import StorageBase
+    from utils.product.build import Build
 
 log = logger.get_package_logger("git.provider")
 
@@ -102,6 +104,39 @@ class StorageProvider(ProviderBase):
         """
         branch_to_use = branch or self.branch
         self._clone_from_storage(repository_name, Path(target_path), branch_to_use, commit_id)
+
+    def get_latest_build(self, repository_name: str, branch: str | None = None) -> Build | None:
+        """Read the build of the "latest" archive of a branch without downloading the archive.
+
+        The build comes from the ``description_latest.json`` published next to
+        the archive.
+
+        Args:
+            repository_name: Name of the repository.
+            branch: Branch of the archive. If None, uses master.
+
+        Returns:
+            The build of the latest archive, or None if its description is not
+            published or cannot be parsed.
+
+        Raises:
+            ProviderError: If the storage cannot be read.
+
+        """
+        key = build_latest_description_key(repository_name, branch or self.branch)
+        try:
+            content = self._storage.get(key)
+        except Exception as e:
+            msg = f"Failed to read '{key}' from storage: {e}"
+            raise ProviderError(msg) from e
+        if content is None:
+            log.debug("No description published for the latest archive: %s", key)
+            return None
+        try:
+            return Product.from_json(content).build
+        except (ValueError, TypeError) as e:
+            log.warning("Ignoring invalid description '%s': %s", key, e)
+            return None
 
     @override
     def remote_exists(self, repository_name: str) -> bool:

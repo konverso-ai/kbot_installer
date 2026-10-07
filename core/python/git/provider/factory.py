@@ -14,6 +14,7 @@ from credentials.github.ssh_github_credentials import SshGithubCredentials
 from git.provider.base import ProviderBase
 from git.provider.config import DEFAULT_PROVIDERS_CONFIG, ProvidersConfig
 from git.provider.errors import ProviderError
+from git.provider.storage_provider import StorageProvider
 from git.versioner import add_versioner
 from storage.base import StorageBackendEnum
 from storage.factory import add_builtin_storage, add_storage_from_config
@@ -338,7 +339,7 @@ def _build_provider(
 def build_storage_provider(
     storage_backend: StorageBackendEnum,
     config: ProvidersConfig = DEFAULT_PROVIDERS_CONFIG,
-) -> ProviderBase:
+) -> StorageProvider:
     """Build the storage provider for a backend, without any fallback provider.
 
     Unlike :func:`add_selector_provider`, no other provider or branch is tried
@@ -357,7 +358,7 @@ def build_storage_provider(
 
     """
     provider = _build_provider("storage", config, storage_backend=storage_backend)
-    if provider is None:
+    if not isinstance(provider, StorageProvider):
         msg = f"Storage provider '{storage_backend.value}' is not configured or lacks credentials"
         raise ProviderError(msg)
     return provider
