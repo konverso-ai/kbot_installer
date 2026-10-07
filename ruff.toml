@@ -86,6 +86,10 @@ ignore = [
     "S603", # subprocess call (database connection tests)
 ]
 
+"**/cli/commands.py" = [
+    "D301", # Click's "\b" no-rewrap marker must be a real backspace, not a raw-string backslash
+]
+
 "**/test_*.py" = [
     "ANN001",    # Missing type annotation for function argument (test parameters)
     "ANN202",    # Missing return type annotation for private function (test helpers)
