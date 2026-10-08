@@ -170,7 +170,8 @@ def copy_source(
     Directories are created directly. Files are copied verbatim unless
     `variables` is given, in which case the source is read as text, its
     placeholders are rendered, and the result is written to `target` with
-    the source's file mode preserved.
+    the source's file mode preserved. Dangling symlinks (e.g. an absolute
+    link to the build machine shipped in a product archive) are skipped.
 
     Args:
         source: Product source path to copy from.
@@ -179,6 +180,10 @@ def copy_source(
             None or empty, the file is copied byte-for-byte.
 
     """
+    if source.is_symlink() and not source.exists():
+        log.warning("Skipping dangling symlink '%s' -> '%s'.", source, source.readlink())
+        return
+
     variables = variables or {}
 
     target.parent.mkdir(parents=True, exist_ok=True)
