@@ -13,7 +13,9 @@ from database.utils import (
     apply_missing_upgrades,
     apply_schema,
     connect,
+    drop_owned_objects,
     dump_database,
+    execute_sql_file,
     is_database_empty,
 )
 
@@ -89,6 +91,48 @@ class InternalDatabase:
                 raise postgres_cluster.PostgresClusterError(msg)
         if self.__settings.pg_data.exists():
             shutil.rmtree(self.__settings.pg_data)
+
+    def data_major_version(self) -> str | None:
+        """Return the PostgreSQL major version the data directory was initialized by.
+
+        Returns:
+            The major version (e.g. '11'), or None if the cluster is not initialized.
+
+        """
+        return postgres_cluster.data_major_version(self.__settings)
+
+    def rebuild_from_backup(self, backup_path: Path, previous_data: Path) -> None:
+        """Recreate the cluster with the current PostgreSQL binaries, then load a backup into it.
+
+        PostgreSQL does not start on a data directory initialized by another
+        major version. The data directory is moved to ``previous_data`` (kept),
+        a new cluster, role and database are created, the backup is loaded the
+        way 'restore_db.sh' does it, and the server is stopped again.
+
+        Args:
+            backup_path: Plain SQL dump of the database ('dump_db.sh').
+            previous_data: Where the current data directory is moved.
+
+        Raises:
+            PostgresClusterError: If the server of the current data directory is still running.
+            FileExistsError: If ``previous_data`` already exists.
+
+        """
+        settings = self.__settings
+        if postgres_cluster.is_running(settings):
+            msg = f"PostgreSQL server for '{settings.pg_data}' is still running: stop it before rebuilding."
+            raise postgres_cluster.PostgresClusterError(msg)
+        if previous_data.exists():
+            msg = f"'{previous_data}' already exists."
+            raise FileExistsError(msg)
+        settings.pg_data.rename(previous_data)
+        try:
+            self.prepare()
+            # The dump re-creates the 'public' schema, which the application role owns.
+            drop_owned_objects(settings)
+            execute_sql_file(settings, backup_path)
+        finally:
+            postgres_cluster.stop(settings)
 
     def _admin_connect(self, *, database: str | None = None) -> Connection:
         """Connect using admin credentials.
