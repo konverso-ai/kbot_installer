@@ -286,11 +286,12 @@ def _check_kbot_workarea(workarea_path: Path) -> None:
         workarea_path: Workarea directory given by the user.
 
     Raises:
-        click.UsageError: If the directory has no 'products/kbot'.
+        click.UsageError: If the directory has neither 'products/kbot' nor
+            'var/products.json' ('products/' is no longer laid out from kbot 2026.01 on).
 
     """
-    if not (workarea_path / "products" / "kbot").is_dir():
-        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot')."
+    if not (workarea_path / "products" / "kbot").is_dir() and not (workarea_path / "var" / "products.json").is_file():
+        msg = f"'{workarea_path}' is not a kbot workarea directory (no 'products/kbot' nor 'var/products.json')."
         raise click.UsageError(msg)
 
 

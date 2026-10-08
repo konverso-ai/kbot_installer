@@ -1608,6 +1608,22 @@ class TestUninstallCommand:
 
     @patch("cli.commands.create_database")
     @patch("cli.commands.run_kbot_command")
+    def test_uninstall_accepts_workarea_without_products_dir(
+        self, mock_run_kbot_command, mock_create_database, tmp_path
+    ) -> None:
+        """From kbot 2026.01 on, a workarea has no 'products/' but still has 'var/products.json'."""
+        workarea_dir = tmp_path / "work"
+        (workarea_dir / "var").mkdir(parents=True)
+        (workarea_dir / "var" / "products.json").write_text("[]")
+
+        result = self.runner.invoke(cli, ["uninstall", "--workarea-dir", str(workarea_dir), "--yes"])
+
+        assert result.exit_code == 0, result.output
+        mock_run_kbot_command.assert_called_once_with(workarea_dir, "stop")
+        assert not workarea_dir.exists()
+
+    @patch("cli.commands.create_database")
+    @patch("cli.commands.run_kbot_command")
     def test_uninstall_continues_when_kbot_stop_fails(
         self, mock_run_kbot_command, mock_create_database, tmp_path
     ) -> None:
