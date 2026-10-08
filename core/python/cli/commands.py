@@ -9,6 +9,8 @@ import click
 
 from database.base import DbSettings
 from database.factory import build_database, create_database
+from database.internal_database import InternalDatabase
+from database.postgres_cluster import major_version
 from database.utils import resolve_admin_password, resolve_db_password, set_admin_password
 from downloadable.bundle_downloadable import LOCAL_BUNDLE_FILE_NAME
 from downloadable.factory import build_downloadable
@@ -19,7 +21,7 @@ from installer_support.installer_service import InstallerService
 from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, run_workarea_script, validate_license
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
-from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str
+from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str, resolve_pg_version
 from storage.base import StorageBackendEnum
 from updatable.factory import UpdatableName
 from updatable.installer_updatable import InstallerUpdatable
@@ -839,7 +841,40 @@ def update(
     "--no-backup",
     is_flag=True,
     default=False,
-    help="Do not back up the database before upgrading.",
+    help=(
+        "Do not back up the database before upgrading. The upgrade then fails if the new 3rdparty "
+        "ships another PostgreSQL major version: the internal database is rebuilt from the backup."
+    ),
+)
+@click.option(
+    "--db-port",
+    type=int,
+    default=5432,
+    show_default=True,
+    help="Postgres port (used to rebuild the internal database on a PostgreSQL major version change).",
+)
+@click.option(
+    "--db-user",
+    type=str,
+    default="kbot_db_user",
+    show_default=True,
+    help="Postgres user (used to rebuild the internal database on a PostgreSQL major version change).",
+)
+@click.option(
+    "--db-password",
+    type=str,
+    default=None,
+    help=(
+        "Postgres password (used to rebuild the internal database on a PostgreSQL major version change; "
+        "default: 'kbot_db_pwd')."
+    ),
+)
+@click.option(
+    "--db-name",
+    type=str,
+    default="kbot_db",
+    show_default=True,
+    help="Postgres database name (used to rebuild the internal database on a PostgreSQL major version change).",
 )
 @click.option(
     "--with-learn",
@@ -881,6 +916,10 @@ def upgrade(
     storage: str = StorageBackendEnum.NEXUS.value,
     backup_file: str | None = None,
     no_backup: bool = False,
+    db_port: int = 5432,
+    db_user: str = "kbot_db_user",
+    db_password: str | None = None,
+    db_name: str = "kbot_db",
     with_learn: bool = False,
     skip_python_requirements: bool = False,
     yes: bool = False,
@@ -902,9 +941,13 @@ def upgrade(
        storage products again, and remove the products no longer needed
        (git working copies are moved to '<installer-dir>/.removed_<timestamp>/').
     5. Relink the workarea (repair strategy) and install the python requirements.
-    6. Upgrade the database ('upgrade_db.sh', then 'upgrade_patch.sh'), then
+    6. If the new 3rdparty ships another PostgreSQL major version than the one
+       the internal database ('<workarea-dir>/var/db') was created with, move
+       'var/db' to 'var/db_pg<old major>_<timestamp>/', create a new cluster
+       and load the backup into it (not possible with --no-backup).
+    7. Upgrade the database ('upgrade_db.sh', then 'upgrade_patch.sh'), then
        'kbot.sh load' (and 'kbot.sh learn' with --with-learn).
-    7. Restart kbot ('kbot.sh restart').
+    8. Restart kbot ('kbot.sh restart').
 
     \b
     Examples:
@@ -947,6 +990,10 @@ def upgrade(
             installer_path,
             workarea_path,
             backup_path,
+            db_port=db_port,
+            db_user=db_user,
+            db_password=resolve_db_password(db_password, no_password=False)[0],
+            db_name=db_name,
             skip_python_requirements=skip_python_requirements,
             with_learn=with_learn,
         )
@@ -1051,6 +1098,10 @@ def _run_upgrade(
     workarea_path: Path,
     backup_path: Path | None,
     *,
+    db_port: int,
+    db_user: str,
+    db_password: str,
+    db_name: str,
     skip_python_requirements: bool,
     with_learn: bool,
 ) -> None:
@@ -1061,6 +1112,10 @@ def _run_upgrade(
         installer_path: Installer directory.
         workarea_path: Workarea directory.
         backup_path: File to back up the database into, or None to skip the backup.
+        db_port: Postgres port, to rebuild the internal database.
+        db_user: Postgres user, to rebuild the internal database.
+        db_password: Postgres password, to rebuild the internal database.
+        db_name: Postgres database name, to rebuild the internal database.
         skip_python_requirements: Whether to skip installing the products' python requirements.
         with_learn: Whether to run 'kbot.sh learn' after loading.
 
@@ -1093,6 +1148,16 @@ def _run_upgrade(
     if not skip_python_requirements:
         install_product_python_requirements(installer_path)
 
+    _rebuild_database_on_pg_major_change(
+        installer_path,
+        workarea_path,
+        backup_path,
+        db_port=db_port,
+        db_user=db_user,
+        db_password=db_password,
+        db_name=db_name,
+    )
+
     run_workarea_script(workarea_path, "pg.sh", "start")
     run_workarea_script(workarea_path, "redis.sh", "start")
     run_workarea_script(workarea_path, "upgrade_db.sh")
@@ -1104,6 +1169,75 @@ def _run_upgrade(
         run_kbot_command(workarea_path, "learn")
 
     run_kbot_command(workarea_path, "restart")
+
+
+def _rebuild_database_on_pg_major_change(
+    installer_path: Path,
+    workarea_path: Path,
+    backup_path: Path | None,
+    *,
+    db_port: int,
+    db_user: str,
+    db_password: str,
+    db_name: str,
+) -> None:
+    """Rebuild the internal database when the new 3rdparty ships another PostgreSQL major version.
+
+    PostgreSQL does not start on a data directory initialized by another major
+    version, and the binaries of the previous one are gone with the previous
+    3rdparty: the database can only be rebuilt from the backup taken before
+    upgrading. Nothing is done for an external database (no '<workarea>/var/db').
+
+    Args:
+        installer_path: Installer directory, holding the new 3rdparty.
+        workarea_path: Workarea directory, holding the internal database.
+        backup_path: Backup taken before upgrading, or None if skipped.
+        db_port: Postgres port.
+        db_user: Postgres user.
+        db_password: Postgres password.
+        db_name: Postgres database name.
+
+    Raises:
+        RuntimeError: If the database must be rebuilt but no backup was taken.
+        TypeError: If the database built for the workarea is not the internal one.
+
+    """
+    pg_version = resolve_pg_version(installer_path)
+    if pg_version is None:
+        return
+    prepend_thirdparty_ld_library_path(installer_path)
+    db = create_database(
+        db_host=None,
+        db_port=db_port,
+        db_user=db_user,
+        password=db_password,
+        db_name=db_name,
+        workarea_path=workarea_path,
+        pg_dir=_resolve_pg_dir(installer_path),
+    )
+    if not isinstance(db, InternalDatabase):
+        msg = f"Expected the internal database backend, got '{type(db).__name__}'."
+        raise TypeError(msg)
+
+    data_version = db.data_major_version()
+    if data_version is None or data_version == major_version(pg_version):
+        return
+
+    pg_data = workarea_path / "var" / "db"
+    if backup_path is None:
+        msg = (
+            f"'{pg_data}' was created by PostgreSQL {data_version}, which PostgreSQL {pg_version} "
+            "cannot start, and '--no-backup' was given: there is no backup to rebuild it from. "
+            f"Move '{pg_data}' aside, create a new cluster and load your own dump with 'bin/restore_db.sh'."
+        )
+        raise RuntimeError(msg)
+
+    previous_data = pg_data.with_name(f"db_pg{data_version}_{datetime.now().astimezone():%Y%m%d_%H%M%S}")
+    click.echo(
+        f"PostgreSQL {data_version} -> {pg_version}: rebuilding the database from '{backup_path}' "
+        f"(previous data directory moved to '{previous_data}')..."
+    )
+    db.rebuild_from_backup(backup_path, previous_data)
 
 
 @cli.command(name="load")

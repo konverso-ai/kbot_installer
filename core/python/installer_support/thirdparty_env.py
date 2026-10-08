@@ -123,6 +123,23 @@ def resolve_pg_dir(installer_path: Path) -> Path | None:
     return Path(pg_dir) if pg_dir else None
 
 
+def resolve_pg_version(installer_path: Path) -> str | None:
+    """Resolve ``PG_VERSION`` (e.g. '16.10') from ``<installer>/3rdparty/versions.env``.
+
+    Args:
+        installer_path: Installer directory holding the downloaded products.
+
+    Returns:
+        The PostgreSQL version shipped by 3rdparty, or ``None`` when the
+        ``versions.env`` file is missing or does not define ``PG_VERSION``.
+
+    """
+    variables = _load_versions(installer_path)
+    if not variables:
+        return None
+    return variables.get("PG_VERSION") or None
+
+
 def resolve_site_packages_dir(installer_path: Path) -> Path | None:
     """Resolve the 3rdparty Python interpreter's ``site-packages`` directory.
 

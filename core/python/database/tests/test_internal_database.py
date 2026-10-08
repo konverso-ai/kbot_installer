@@ -59,6 +59,86 @@ class TestPrepare:
             mock_database.assert_called_once_with()
 
 
+class TestRebuildFromBackup:
+    """Test cases for InternalDatabase.rebuild_from_backup."""
+
+    @pytest.fixture
+    def old_cluster(self, settings: InternalDbSettings) -> Path:
+        settings.pg_data.mkdir(parents=True)
+        (settings.pg_data / "PG_VERSION").write_text("11\n")
+        return settings.pg_data.with_name("data_pg11")
+
+    def test_rebuildfrombackup_valid_moves_data_then_recreates_and_loads_backup(
+        self, db: InternalDatabase, settings: InternalDbSettings, old_cluster: Path, tmp_path: Path
+    ) -> None:
+        backup = tmp_path / "backup.sql"
+        manager = MagicMock()
+        manager.prepare.side_effect = lambda: manager.data_moved(
+            not settings.pg_data.exists() and (old_cluster / "PG_VERSION").is_file()
+        )
+        with (
+            patch("database.internal_database.postgres_cluster.is_running", return_value=False),
+            patch("database.internal_database.postgres_cluster.stop", manager.stop),
+            patch("database.internal_database.drop_owned_objects", manager.drop_owned_objects),
+            patch("database.internal_database.execute_sql_file", manager.execute_sql_file),
+            patch.object(db, "prepare", manager.prepare),
+        ):
+            db.rebuild_from_backup(backup, old_cluster)
+
+        assert [name for name, _, _ in manager.mock_calls] == [
+            "prepare",
+            "data_moved",
+            "drop_owned_objects",
+            "execute_sql_file",
+            "stop",
+        ]
+        manager.data_moved.assert_called_once_with(True)  # noqa: FBT003
+        manager.execute_sql_file.assert_called_once_with(settings, backup)
+
+    def test_rebuildfrombackup_invalid_stops_new_server_when_loading_fails(
+        self, db: InternalDatabase, old_cluster: Path, tmp_path: Path
+    ) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_running", return_value=False),
+            patch("database.internal_database.postgres_cluster.stop") as mock_stop,
+            patch("database.internal_database.drop_owned_objects"),
+            patch("database.internal_database.execute_sql_file", side_effect=RuntimeError("bad dump")),
+            patch.object(db, "prepare"),
+            pytest.raises(RuntimeError, match="bad dump"),
+        ):
+            db.rebuild_from_backup(tmp_path / "backup.sql", old_cluster)
+
+        mock_stop.assert_called_once()
+        assert (old_cluster / "PG_VERSION").is_file()
+
+    def test_rebuildfrombackup_invalid_refuses_running_server(
+        self, db: InternalDatabase, settings: InternalDbSettings, old_cluster: Path, tmp_path: Path
+    ) -> None:
+        with (
+            patch("database.internal_database.postgres_cluster.is_running", return_value=True),
+            patch.object(db, "prepare") as mock_prepare,
+            pytest.raises(postgres_cluster.PostgresClusterError, match="still running"),
+        ):
+            db.rebuild_from_backup(tmp_path / "backup.sql", old_cluster)
+
+        mock_prepare.assert_not_called()
+        assert (settings.pg_data / "PG_VERSION").is_file()
+
+    def test_rebuildfrombackup_invalid_refuses_existing_destination(
+        self, db: InternalDatabase, settings: InternalDbSettings, old_cluster: Path, tmp_path: Path
+    ) -> None:
+        old_cluster.mkdir()
+        with (
+            patch("database.internal_database.postgres_cluster.is_running", return_value=False),
+            patch.object(db, "prepare") as mock_prepare,
+            pytest.raises(FileExistsError),
+        ):
+            db.rebuild_from_backup(tmp_path / "backup.sql", old_cluster)
+
+        mock_prepare.assert_not_called()
+        assert (settings.pg_data / "PG_VERSION").is_file()
+
+
 class TestCheckConnection:
     """Test cases for InternalDatabase.check_connection."""
 

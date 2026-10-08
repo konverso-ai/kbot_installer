@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from cli.commands import cli
+from database.internal_database import InternalDatabase
 from storage.base import StorageBackendEnum
 from updatable.factory import UpdatableName
 from upgradable.errors import UpgradeError
@@ -1646,8 +1647,9 @@ class TestUpgradeCommand:
 
     @pytest.fixture(autouse=True)
     def _env(self, monkeypatch) -> None:
-        """Restore KBOT_INSTALLER, which the command exports for the kbot scripts."""
+        """Restore KBOT_INSTALLER and LD_LIBRARY_PATH, which the command exports for the kbot scripts."""
         monkeypatch.delenv("KBOT_INSTALLER", raising=False)
+        monkeypatch.delenv("LD_LIBRARY_PATH", raising=False)
 
     @pytest.fixture
     def dirs(self, tmp_path: Path) -> tuple[Path, Path]:
@@ -1699,6 +1701,8 @@ class TestUpgradeCommand:
                 calls.append(("relink",))
             elif name == "install_product_python_requirements":
                 calls.append(("requirements",))
+            elif name == "rebuild_from_backup":
+                calls.append(("rebuild",))
         return calls
 
     def test_upgrade_runs_steps_in_order(self, dirs, mocks) -> None:
@@ -1826,6 +1830,83 @@ class TestUpgradeCommand:
         assert "Error upgrading: 'upgrade_db.sh' failed (exit 1)." in result.output
         assert f"The database backup is '{backup.resolve()}'" in result.output
         assert ("kbot.sh", "restart") not in self._script_calls(mocks)
+
+    @staticmethod
+    def _set_pg_versions(installer_dir: Path, workarea_dir: Path, *, shipped: str, data: str) -> Path:
+        """Ship PostgreSQL `shipped` in the installer's 3rdparty; create `data` in the workarea's 'var/db'."""
+        thirdparty = installer_dir / "3rdparty"
+        thirdparty.mkdir()
+        (thirdparty / "versions.env").write_text(
+            f"PG_VERSION={shipped}\nPG_DIR=${{THIRDPARTY_HOME}}/postgresql-${{PG_VERSION}}\n", encoding="utf-8"
+        )
+        pg_data = workarea_dir / "var" / "db"
+        pg_data.mkdir(parents=True)
+        (pg_data / "PG_VERSION").write_text(f"{data}\n", encoding="utf-8")
+        return pg_data
+
+    def test_upgrade_pg_major_change_rebuilds_database_from_backup(self, dirs, mocks) -> None:
+        """A new PostgreSQL major version rebuilds 'var/db' from the backup before the DB scripts start it."""
+        installer_dir, workarea_dir = dirs
+        pg_data = self._set_pg_versions(installer_dir, workarea_dir, shipped="16.10", data="11")
+        backup = installer_dir / "kbot.sql"
+
+        with patch.object(InternalDatabase, "rebuild_from_backup") as mock_rebuild:
+            mocks.attach_mock(mock_rebuild, "rebuild_from_backup")
+            result = self.runner.invoke(
+                cli,
+                self._args(
+                    installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y", "--backup-file", str(backup)
+                ),
+            )
+
+        assert result.exit_code == 0, result.output
+        backup_path, previous_data = mock_rebuild.call_args.args
+        assert backup_path == backup.resolve()
+        assert re.fullmatch(re.escape(str(pg_data.parent)) + r"/db_pg11_\d{8}_\d{6}", str(previous_data))
+        assert self._script_calls(mocks)[2:] == [
+            ("kbot.sh", "stop"),
+            ("apply",),
+            ("relink",),
+            ("requirements",),
+            ("rebuild",),
+            ("pg.sh", "start"),
+            ("redis.sh", "start"),
+            ("upgrade_db.sh",),
+            ("upgrade_patch.sh",),
+            ("kbot.sh", "load"),
+            ("kbot.sh", "restart"),
+        ]
+        assert "PostgreSQL 11 -> 16.10: rebuilding the database" in result.output
+
+    @pytest.mark.parametrize(("shipped", "data"), [("16.10", "16"), ("9.6.1", "9.6")])
+    def test_upgrade_same_pg_major_keeps_database(self, dirs, mocks, shipped, data) -> None:
+        """The same PostgreSQL major version keeps 'var/db' as is."""
+        installer_dir, workarea_dir = dirs
+        self._set_pg_versions(installer_dir, workarea_dir, shipped=shipped, data=data)
+
+        with patch.object(InternalDatabase, "rebuild_from_backup", autospec=True) as mock_rebuild:
+            result = self.runner.invoke(
+                cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y")
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_rebuild.assert_not_called()
+
+    def test_upgrade_pg_major_change_without_backup_fails_before_db_scripts(self, dirs, mocks) -> None:
+        """With '--no-backup', a new PostgreSQL major version aborts, leaving 'var/db' in place."""
+        installer_dir, workarea_dir = dirs
+        pg_data = self._set_pg_versions(installer_dir, workarea_dir, shipped="16.10", data="11")
+
+        with patch.object(InternalDatabase, "rebuild_from_backup", autospec=True) as mock_rebuild:
+            result = self.runner.invoke(
+                cli, self._args(installer_dir, workarea_dir, "-p", "site", "-v", "2026.01", "-y", "--no-backup")
+            )
+
+        assert result.exit_code != 0
+        assert "created by PostgreSQL 11, which PostgreSQL 16.10 cannot start" in result.output
+        mock_rebuild.assert_not_called()
+        assert (pg_data / "PG_VERSION").is_file()
+        assert ("upgrade_db.sh",) not in self._script_calls(mocks)
 
 
 class TestCommandIntegration:

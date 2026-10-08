@@ -43,6 +43,26 @@ class TestIsInitialized:
         assert postgres_cluster.is_initialized(settings) is False
 
 
+class TestMajorVersion:
+    """Test cases for major_version and data_major_version."""
+
+    @pytest.mark.parametrize(
+        ("version", "expected"),
+        [("9.6.1", "9.6"), ("9.6", "9.6"), ("10.4", "10"), ("11", "11"), ("16.10", "16"), (" 16\n", "16")],
+    )
+    def test_majorversion_valid_matches_pgversion_file_format(self, version: str, expected: str) -> None:
+        assert postgres_cluster.major_version(version) == expected
+
+    def test_datamajorversion_valid_reads_pgversion(self, settings: InternalDbSettings) -> None:
+        settings.pg_data.mkdir(parents=True)
+        (settings.pg_data / "PG_VERSION").write_text("11\n")
+
+        assert postgres_cluster.data_major_version(settings) == "11"
+
+    def test_datamajorversion_valid_returns_none_when_not_initialized(self, settings: InternalDbSettings) -> None:
+        assert postgres_cluster.data_major_version(settings) is None
+
+
 class TestInitdb:
     """Test cases for initdb."""
 
