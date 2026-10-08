@@ -187,6 +187,16 @@ class TestCopySource:
 
         assert target.read_text() == "home=/work"
 
+    def test_skips_dangling_symlink(self, tmp_path: Path) -> None:
+        source = tmp_path / "marked"
+        source.symlink_to("/home/runner/work/kbot/build/marked.js")
+        target = tmp_path / "work" / "marked"
+
+        copy_source(source, target)
+
+        assert not target.exists()
+        assert not target.is_symlink()
+
 
 class TestIterSources:
     def test_recursive_yields_nested_files(self, tmp_path: Path) -> None:
