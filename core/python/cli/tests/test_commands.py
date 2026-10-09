@@ -1799,6 +1799,7 @@ class TestUpgradeCommand:
             product="site",
             version="2026.01",
             bundle=None,
+            branch=None,
             provider=(),
             verbose=False,
         )
@@ -1853,6 +1854,8 @@ class TestUpgradeCommand:
             (("-p", "site", "-v", "2026.01"), True, "was installed from a bundle"),
             (("-p", "site"), False, "Options '-p/--product' and '-v/--version' are required"),
             ((), True, "Option '-v/--version' is required."),
+            (("-p", "site", "-B", "KB-1"), False, "Option '-B/--branch' requires '-v/--version'."),
+            (("-b", "ev-basic-2026.01.0003", "-B", "KB-1"), False, "Option '-B/--branch' requires '-v/--version'."),
         ],
     )
     def test_upgrade_rejects_inconsistent_options(self, dirs, mocks, extra, bundle_installed, message) -> None:
