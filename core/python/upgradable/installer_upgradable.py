@@ -4,8 +4,10 @@ The target is either an installed product with its dependency closure
 (``product`` + ``version``) or a bundle (an exact bundle name, or the latest
 bundle of the installed bundle's name for ``version``). :meth:`InstallerUpgradable.check`
 validates the installer without modifying it; :meth:`InstallerUpgradable.apply`
-then checks out the git working copies on the release branch, replaces the
-storage downloads, and removes the products the new target no longer needs.
+then checks out the git working copies on the target branch (the release branch
+of the version, or an explicit ``branch``, falling back to each repository's
+default branch), replaces the storage downloads, and removes the products the
+new target no longer needs.
 """
 
 from __future__ import annotations
@@ -49,6 +51,9 @@ if TYPE_CHECKING:
 
 log = logger.get_package_logger("upgradable")
 
+# Default branch of a working copy whose clone did not record origin's HEAD.
+_FALLBACK_DEFAULT_BRANCH = "master"
+
 
 @dataclass(frozen=True)
 class UpgradeOutcome:
@@ -73,9 +78,14 @@ class InstallerUpgradable:
     upgrade ``product`` and its dependencies to ``version``; else → upgrade to the
     latest bundle of the installed bundle's name for ``version``.
 
+    Git working copies move to the target branch: ``branch`` if given, else the
+    release branch of the version. A working copy lacking it moves to its
+    default branch (``origin/HEAD``, else ``master``) instead.
+
     Attributes:
         installer_path: Installer directory holding the products.
         target: Human-readable description of the upgrade target, set by :meth:`check`.
+        notes: Working copies that will not move to the target branch as is, set by :meth:`check`.
 
     """
 
@@ -87,6 +97,7 @@ class InstallerUpgradable:
         product: str | None = None,
         version: str | None = None,
         bundle: str | None = None,
+        branch: str | None = None,
         provider: tuple[str, ...] = (),
         verbose: bool = False,
     ) -> None:
@@ -98,6 +109,8 @@ class InstallerUpgradable:
             product: Product to upgrade with its dependencies (product mode).
             version: Target version (e.g. ``2026.01``); unused when ``bundle`` is set.
             bundle: Exact bundle descriptor name to upgrade to.
+            branch: Branch to move the git working copies to (and, in product mode,
+                to download the new products from) instead of the version's release branch.
             provider: Providers to download products with in product mode; empty for the default order.
             verbose: Whether to enable verbose logging.
 
@@ -107,14 +120,18 @@ class InstallerUpgradable:
         self.product = product
         self.version = version
         self.bundle = bundle
+        self.branch = branch
         self.provider = provider
         self.verbose = verbose
         self.target = ""
+        self.notes: list[str] = []
         self._entries: list[tuple[Path, Product]] = []
         self._branch: str | None = None
         self._bundle_name: str | None = None
         self._bundle_products: set[str] | None = None
         self._versioners: dict[Path, VersionerBase] = {}
+        # Branch each upgraded git working copy moves to, and whether origin has it (pulled then).
+        self._git_branches: dict[Path, tuple[str, bool]] = {}
 
     @property
     def _product_mode(self) -> bool:
@@ -125,13 +142,16 @@ class InstallerUpgradable:
 
         Every problem is collected before failing: unknown product or bundle,
         target not newer, symlinked or locally built products, git working
-        copies with uncommitted changes or without the release branch.
+        copies with uncommitted changes or with neither the target branch nor
+        their default branch.
 
         Raises:
             UpgradeError: If the installer is not ready for the upgrade.
 
         """
         self._entries = InstallerService(self.installer_path).load_product_dirs()
+        self.notes = []
+        self._git_branches = {}
         problems: list[str] = []
         if self._product_mode:
             self._resolve_product_target(problems)
@@ -172,7 +192,7 @@ class InstallerUpgradable:
             problems.append(f"Product '{self.product}' is not installed in '{self.installer_path}'")
         elif installed.version and (target.major, target.minor) <= (installed.version.major, installed.version.minor):
             problems.append(f"'{self.product}' is at version {installed.version.to_json_str()}: {version} is not newer")
-        self._branch = version_to_branch(version)
+        self._branch = self.branch or version_to_branch(version)
         self.target = f"product {self.product} {bare_version} (branch {self._branch})"
 
     def _resolve_bundle_target(self, problems: list[str]) -> None:
@@ -210,13 +230,13 @@ class InstallerUpgradable:
             problems.append(
                 f"Bundle {name} is not newer than the installed {current.name} {current.version.to_json_str()}"
             )
-        self._branch = version_to_branch(f"{new.version.major}.{new.version.minor:02d}")
+        self._branch = self.branch or version_to_branch(f"{new.version.major}.{new.version.minor:02d}")
         self._bundle_name = name
         self._bundle_products = {p.name for p in new.versions}
         self.target = f"bundle {name} (branch {self._branch})"
 
     def _is_upgraded_git_copy(self, product: Product) -> bool:
-        """Tell whether a git working copy of product is moved to the release branch.
+        """Tell whether a git working copy of product is moved to the target branch.
 
         In product mode the new dependency closure is only known once the new
         branches are checked out, so every working copy is moved.
@@ -227,7 +247,11 @@ class InstallerUpgradable:
         return self._bundle_products is not None and product.name in self._bundle_products
 
     def _check_git_working_copy(self, path: Path, product: Product) -> str | None:
-        """Check a git working copy is clean and has the release branch.
+        """Check a git working copy is clean and resolve the branch it moves to.
+
+        The target branch is used if it exists locally or on origin, else the
+        repository's default branch (``origin/HEAD``, else ``master``). The
+        chosen branch is pulled only if origin has it.
 
         Args:
             path: Working copy folder.
@@ -246,19 +270,31 @@ class InstallerUpgradable:
             if self._branch is None or not self._is_upgraded_git_copy(product):
                 return None
             versioner.fetch(path)
-            if versioner.select_branch(path, [self._branch]) is None:
-                return f"branch '{self._branch}' not found locally or on origin"
+            remote = set(versioner.list_remote_tracking_branches(path))
+            local = set(versioner.list_local_branches(path))
+            default = versioner.default_remote_branch(path) or _FALLBACK_DEFAULT_BRANCH
         except (VersionerError, ValueError, OSError) as e:
             return str(e)
+
+        candidates = list(dict.fromkeys([self._branch, default]))
+        branch = next((b for b in candidates if b in remote or b in local), None)
+        if branch is None:
+            return f"none of the branches {', '.join(repr(b) for b in candidates)} found locally or on origin"
+        on_origin = branch in remote
+        self._git_branches[path] = (branch, on_origin)
+        if branch != self._branch:
+            self.notes.append(f"{path.name}: branch '{self._branch}' not found, using default branch '{branch}'")
+        if not on_origin:
+            self.notes.append(f"{path.name}: branch '{branch}' is not on origin, it will not be pulled")
         return None
 
     def apply(self) -> UpgradeOutcome:
         """Move the installer to the target checked by :meth:`check`.
 
-        Git working copies are checked out on the release branch and pulled;
-        storage downloads are deleted then downloaded again from the new target;
-        products outside the new target are removed (git working copies are
-        moved to ``.removed_<timestamp>/``, other folders deleted).
+        Git working copies are checked out on the branch resolved by :meth:`check`
+        and pulled if origin has it; storage downloads are deleted then downloaded
+        again from the new target; products outside the new target are removed
+        (git working copies are moved to ``.removed_<timestamp>/``, other folders deleted).
 
         Returns:
             The products added and removed.
@@ -270,14 +306,14 @@ class InstallerUpgradable:
         if self._branch is None:
             msg = "The upgrade target is not resolved: run check() first"
             raise UpgradeError(msg)
-        branch = self._branch
         timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
         old_names = {path.name for path, _ in self._entries}
 
-        for path, product in self._entries:
+        for path, _ in self._entries:
             kind = ProductDownloadable.local_copy_kind(path)
-            if kind == LOCAL_GIT_WORKING_COPY and self._is_upgraded_git_copy(product):
-                self._checkout_release_branch(path, branch)
+            if kind == LOCAL_GIT_WORKING_COPY and path in self._git_branches:
+                branch, on_origin = self._git_branches[path]
+                self._checkout_branch(path, branch, on_origin=on_origin)
             elif kind is None:
                 log.info("Removing %s before downloading its new version", path.name)
                 shutil.rmtree(path)
@@ -286,6 +322,7 @@ class InstallerUpgradable:
             build_downloadable(
                 product=self.product or "",
                 version=self.version,
+                branch=self.branch,
                 bundle=None,
                 installer_path=self.installer_path,
                 provider=self.provider,
@@ -309,12 +346,13 @@ class InstallerUpgradable:
             moved_dir=moved_dir,
         )
 
-    def _checkout_release_branch(self, path: Path, branch: str) -> None:
-        """Check out a git working copy on branch, then pull it.
+    def _checkout_branch(self, path: Path, branch: str, *, on_origin: bool) -> None:
+        """Check out a git working copy on branch, then pull it if origin has it.
 
         Args:
             path: Working copy folder.
-            branch: Release branch to move to.
+            branch: Branch to move to.
+            on_origin: Whether origin has branch.
 
         """
         versioner = self._versioners.get(path) or add_versioner_for_repository_remote(path)
@@ -324,7 +362,8 @@ class InstallerUpgradable:
             current = None
         if current != branch:
             versioner.checkout(path, branch)
-        versioner.pull(path, branch)
+        if on_origin:
+            versioner.pull(path, branch)
         log.info("Checked out %s on %s", path.name, branch)
 
     def _remove_products_outside_target(self, timestamp: str) -> Path | None:
