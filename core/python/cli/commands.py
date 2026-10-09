@@ -806,6 +806,16 @@ def update(
     help="Exact bundle descriptor to upgrade to (e.g. 'ev-basic-2026.01.0003').",
 )
 @click.option(
+    "-B",
+    "--branch",
+    type=str,
+    default=None,
+    help=(
+        "Branch to move the git working copies to (and to download the new products from with "
+        "'-p/--product') instead of 'release-<version>-dev'. Requires '-v/--version'."
+    ),
+)
+@click.option(
     "-i",
     "--installer-dir",
     type=click.Path(),
@@ -913,6 +923,7 @@ def upgrade(
     version: str | None,
     bundle: str | None,
     *,
+    branch: str | None = None,
     provider: tuple[str, ...] = (),
     storage: str = StorageBackendEnum.NEXUS.value,
     backup_file: str | None = None,
@@ -934,11 +945,13 @@ def upgrade(
 
     \b
     1. Check the installer, without modifying it: symlinked or locally built
-       products, and git working copies with uncommitted changes or without
-       the 'release-<version>-dev' branch, cancel the upgrade.
+       products, and git working copies with uncommitted changes or with
+       neither the target branch ('release-<version>-dev', or '-B/--branch')
+       nor their default branch, cancel the upgrade.
     2. Back up the database ('bin/dump_db.sh').
     3. Stop kbot ('kbot.sh stop').
-    4. Check out the git working copies on the release branch, download the
+    4. Check out the git working copies on the target branch (on their default
+       branch, origin's HEAD or else 'master', if they lack it), download the
        storage products again, and remove the products no longer needed
        (git working copies are moved to '<installer-dir>/.removed_<timestamp>/').
     5. Relink the workarea (repair strategy) and install the python requirements.
@@ -953,13 +966,14 @@ def upgrade(
     \b
     Examples:
         kbot-installer upgrade -p site-konverso -v 2026.01
+        kbot-installer upgrade -p site-konverso -v 2026.01 -B KB-12345
         kbot-installer upgrade -v 2026.01 -y
         kbot-installer upgrade -b ev-basic-2026.01.0003 --backup-file ~/backups/kbot.sql
 
     """
     installer_path = Path(installer_dir)
     workarea_path = Path(workarea_dir)
-    _check_upgrade_options(installer_path, product, version, bundle, backup_file, no_backup=no_backup)
+    _check_upgrade_options(installer_path, product, version, bundle, backup_file, branch=branch, no_backup=no_backup)
     _check_kbot_workarea(workarea_path)
 
     # The kbot scripts ('upgrade_db.sh', 'upgrade_patch.sh', ...) find the products through it.
@@ -971,6 +985,7 @@ def upgrade(
         product=product,
         version=version,
         bundle=bundle,
+        branch=branch,
         provider=provider,
         verbose=verbose,
     )
@@ -980,6 +995,8 @@ def upgrade(
         click.echo(str(e), err=True)
         raise click.Abort from e
     click.echo(f"Upgrading '{installer_path}' and '{workarea_path}' to {upgradable.target}.")
+    for note in upgradable.notes:
+        click.echo(f"  - {note}")
     if not yes:
         click.confirm("Continue with upgrade?", abort=True)
 
@@ -1017,6 +1034,7 @@ def _check_upgrade_options(
     bundle: str | None,
     backup_file: str | None,
     *,
+    branch: str | None,
     no_backup: bool,
 ) -> None:
     """Check the 'upgrade' options select exactly one target.
@@ -1026,6 +1044,7 @@ def _check_upgrade_options(
         product: '-p/--product' value.
         version: '-v/--version' value.
         bundle: '-b/--bundle' value.
+        branch: '-B/--branch' value.
         backup_file: '--backup-file' value.
         no_backup: '--no-backup' flag.
 
@@ -1036,6 +1055,9 @@ def _check_upgrade_options(
     bundle_installed = (installer_path / LOCAL_BUNDLE_FILE_NAME).is_file()
     if backup_file and no_backup:
         msg = "Options '--backup-file' and '--no-backup' are mutually exclusive."
+        raise click.UsageError(msg)
+    if branch and not version:
+        msg = "Option '-B/--branch' requires '-v/--version'."
         raise click.UsageError(msg)
     if bundle and (product or version):
         msg = (
