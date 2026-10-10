@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from installer_support.thirdparty_env import resolve_site_packages_dir
+from interactivity.base import InteractivePrompter
 from utils.Logger import logger
 from utils.product.product import Product
 from workarea.rule_action import RuleAction
@@ -126,17 +127,15 @@ def repair_broken_links(paths: Iterable[Path], *, interactive: bool = False) -> 
     Args:
         paths: Paths to check for broken symlinks (e.g. `work_root.rglob("*")`).
         interactive: If True, prompt for confirmation before removing each broken
-            symlink; otherwise remove them all without asking.
+            symlink (an empty answer means yes); otherwise remove them all without asking.
 
     """
     for path in paths:
         if not is_broken_symlink(path=path):
             continue
 
-        if interactive:
-            answer = input(f"Broken symlink {path}. Rebuild it? [y/N] ")
-            if answer.lower() not in {"y", "yes"}:
-                continue
+        if interactive and not InteractivePrompter().ask_yn(f"Broken symlink {path}. Rebuild it? [Y/n] "):
+            continue
 
         path.unlink()
 
@@ -529,10 +528,8 @@ def cleanup_unused_tests_dir(work_root: Path, products_root: Iterable[Path], *, 
     if any((product_root / "tests").exists() for product_root in products_root):
         return
 
-    if interactive:
-        answer = input(f"Not used directory 'tests' ({tests_dir}). Remove it? [Y/n] ")
-        if answer not in {"y", "yes"}:
-            return
+    if interactive and not InteractivePrompter().ask_yn(f"Not used directory 'tests' ({tests_dir}). Remove it? [Y/n] "):
+        return
 
     shutil.rmtree(tests_dir)
 

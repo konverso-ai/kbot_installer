@@ -1141,7 +1141,7 @@ class TestUpdateCommand:
 
         assert result.exit_code == 0, result.output
         mock_build_workarea.assert_called_once_with(installer_path=installer_dir, workarea_path=workarea_dir)
-        assert mock_build_workarea.return_value.update_mode is True
+        assert mock_build_workarea.return_value.update_mode is False
         mock_workarea_updatable.assert_called_once_with(
             installable=mock_build_workarea.return_value,
             mode=UpdatableName.REPAIR,
@@ -1150,13 +1150,13 @@ class TestUpdateCommand:
 
     @patch("cli.commands.WorkareaUpdatable")
     @patch("cli.commands.build_workarea")
-    def test_update_workarea_defaults_how_to_smooth(
+    def test_update_workarea_defaults_how_to_interactive(
         self,
         mock_build_workarea,
         mock_workarea_updatable,
         tmp_path,
     ) -> None:
-        """--how defaults to 'smooth' when not specified."""
+        """--how defaults to 'interactive', the only strategy allowed to prompt."""
         mock_build_workarea.return_value = MagicMock()
 
         result = self.runner.invoke(
@@ -1172,7 +1172,8 @@ class TestUpdateCommand:
         )
 
         assert result.exit_code == 0, result.output
-        assert mock_workarea_updatable.call_args.kwargs["mode"] == UpdatableName.SMOOTH
+        assert mock_workarea_updatable.call_args.kwargs["mode"] == UpdatableName.INTERACTIVE
+        assert mock_build_workarea.return_value.update_mode is True
 
     def test_update_requires_a_target(self, tmp_path) -> None:
         """Update fails when no target (--installer or --workarea) is specified."""

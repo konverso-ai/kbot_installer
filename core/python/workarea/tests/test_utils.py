@@ -585,6 +585,18 @@ class TestCleanupUnusedTestsDir:
 
         assert not tests_dir.exists()
 
+    def test_interactive_removes_on_empty_answer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pressing Enter accepts the [Y/n] default."""
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+
+        cleanup_unused_tests_dir(tmp_path, [], interactive=True)
+
+        assert not tests_dir.exists()
+
     def test_interactive_keeps_on_refusal(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -651,6 +663,18 @@ class TestRepairBrokenLinks:
         broken_link = work_root / "broken_link"
         broken_link.symlink_to(work_root / "missing")
         monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+
+        repair_broken_links(work_root.rglob("*"), interactive=True)
+
+        assert not broken_link.exists()
+
+    def test_interactive_removes_link_on_empty_answer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pressing Enter accepts the [Y/n] default."""
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        broken_link = work_root / "broken_link"
+        broken_link.symlink_to(work_root / "missing")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
         repair_broken_links(work_root.rglob("*"), interactive=True)
 

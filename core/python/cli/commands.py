@@ -670,7 +670,7 @@ def install(
 @click.option(
     "--how",
     type=_HOW_CHOICES,
-    default=UpdatableName.SMOOTH.value,
+    default=UpdatableName.INTERACTIVE.value,
     show_default=True,
     help="Update strategy to apply.",
 )
@@ -717,7 +717,7 @@ def update(
     *,
     installer: bool = False,
     workarea: bool = False,
-    how: str = UpdatableName.SMOOTH.value,
+    how: str = UpdatableName.INTERACTIVE.value,
     storage: str = StorageBackendEnum.NEXUS.value,
     skip_python_requirements: bool = False,
     verbose: bool = False,
@@ -762,8 +762,10 @@ def update(
                 installer_path=installer_path,
                 workarea_path=Path(workarea_dir),
             )
-            installable.update_mode = True
-            WorkareaUpdatable(installable=installable, mode=UpdatableName(how))()
+            mode = UpdatableName(how)
+            # Only the interactive strategy may prompt (e.g. before removing the unused 'tests' directory).
+            installable.update_mode = mode == UpdatableName.INTERACTIVE
+            WorkareaUpdatable(installable=installable, mode=mode)()
 
         if not skip_python_requirements:
             install_product_python_requirements(installer_path)
