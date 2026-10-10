@@ -1178,7 +1178,6 @@ def _run_upgrade(
         click.echo(f"Removed git working copies moved to '{outcome.moved_dir}'.")
 
     installable = build_workarea(installer_path=installer_path, workarea_path=workarea_path)
-    installable.update_mode = True
     WorkareaUpdatable(installable=installable, mode=UpdatableName.REPAIR)()
 
     # Before the database step: patch scripts may import the new requirements.
