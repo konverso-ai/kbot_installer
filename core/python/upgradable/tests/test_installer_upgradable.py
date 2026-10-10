@@ -143,6 +143,47 @@ class TestCheck:
             _product_upgrade(installer).check()
 
 
+class TestForce:
+    """'force' keeps symlinked and locally built products instead of cancelling the upgrade."""
+
+    def test_local_build_and_symlink_are_kept_while_git_copies_move(self, tmp_path: Path, installer: Path) -> None:
+        """With force, a local build and a symlink are kept (even outside the target); demo still moves."""
+        upstream = tmp_path / "up"
+        _make_upstream(upstream, "release-2025.03-dev", _xml("demo", "2025.03"))
+        _branch_upstream(upstream, "release-2025.03-dev", "release-2026.01-dev", _xml("demo", "2026.01"))
+        demo = installer / "demo"
+        _clone(upstream, demo, "release-2025.03-dev")
+        local = installer / "local"
+        local.mkdir()
+        (local / "description.xml").write_text(_xml("local", "2025.03"), encoding="utf-8")
+        linked_source = tmp_path / "git" / "linked"
+        linked_source.mkdir(parents=True)
+        (linked_source / "description.xml").write_text(_xml("linked", "2025.03"), encoding="utf-8")
+        (installer / "linked").symlink_to(linked_source)
+        upgradable = InstallerUpgradable(
+            installer_path=installer,
+            storage_backend=StorageBackendEnum.NEXUS,
+            product="demo",
+            version="2026.01",
+            force=True,
+        )
+
+        with patch("upgradable.installer_upgradable.build_downloadable"):
+            upgradable.check()
+            outcome = upgradable.apply()
+
+        assert compare(
+            "eq",
+            sorted(upgradable.notes),
+            ["linked: local symlink kept as is (--force)", "local: local build kept as is (--force)"],
+        )
+        assert compare("eq", DulwichVersioner().current_branch(demo), "release-2026.01-dev")
+        assert compare("eq", (local / "description.xml").is_file(), True)
+        assert compare("eq", (installer / "linked").is_symlink(), True)
+        assert compare("eq", (linked_source / "description.xml").is_file(), True)
+        assert compare("eq", outcome.removed, [])
+
+
 class TestProductUpgrade:
     """Product mode moves the product and its new dependency closure, and drops the rest."""
 
