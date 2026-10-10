@@ -330,6 +330,103 @@ class TestApplyRule:
         assert (work_root / "elsewhere" / "a.py").is_symlink()
         assert not (work_root / "core").exists()
 
+    @staticmethod
+    def _copy_setup(tmp_path: Path, source_text: str, target_text: str) -> tuple[Path, Path, Path]:
+        product_root = tmp_path / "product"
+        (product_root / "core").mkdir(parents=True)
+        source_file = product_root / "core" / "a.py"
+        source_file.write_text(source_text)
+        work_root = tmp_path / "work"
+        target = work_root / "core" / "a.py"
+        target.parent.mkdir(parents=True)
+        target.write_text(target_text)
+        return product_root, work_root, target
+
+    def test_refresh_rewrites_outdated_copy(self, tmp_path: Path) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "new", "old")
+
+        rule = _rule(source=Path("core"), action=RuleAction.COPY, refresh=True)
+        apply_rule(product_root, work_root, rule, runtime_variables={})
+
+        assert target.read_text() == "new"
+        assert not target.is_symlink()
+
+    def test_refresh_replaces_symlink_target_without_touching_source(self, tmp_path: Path) -> None:
+        product_root = tmp_path / "product"
+        (product_root / "core").mkdir(parents=True)
+        source_file = product_root / "core" / "a.py"
+        source_file.write_text("src")
+        work_root = tmp_path / "work"
+        target = work_root / "core" / "a.py"
+        target.parent.mkdir(parents=True)
+        target.symlink_to(source_file)
+
+        rule = _rule(
+            source=Path("core"),
+            action=RuleAction.COPY,
+            placeholders=["__KBOT_HOME__"],
+            refresh=True,
+        )
+        apply_rule(product_root, work_root, rule, runtime_variables={"__KBOT_HOME__": "/work"})
+
+        assert not target.is_symlink()
+        assert target.read_text() == "src"
+        assert source_file.read_text() == "src"
+
+    def test_refresh_compares_rendered_placeholders(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "home=__KBOT_HOME__", "home=/work")
+
+        def _no_prompt(_prompt: str) -> str:
+            raise AssertionError("up-to-date rendered copy must not prompt")
+
+        monkeypatch.setattr("builtins.input", _no_prompt)
+
+        rule = _rule(
+            source=Path("core"),
+            action=RuleAction.COPY,
+            placeholders=["__KBOT_HOME__"],
+            refresh=True,
+        )
+        apply_rule(
+            product_root,
+            work_root,
+            rule,
+            runtime_variables={"__KBOT_HOME__": "/work"},
+            interactive=True,
+        )
+
+        assert target.read_text() == "home=/work"
+
+    def test_refresh_interactive_refusal_keeps_copy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "new", "old")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+        rule = _rule(source=Path("core"), action=RuleAction.COPY, refresh=True)
+        apply_rule(product_root, work_root, rule, runtime_variables={}, interactive=True)
+
+        assert target.read_text() == "old"
+
+    def test_claimed_target_not_refreshed_by_later_product(self, tmp_path: Path) -> None:
+        products = []
+        for name, text in (("product1", "first"), ("product2", "second")):
+            root = tmp_path / name
+            (root / "core").mkdir(parents=True)
+            (root / "core" / "a.py").write_text(text)
+            products.append(root)
+        work_root = tmp_path / "work"
+        rules = [_rule(source=Path("core"), action=RuleAction.COPY, refresh=True)]
+
+        for _ in range(2):
+            claimed: set[Path] = set()
+            for product_root in products:
+                apply_rules(product_root, work_root, rules, runtime_variables={}, claimed=claimed)
+
+            assert (work_root / "core" / "a.py").read_text() == "first"
+
 
 def test_apply_rules_applies_every_rule(tmp_path: Path) -> None:
     product_root = tmp_path / "product"
