@@ -43,7 +43,6 @@ def build_downloadable(
     product: str,
     version: str | None,
     bundle: str | None,
-    branch: str | None = None,
     installer_path: "Path",
     provider: tuple[str, ...] = (),
     storage_backend: "StorageBackendEnum",
@@ -56,8 +55,6 @@ def build_downloadable(
         product: Product name (top level product in bundle mode).
         version: Product version, required unless ``bundle`` is set.
         bundle: Bundle name, or None to download a single product.
-        branch: Branch to download the products from (product mode only),
-            instead of the release branch of ``version``.
         installer_path: Directory the bundle descriptor is looked up from
             (bundle mode only; product mode resolves the products relative to
             the path passed to ``download()``).
@@ -89,7 +86,7 @@ def build_downloadable(
         msg = "'version' is required when building a downloadable for a product without a bundle."
         raise ValueError(msg)
 
-    product_obj = Product(name=product, build=Build(branch=branch or version_to_branch(version)))
+    product_obj = Product(name=product, build=Build(branch=version_to_branch(version)))
     selected_providers = list(provider) if provider else list(_DEFAULT_PROVIDER_NAMES)
     selector = add_selector_provider(provider_names=selected_providers, storage_backend=storage_backend)
     return ProductDownloadable(
