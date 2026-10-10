@@ -4,10 +4,10 @@ The target is either an installed product with its dependency closure
 (``product`` + ``version``) or a bundle (an exact bundle name, or the latest
 bundle of the installed bundle's name for ``version``). :meth:`InstallerUpgradable.check`
 validates the installer without modifying it; :meth:`InstallerUpgradable.apply`
-then checks out the git working copies on the target branch (the release branch
-of the version, or an explicit ``branch``, falling back to each repository's
-default branch), replaces the storage downloads, and removes the products the
-new target no longer needs.
+then checks out the git working copies on the first branch they have among
+the explicit ``branch``, the release branch of the version and their default
+branch, replaces the storage downloads, and removes the products the new
+target no longer needs.
 """
 
 from __future__ import annotations
@@ -55,6 +55,11 @@ log = logger.get_package_logger("upgradable")
 _FALLBACK_DEFAULT_BRANCH = "master"
 
 
+def _preferred_branches(branch: str | None, release_branch: str) -> list[str]:
+    """Return the branches git working copies move to first: ``branch`` (if any), then ``release_branch``."""
+    return list(dict.fromkeys([b for b in (branch, release_branch) if b]))
+
+
 @dataclass(frozen=True)
 class UpgradeOutcome:
     """Products added to and removed from the installer by an upgrade.
@@ -78,9 +83,9 @@ class InstallerUpgradable:
     upgrade ``product`` and its dependencies to ``version``; else → upgrade to the
     latest bundle of the installed bundle's name for ``version``.
 
-    Git working copies move to the target branch: ``branch`` if given, else the
-    release branch of the version. A working copy lacking it moves to its
-    default branch (``origin/HEAD``, else ``master``) instead.
+    Git working copies move to the first branch they have among ``branch`` (if
+    given), the release branch of the version, and their default branch
+    (``origin/HEAD``, else ``master``).
 
     Attributes:
         installer_path: Installer directory holding the products.
@@ -111,8 +116,8 @@ class InstallerUpgradable:
             product: Product to upgrade with its dependencies (product mode).
             version: Target version (e.g. ``2026.01``); unused when ``bundle`` is set.
             bundle: Exact bundle descriptor name to upgrade to.
-            branch: Branch to move the git working copies to (and, in product mode,
-                to download the new products from) instead of the version's release branch.
+            branch: Branch to move the git working copies to first; those lacking it
+                fall back to the version's release branch, then to their default branch.
             provider: Providers to download products with in product mode; empty for the default order.
             force: Whether to keep symlinked and locally built products as they are
                 instead of cancelling the upgrade; they are never replaced nor removed.
@@ -131,7 +136,8 @@ class InstallerUpgradable:
         self.target = ""
         self.notes: list[str] = []
         self._entries: list[tuple[Path, Product]] = []
-        self._branch: str | None = None
+        # Branches git working copies move to, in order of preference, before their default branch.
+        self._branches: list[str] = []
         self._bundle_name: str | None = None
         self._bundle_products: set[str] | None = None
         self._versioners: dict[Path, VersionerBase] = {}
@@ -201,8 +207,8 @@ class InstallerUpgradable:
             problems.append(f"Product '{self.product}' is not installed in '{self.installer_path}'")
         elif installed.version and (target.major, target.minor) <= (installed.version.major, installed.version.minor):
             problems.append(f"'{self.product}' is at version {installed.version.to_json_str()}: {version} is not newer")
-        self._branch = self.branch or version_to_branch(version)
-        self.target = f"product {self.product} {bare_version} (branch {self._branch})"
+        self._branches = _preferred_branches(self.branch, version_to_branch(version))
+        self.target = f"product {self.product} {bare_version} (branch {self._branches[0]})"
 
     def _resolve_bundle_target(self, problems: list[str]) -> None:
         """Resolve the bundle to upgrade to and its release branch.
@@ -239,10 +245,12 @@ class InstallerUpgradable:
             problems.append(
                 f"Bundle {name} is not newer than the installed {current.name} {current.version.to_json_str()}"
             )
-        self._branch = self.branch or version_to_branch(f"{new.version.major}.{new.version.minor:02d}")
+        self._branches = _preferred_branches(
+            self.branch, version_to_branch(f"{new.version.major}.{new.version.minor:02d}")
+        )
         self._bundle_name = name
         self._bundle_products = {p.name for p in new.versions}
-        self.target = f"bundle {name} (branch {self._branch})"
+        self.target = f"bundle {name} (branch {self._branches[0]})"
 
     def _is_upgraded_git_copy(self, product: Product) -> bool:
         """Tell whether a git working copy of product is moved to the target branch.
@@ -258,9 +266,10 @@ class InstallerUpgradable:
     def _check_git_working_copy(self, path: Path, product: Product) -> str | None:
         """Check a git working copy is clean and resolve the branch it moves to.
 
-        The target branch is used if it exists locally or on origin, else the
-        repository's default branch (``origin/HEAD``, else ``master``). The
-        chosen branch is pulled only if origin has it.
+        The first branch the working copy has (locally or on origin) among the
+        preferred branches (``branch``, then the release branch) and its default
+        branch (``origin/HEAD``, else ``master``) is used. It is pulled only if
+        origin has it.
 
         Args:
             path: Working copy folder.
@@ -276,7 +285,7 @@ class InstallerUpgradable:
             if changed:
                 return format_uncommitted_changes(changed)
             self._versioners[path] = versioner
-            if self._branch is None or not self._is_upgraded_git_copy(product):
+            if not self._branches or not self._is_upgraded_git_copy(product):
                 return None
             versioner.fetch(path)
             remote = set(versioner.list_remote_tracking_branches(path))
@@ -285,14 +294,15 @@ class InstallerUpgradable:
         except (VersionerError, ValueError, OSError) as e:
             return str(e)
 
-        candidates = list(dict.fromkeys([self._branch, default]))
+        candidates = list(dict.fromkeys([*self._branches, default]))
         branch = next((b for b in candidates if b in remote or b in local), None)
         if branch is None:
             return f"none of the branches {', '.join(repr(b) for b in candidates)} found locally or on origin"
         on_origin = branch in remote
         self._git_branches[path] = (branch, on_origin)
-        if branch != self._branch:
-            self.notes.append(f"{path.name}: branch '{self._branch}' not found, using default branch '{branch}'")
+        if branch != candidates[0]:
+            fallback = "default branch" if branch not in self._branches else "branch"
+            self.notes.append(f"{path.name}: branch '{candidates[0]}' not found, using {fallback} '{branch}'")
         if not on_origin:
             self.notes.append(f"{path.name}: branch '{branch}' is not on origin, it will not be pulled")
         return None
@@ -312,7 +322,7 @@ class InstallerUpgradable:
             UpgradeError: If :meth:`check` did not resolve a target.
 
         """
-        if self._branch is None:
+        if not self._branches:
             msg = "The upgrade target is not resolved: run check() first"
             raise UpgradeError(msg)
         timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
@@ -331,7 +341,6 @@ class InstallerUpgradable:
             build_downloadable(
                 product=self.product or "",
                 version=self.version,
-                branch=self.branch,
                 bundle=None,
                 installer_path=self.installer_path,
                 provider=self.provider,
