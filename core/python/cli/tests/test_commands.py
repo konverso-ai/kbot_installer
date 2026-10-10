@@ -1801,6 +1801,7 @@ class TestUpgradeCommand:
             bundle=None,
             branch=None,
             provider=(),
+            force=False,
             verbose=False,
         )
         calls = self._script_calls(mocks)
