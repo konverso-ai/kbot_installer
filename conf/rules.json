@@ -19,13 +19,11 @@
         "action": "copy",
         "recursive": false,
         "includes": [
-            "RunBot",
             "RunBot.py",
-            "Learn",
             "Learn.py",
-            "Load",
             "Load.py"
-        ]
+        ],
+        "refresh": true
     },
     {
         "source": "rest/api",
@@ -55,9 +53,9 @@
     {
         "source": "bin",
         "action": "copy",
-        "recursive": false,
         "includes": ["rc/kbot"],
-        "placeholders": ["__KBOT_HOME__", "__KBOT_USER__"]
+        "placeholders": ["__KBOT_HOME__", "__KBOT_USER__"],
+        "refresh": true
     },
     {
         "source": "conf",

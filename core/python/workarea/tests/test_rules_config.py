@@ -45,7 +45,7 @@ class TestLoadDefaultRules:
         """Regression: RunBot.py/Learn.py/Load.py must end up as real files.
 
         The `core/python` rules link every `.py` file, then separately copy
-        RunBot(.py)/Learn(.py)/Load(.py) so these entry-point scripts are real
+        RunBot.py/Learn.py/Load.py so these entry-point scripts are real
         files (running them as a symlink resolves `sys.path[0]` to the
         product's own source dir instead of the merged workarea, breaking
         imports of files only added by other products, e.g.
@@ -75,6 +75,48 @@ class TestLoadDefaultRules:
             target = work_root / "core" / "python" / name
             assert target.is_file()
             assert not target.is_symlink()
+
+    def test_entry_point_copies_follow_product_changes(self, tmp_path: Path) -> None:
+        """Regression: re-applying the rules must refresh outdated entry-point copies.
+
+        `linkproduct.sh` re-runs the layout after `make` updated the product
+        sources; a stale workarea `RunBot.py` copy must pick up the change.
+        """
+        product_root = tmp_path / "product"
+        core_python = product_root / "core" / "python"
+        core_python.mkdir(parents=True)
+        run_bot = core_python / "RunBot.py"
+        run_bot.write_text("# old\n")
+        work_root = tmp_path / "work"
+        rules = load_default_rules()
+
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables={})
+        run_bot.write_text("# new\n")
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables={})
+
+        target = work_root / "core" / "python" / "RunBot.py"
+        assert not target.is_symlink()
+        assert target.read_text() == "# new\n"
+
+    def test_rc_kbot_is_rendered_copy_following_product_changes(self, tmp_path: Path) -> None:
+        """Regression: `bin/rc/kbot` must be a rendered copy kept in sync with the product."""
+        product_root = tmp_path / "product"
+        rc_dir = product_root / "bin" / "rc"
+        rc_dir.mkdir(parents=True)
+        rc_kbot = rc_dir / "kbot"
+        rc_kbot.write_text("home=__KBOT_HOME__ user=__KBOT_USER__\n")
+        work_root = tmp_path / "work"
+        rules = load_default_rules()
+        variables = {"__KBOT_HOME__": "/work", "__KBOT_USER__": "bob"}
+
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables=variables)
+        target = work_root / "bin" / "rc" / "kbot"
+        assert not target.is_symlink()
+        assert target.read_text() == "home=/work user=bob\n"
+
+        rc_kbot.write_text("v2 home=__KBOT_HOME__\n")
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables=variables)
+        assert target.read_text() == "v2 home=/work\n"
 
     def test_conf_layout_matches_legacy_setup_conf(self, tmp_path: Path) -> None:
         """Regression: product `conf` entries are laid out like legacy `_SetupConf`.
