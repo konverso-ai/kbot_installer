@@ -811,8 +811,8 @@ def update(
     type=str,
     default=None,
     help=(
-        "Branch to move the git working copies to (and to download the new products from with "
-        "'-p/--product') instead of 'release-<version>-dev'. Requires '-v/--version'."
+        "Branch to move the git working copies to first (e.g. a feature branch); those lacking it "
+        "move to 'release-<version>-dev', then to their default branch. Requires '-v/--version'."
     ),
 )
 @click.option(
@@ -956,14 +956,13 @@ def upgrade(
     \b
     1. Check the installer, without modifying it: symlinked or locally built
        products (kept as they are with --force), and git working copies with
-       uncommitted changes or with neither the target branch
-       ('release-<version>-dev', or '-B/--branch') nor their default branch,
-       cancel the upgrade.
+       uncommitted changes or with none of the branches below, cancel the upgrade.
     2. Back up the database ('bin/dump_db.sh').
     3. Stop kbot ('kbot.sh stop').
-    4. Check out the git working copies on the target branch (on their default
-       branch, origin's HEAD or else 'master', if they lack it), download the
-       storage products again, and remove the products no longer needed
+    4. Check out each git working copy on the first branch it has among
+       '-B/--branch', 'release-<version>-dev' and its default branch (origin's
+       HEAD, else 'master'), download the storage products again, and remove
+       the products no longer needed
        (git working copies are moved to '<installer-dir>/.removed_<timestamp>/').
     5. Relink the workarea (repair strategy) and install the python requirements.
     6. If the new 3rdparty ships another PostgreSQL major version than the one
