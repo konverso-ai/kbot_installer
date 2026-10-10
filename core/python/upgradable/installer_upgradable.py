@@ -85,7 +85,8 @@ class InstallerUpgradable:
     Attributes:
         installer_path: Installer directory holding the products.
         target: Human-readable description of the upgrade target, set by :meth:`check`.
-        notes: Working copies that will not move to the target branch as is, set by :meth:`check`.
+        notes: Products that will not move to the target branch as is (other
+            branch, no pull, or kept as is with ``force``), set by :meth:`check`.
 
     """
 
@@ -99,6 +100,7 @@ class InstallerUpgradable:
         bundle: str | None = None,
         branch: str | None = None,
         provider: tuple[str, ...] = (),
+        force: bool = False,
         verbose: bool = False,
     ) -> None:
         """Initialize the upgrade.
@@ -112,6 +114,8 @@ class InstallerUpgradable:
             branch: Branch to move the git working copies to (and, in product mode,
                 to download the new products from) instead of the version's release branch.
             provider: Providers to download products with in product mode; empty for the default order.
+            force: Whether to keep symlinked and locally built products as they are
+                instead of cancelling the upgrade; they are never replaced nor removed.
             verbose: Whether to enable verbose logging.
 
         """
@@ -122,6 +126,7 @@ class InstallerUpgradable:
         self.bundle = bundle
         self.branch = branch
         self.provider = provider
+        self.force = force
         self.verbose = verbose
         self.target = ""
         self.notes: list[str] = []
@@ -141,9 +146,9 @@ class InstallerUpgradable:
         """Check the installer can be upgraded, without modifying it.
 
         Every problem is collected before failing: unknown product or bundle,
-        target not newer, symlinked or locally built products, git working
-        copies with uncommitted changes or with neither the target branch nor
-        their default branch.
+        target not newer, symlinked or locally built products (kept as they are
+        with ``force``), git working copies with uncommitted changes or with
+        neither the target branch nor their default branch.
 
         Raises:
             UpgradeError: If the installer is not ready for the upgrade.
@@ -161,9 +166,13 @@ class InstallerUpgradable:
         for path, product in self._entries:
             kind = ProductDownloadable.local_copy_kind(path)
             if kind in (LOCAL_SYMLINK, LOCAL_BUILD):
-                problems.append(
-                    f"{path.name}: {kind} cannot be upgraded (only storage downloads and git working copies can)"
-                )
+                if self.force:
+                    self.notes.append(f"{path.name}: {kind} kept as is (--force)")
+                else:
+                    problems.append(
+                        f"{path.name}: {kind} cannot be upgraded (only storage downloads and git working "
+                        "copies can; use --force to keep it as is)"
+                    )
             elif kind == LOCAL_GIT_WORKING_COPY:
                 problem = self._check_git_working_copy(path, product)
                 if problem:
@@ -369,6 +378,8 @@ class InstallerUpgradable:
     def _remove_products_outside_target(self, timestamp: str) -> Path | None:
         """Remove the installed products the new target does not need.
 
+        Symlinked and locally built products (only present with ``force``) are kept.
+
         Args:
             timestamp: Suffix of the folder removed git working copies are moved to.
 
@@ -387,7 +398,10 @@ class InstallerUpgradable:
         for path, product in entries:
             if product.name in targets:
                 continue
-            if ProductDownloadable.local_copy_kind(path) == LOCAL_GIT_WORKING_COPY:
+            kind = ProductDownloadable.local_copy_kind(path)
+            if kind in (LOCAL_SYMLINK, LOCAL_BUILD):
+                log.warning("Keeping %s %s, no longer needed by the target", kind, path.name)
+            elif kind == LOCAL_GIT_WORKING_COPY:
                 moved_dir = self.installer_path / f".removed_{timestamp}"
                 moved_dir.mkdir(exist_ok=True)
                 path.rename(moved_dir / path.name)

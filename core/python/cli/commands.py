@@ -903,6 +903,15 @@ def update(
     ),
 )
 @click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help=(
+        "Keep symlinked and locally built products (e.g. a 'make' of ~/dev/git/kbot) as they are "
+        "instead of cancelling the upgrade: they are neither replaced nor removed."
+    ),
+)
+@click.option(
     "-y",
     "--yes",
     is_flag=True,
@@ -934,6 +943,7 @@ def upgrade(
     db_name: str = "kbot_db",
     with_learn: bool = False,
     skip_python_requirements: bool = False,
+    force: bool = False,
     yes: bool = False,
     verbose: bool = False,
 ) -> None:
@@ -945,9 +955,10 @@ def upgrade(
 
     \b
     1. Check the installer, without modifying it: symlinked or locally built
-       products, and git working copies with uncommitted changes or with
-       neither the target branch ('release-<version>-dev', or '-B/--branch')
-       nor their default branch, cancel the upgrade.
+       products (kept as they are with --force), and git working copies with
+       uncommitted changes or with neither the target branch
+       ('release-<version>-dev', or '-B/--branch') nor their default branch,
+       cancel the upgrade.
     2. Back up the database ('bin/dump_db.sh').
     3. Stop kbot ('kbot.sh stop').
     4. Check out the git working copies on the target branch (on their default
@@ -967,6 +978,7 @@ def upgrade(
     Examples:
         kbot-installer upgrade -p site-konverso -v 2026.01
         kbot-installer upgrade -p site-konverso -v 2026.01 -B KB-12345
+        kbot-installer upgrade -p site-konverso -v 2026.01 -B KB-12345 --force
         kbot-installer upgrade -v 2026.01 -y
         kbot-installer upgrade -b ev-basic-2026.01.0003 --backup-file ~/backups/kbot.sql
 
@@ -987,6 +999,7 @@ def upgrade(
         bundle=bundle,
         branch=branch,
         provider=provider,
+        force=force,
         verbose=verbose,
     )
     try:
