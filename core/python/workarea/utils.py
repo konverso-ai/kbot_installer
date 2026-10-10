@@ -1,5 +1,6 @@
 """Filesystem helpers for laying out and maintaining a product workarea."""
 
+import filecmp
 import getpass
 import json
 import shutil
@@ -221,19 +222,82 @@ def iter_sources(root: Path, rule: "WorkAreaRule") -> Iterator[Path]:
             yield path
 
 
+def _is_stale_copy(source: Path, target: Path, variables: dict[str, str]) -> bool:
+    """Check whether an existing copy target no longer matches its source.
+
+    Content is compared (never mtimes, which `cp`-based builds do not
+    preserve). A symlink target is always stale since a copy rule must
+    produce a real file. Directories and dangling source symlinks are never
+    stale.
+
+    Args:
+        source: Product source path the target was copied from.
+        target: Existing workarea path.
+        variables: Placeholder values rendered into the copied content.
+
+    Returns:
+        True if `target` must be replaced by a fresh copy of `source`.
+
+    """
+    if source.is_symlink() and not source.exists():
+        return False
+    if source.is_dir():
+        return False
+    if target.is_symlink():
+        return True
+    if target.is_dir():
+        return False
+    if variables:
+        rendered = render_variables(source.read_text(encoding="utf-8"), variables)
+        return target.read_text(encoding="utf-8") != rendered
+    return not filecmp.cmp(source, target, shallow=False)
+
+
+def _refresh_copy(
+    source: Path,
+    target: Path,
+    variables: dict[str, str],
+    *,
+    interactive: bool,
+) -> None:
+    """Replace an outdated copy target with a fresh copy of its source.
+
+    The target is unlinked first so that a symlink target is replaced instead
+    of being followed (which would overwrite the product source).
+
+    Args:
+        source: Product source path to copy from.
+        target: Outdated workarea path to replace.
+        variables: Placeholder values to render into the file content.
+        interactive: If True, prompt for confirmation first (an empty answer
+            means yes).
+
+    """
+    if interactive and not InteractivePrompter().ask_yn(f"Outdated copy {target}. Refresh it from {source}? [Y/n] "):
+        return
+
+    target.unlink()
+    copy_source(source, target, variables=variables)
+    log.info("Refreshed outdated copy '%s' from '%s'.", target, source)
+
+
 def apply_rule(
     product_root: Path,
     work_root: Path,
     rule: WorkareaRule,
     *,
     runtime_variables: dict[str, str],
+    claimed: set[Path] | None = None,
+    interactive: bool = False,
 ) -> None:
     """Apply a single layout rule from a product root into the workarea.
 
     Resolves the rule's source directory under `product_root`, then links or
     copies every matching source path into the corresponding location under
     `work_root`. Existing targets (including broken symlinks) are left
-    untouched.
+    untouched, except copy targets of a `refresh` rule whose content differs
+    from the source, which are replaced. Targets already in `claimed`
+    (provided by an earlier product) are skipped entirely.
 
     Args:
         product_root: Root directory of the product providing the sources.
@@ -241,8 +305,15 @@ def apply_rule(
         rule: Layout rule describing the source, target, and action to apply.
         runtime_variables: Available runtime variable values, used to resolve
             the subset named in `rule.placeholders`.
+        claimed: Targets already provided during the current layout pass;
+            updated in place with the targets this rule provides. If None, a
+            fresh set is used.
+        interactive: If True, prompt before refreshing each outdated copy.
 
     """
+    if claimed is None:
+        claimed = set()
+
     source_root = product_root / rule.source
 
     if not source_root.exists():
@@ -256,14 +327,21 @@ def apply_rule(
         relative = source.relative_to(source_root)
         target = target_root / relative
 
-        if target.exists() or target.is_symlink():
+        if target in claimed:
             continue
 
-        match rule.action:
-            case RuleAction.LINK:
-                link_source(source, target)
-            case RuleAction.COPY:
-                copy_source(source, target, variables=variables)
+        if target.exists() or target.is_symlink():
+            if rule.action is RuleAction.COPY and rule.refresh and _is_stale_copy(source, target, variables):
+                _refresh_copy(source, target, variables, interactive=interactive)
+        else:
+            match rule.action:
+                case RuleAction.LINK:
+                    link_source(source, target)
+                case RuleAction.COPY:
+                    copy_source(source, target, variables=variables)
+
+        if target.exists() or target.is_symlink():
+            claimed.add(target)
 
 
 def apply_rules(
@@ -272,6 +350,8 @@ def apply_rules(
     rules: list["WorkAreaRule"],
     *,
     runtime_variables: dict[str, str],
+    claimed: set[Path] | None = None,
+    interactive: bool = False,
 ) -> None:
     """Apply a list of layout rules from a product root into the workarea.
 
@@ -281,14 +361,23 @@ def apply_rules(
         rules: Layout rules to apply, in order.
         runtime_variables: Available runtime variable values, used to resolve
             each rule's `placeholders`.
+        claimed: Targets already provided during the current layout pass
+            (share one set across products so the first product wins). If
+            None, a fresh set is used.
+        interactive: If True, prompt before refreshing each outdated copy.
 
     """
+    if claimed is None:
+        claimed = set()
+
     for rule in rules:
         apply_rule(
             product_root=product_root,
             work_root=work_root,
             rule=rule,
             runtime_variables=runtime_variables,
+            claimed=claimed,
+            interactive=interactive,
         )
 
 
