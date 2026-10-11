@@ -3,6 +3,7 @@
 import filecmp
 import getpass
 import json
+import os
 import shutil
 from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
@@ -139,6 +140,28 @@ def repair_broken_links(paths: Iterable[Path], *, interactive: bool = False) -> 
             continue
 
         path.unlink()
+
+
+def remove_installer_links(work_root: Path, installer_root: Path) -> None:
+    """Remove every symlink under the work root that points into the installer root.
+
+    Valid links are removed too: once the products have changed (e.g. after
+    an upgrade), a link may still resolve while pointing to a product that no
+    longer provides that path, or no longer wins it. Link targets are compared
+    lexically, without resolving them, so links into a product that is itself
+    a symlink (e.g. to a git working copy) are removed as well. Links pointing
+    elsewhere, regular files, and directories are left untouched.
+
+    Args:
+        work_root: Root directory of the workarea to scan.
+        installer_root: Absolute installer root holding the products.
+
+    """
+    links = [path for path in work_root.rglob("*") if path.is_symlink()]
+    for link in links:
+        target = Path(os.path.normpath(link.parent / link.readlink()))
+        if target.is_relative_to(installer_root):
+            link.unlink()
 
 
 def link_source(source: Path, target: Path) -> None:
