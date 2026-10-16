@@ -77,6 +77,10 @@ ignore = [
     "F401", # Imported but unused (common in __init__.py files)
 ]
 
+"core/python/errors/*.py" = [
+    "INP001", # errors is a namespace package shared with the products: no __init__.py
+]
+
 "**/*example*.py" = [
     "T201", # print found (acceptable in example files)
 ]
