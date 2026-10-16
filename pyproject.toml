@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
 version = "2.0.0"
-requires-python = ">=3.10, <3.13"
+requires-python = "~=3.12.0"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
@@ -52,6 +52,11 @@ only-include = ["core/python"]
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
+[tool.uv]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
 [[tool.uv.index]]
 name = "konverso-aws-private"
 url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
@@ -68,26 +73,28 @@ deps = [
 ]
 lint = [
     "pylint",
+    "pylint-django[with-django]",
+    "pylint-plugin-utils",
     "ruff",
 ]
-
-typecheck = [
-    "ty",
-    "mypy-boto3-s3",
-    "mypy-boto3-secretsmanager>=1.43.0",
-]
-
 test = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
     "pytest-mock",
 ]
+typecheck = [
+    "ty",
+    "mypy-boto3-s3",
+    "mypy-boto3-secretsmanager>=1.43.0",
+]
 
 dev = [
+    { include-group = "deps" },
     { include-group = "lint" },
     { include-group = "typecheck" },
     { include-group = "test" },
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [tool.deptry]
