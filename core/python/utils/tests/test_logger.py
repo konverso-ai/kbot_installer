@@ -7,6 +7,8 @@ import types
 
 import pytest
 
+from errors.kb11111 import KB11111
+from errors.llm00001 import LLM00001
 from utils.Logger import (
     FINE,
     FINEST,
@@ -35,18 +37,6 @@ class _RecordingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.records.append(record)
-
-
-class _SampleError(BaseException):
-    """Duck-typed stand-in for kbot's ``errors.base.ErrorCode``, which kbot_installer does not ship."""
-
-    code = "TEST00001"
-    message = "Sample error"
-    level = "warning"
-
-
-class _DebugSampleError(_SampleError):
-    level = "debug"
 
 
 @pytest.fixture
@@ -497,7 +487,7 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log uses the ErrorCode's own level and message by default."""
-        error = _DebugSampleError()
+        error = LLM00001()
 
         package_logger.log(error)
 
@@ -509,7 +499,7 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log honors explicit message/level overrides."""
-        error = _SampleError()
+        error = KB11111()
 
         package_logger.log(error, message="custom", level="error")
 
@@ -521,9 +511,9 @@ class TestKbotPackageLogger:
         self, kbot_logger: KbotLogger, package_logger
     ) -> None:
         """Test log_and_raise emits a record and then raises the same error."""
-        error = _SampleError()
+        error = KB11111()
 
-        with pytest.raises(_SampleError):
+        with pytest.raises(KB11111):
             package_logger.log_and_raise(error)
 
         assert compare("eq", len(_records(kbot_logger)), 1)
