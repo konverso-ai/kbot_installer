@@ -6,7 +6,8 @@ import sys
 import types
 
 import pytest
-from errors import KB11111, LLM00001
+from errors.kb11111 import KB11111
+from errors.llm00001 import LLM00001
 
 from utils.Logger import (
     FINE,

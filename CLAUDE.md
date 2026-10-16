@@ -16,6 +16,10 @@ All actual Python source lives under `core/python/` (this is the package root â€
 `workarea`, `writer`) are imported as absolute imports, e.g. `from installable.base import InstallableBase`, not
 `from core.python.installable...`.
 
+`errors` is a namespace package shared with kbot (no `errors/__init__.py`, in either repo).
+`errors/base.py` holds `ErrorCode`, and each code has its own lowercase module (`errors/kb0002.py` â†’ `KB0002`,
+imported as `from errors.kb0002 import KB0002`); kbot adds `errors/factory.py` and its own codes.
+
 ## Common commands
 
 Package management and running use `uv`; a `Makefile` wraps the common workflows (also exposed as
