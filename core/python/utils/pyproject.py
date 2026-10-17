@@ -64,13 +64,13 @@ class WheelTarget(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    packages: list[str] = Field(default_factory=lambda: ["core/python", "rest"])
+    packages: list[str] = Field(default_factory=lambda: ["core/python", "rest", "infra"])
     py_modules: list[str] = Field(
         default_factory=lambda: ["Bot", "Load", "Learn", "System"],
         serialization_alias="py-modules",
     )
     sources: dict[str, str] = Field(
-        default_factory=lambda: {"core/python": ".", "rest": "."}
+        default_factory=lambda: {"core/python": ".", "rest": ".", "infra": "."}
     )
     force_include: ForceInclude = Field(serialization_alias="force-include")
 
