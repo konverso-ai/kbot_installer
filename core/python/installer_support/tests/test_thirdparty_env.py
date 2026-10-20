@@ -10,6 +10,7 @@ from installer_support.thirdparty_env import (
     prepend_thirdparty_ld_library_path,
     resolve_pg_dir,
     resolve_pg_dir_str,
+    resolve_pg_version,
     thirdparty_ld_library_path,
 )
 
@@ -83,6 +84,23 @@ class TestResolvePgDir:
         _write_versions_env(tmp_path, "PYTHON_VERSION=3.10.15\n")
 
         assert resolve_pg_dir(tmp_path) is None
+
+
+class TestResolvePgVersion:
+    """Tests for resolve_pg_version."""
+
+    def test_resolves_pg_version(self, tmp_path: Path) -> None:
+        _write_versions_env(tmp_path)
+
+        assert resolve_pg_version(tmp_path) == "11.5"
+
+    def test_returns_none_without_versions_env(self, tmp_path: Path) -> None:
+        assert resolve_pg_version(tmp_path) is None
+
+    def test_returns_none_without_pg_version(self, tmp_path: Path) -> None:
+        _write_versions_env(tmp_path, "PYTHON_VERSION=3.12.13\n")
+
+        assert resolve_pg_version(tmp_path) is None
 
 
 class TestThirdpartyLdLibraryPath:

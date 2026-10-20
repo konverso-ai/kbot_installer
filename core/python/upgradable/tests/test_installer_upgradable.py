@@ -120,13 +120,19 @@ class TestCheck:
         assert compare("eq", _head(demo), head)
         assert compare("eq", DulwichVersioner().current_branch(demo), "release-2025.03-dev")
 
-    def test_missing_release_branch_is_reported(self, tmp_path: Path, installer: Path) -> None:
-        """A clean working copy whose origin lacks the release branch cancels the upgrade."""
+    def test_missing_target_and_default_branches_are_reported(self, tmp_path: Path, installer: Path) -> None:
+        """A clean working copy with neither the target branch nor a default branch cancels the upgrade."""
         upstream = tmp_path / "up"
         _make_upstream(upstream, "release-2025.03-dev", _xml("demo", "2025.03"))
-        _clone(upstream, installer / "demo", "release-2025.03-dev")
+        demo = installer / "demo"
+        _clone(upstream, demo, "release-2025.03-dev")
+        with Repo(str(demo)) as repo:
+            repo.refs.remove_if_equals(b"refs/remotes/origin/HEAD", None)
 
-        with pytest.raises(UpgradeError, match=r"demo: branch 'release-2026\.01-dev' not found"):
+        with pytest.raises(
+            UpgradeError,
+            match=r"demo: none of the branches 'release-2026\.01-dev', 'master' found locally or on origin",
+        ):
             _product_upgrade(installer).check()
 
     def test_target_not_newer_is_reported(self, installer: Path) -> None:
@@ -135,6 +141,47 @@ class TestCheck:
 
         with pytest.raises(UpgradeError, match=r"'demo' is at version 2026\.01: 2026\.01 is not newer"):
             _product_upgrade(installer).check()
+
+
+class TestForce:
+    """'force' keeps symlinked and locally built products instead of cancelling the upgrade."""
+
+    def test_local_build_and_symlink_are_kept_while_git_copies_move(self, tmp_path: Path, installer: Path) -> None:
+        """With force, a local build and a symlink are kept (even outside the target); demo still moves."""
+        upstream = tmp_path / "up"
+        _make_upstream(upstream, "release-2025.03-dev", _xml("demo", "2025.03"))
+        _branch_upstream(upstream, "release-2025.03-dev", "release-2026.01-dev", _xml("demo", "2026.01"))
+        demo = installer / "demo"
+        _clone(upstream, demo, "release-2025.03-dev")
+        local = installer / "local"
+        local.mkdir()
+        (local / "description.xml").write_text(_xml("local", "2025.03"), encoding="utf-8")
+        linked_source = tmp_path / "git" / "linked"
+        linked_source.mkdir(parents=True)
+        (linked_source / "description.xml").write_text(_xml("linked", "2025.03"), encoding="utf-8")
+        (installer / "linked").symlink_to(linked_source)
+        upgradable = InstallerUpgradable(
+            installer_path=installer,
+            storage_backend=StorageBackendEnum.NEXUS,
+            product="demo",
+            version="2026.01",
+            force=True,
+        )
+
+        with patch("upgradable.installer_upgradable.build_downloadable"):
+            upgradable.check()
+            outcome = upgradable.apply()
+
+        assert compare(
+            "eq",
+            sorted(upgradable.notes),
+            ["linked: local symlink kept as is (--force)", "local: local build kept as is (--force)"],
+        )
+        assert compare("eq", DulwichVersioner().current_branch(demo), "release-2026.01-dev")
+        assert compare("eq", (local / "description.xml").is_file(), True)
+        assert compare("eq", (installer / "linked").is_symlink(), True)
+        assert compare("eq", (linked_source / "description.xml").is_file(), True)
+        assert compare("eq", outcome.removed, [])
 
 
 class TestProductUpgrade:
@@ -183,6 +230,86 @@ class TestProductUpgrade:
         assert compare("eq", (outcome.moved_dir / "extra" / ".git").is_dir(), True)
         assert compare("eq", outcome.moved_dir.name.startswith(".removed_"), True)
         assert compare("eq", (installer / "old").exists(), False)
+
+
+class TestBranchResolution:
+    """Git working copies move to the explicit branch, else the release branch, else their default branch."""
+
+    @staticmethod
+    def _check_and_apply(upgradable: InstallerUpgradable) -> MagicMock:
+        """Run check() then apply(), with the product downloads mocked; return the download factory mock."""
+        with patch("upgradable.installer_upgradable.build_downloadable") as build_downloadable:
+            upgradable.check()
+            upgradable.apply()
+        return build_downloadable
+
+    def test_explicit_branch_then_release_branch(self, tmp_path: Path, installer: Path) -> None:
+        """'branch' is used where it exists; a working copy lacking it moves to the release branch."""
+        up_demo = tmp_path / "up_demo"
+        _make_upstream(up_demo, "release-2025.03-dev", _xml("demo", "2025.03", ("site",)))
+        feature_head = _branch_upstream(up_demo, "release-2025.03-dev", "KB-1", _xml("demo", "2026.01", ("site",)))
+        demo = installer / "demo"
+        _clone(up_demo, demo, "release-2025.03-dev")
+        up_site = tmp_path / "up_site"
+        _make_upstream(up_site, "release-2025.03-dev", _xml("site", "2025.03"))
+        release_head = _branch_upstream(up_site, "release-2025.03-dev", "release-2026.01-dev", _xml("site", "2026.01"))
+        site = installer / "site"
+        _clone(up_site, site, "release-2025.03-dev")
+        upgradable = InstallerUpgradable(
+            installer_path=installer,
+            storage_backend=StorageBackendEnum.NEXUS,
+            product="demo",
+            version="2026.01",
+            branch="KB-1",
+        )
+
+        build_downloadable = self._check_and_apply(upgradable)
+
+        assert compare("eq", upgradable.target, "product demo 2026.01 (branch KB-1)")
+        assert compare("eq", upgradable.notes, ["site: branch 'KB-1' not found, using branch 'release-2026.01-dev'"])
+        assert compare("eq", DulwichVersioner().current_branch(demo), "KB-1")
+        assert compare("eq", _head(demo), feature_head)
+        assert compare("eq", DulwichVersioner().current_branch(site), "release-2026.01-dev")
+        assert compare("eq", _head(site), release_head)
+        assert compare("eq", build_downloadable.call_args.kwargs["version"], "2026.01")
+
+    def test_missing_target_branch_falls_back_to_origin_default_branch(self, tmp_path: Path, installer: Path) -> None:
+        """Without the target branch, the working copy moves to origin's HEAD branch, pulled."""
+        upstream = tmp_path / "up"
+        _make_upstream(upstream, "main", _xml("demo", "2025.03"))
+        _branch_upstream(upstream, "main", "release-2025.03-dev", _xml("demo", "2025.02"))
+        demo = installer / "demo"
+        _clone(upstream, demo, "release-2025.03-dev")
+        (upstream / "README").write_text("b", encoding="utf-8")
+        with Repo(str(upstream)) as repo:
+            main_head = _commit_all(repo, b"main moves on")
+        upgradable = _product_upgrade(installer)
+
+        self._check_and_apply(upgradable)
+
+        assert compare(
+            "eq", upgradable.notes, ["demo: branch 'release-2026.01-dev' not found, using default branch 'main'"]
+        )
+        assert compare("eq", DulwichVersioner().current_branch(demo), "main")
+        assert compare("eq", _head(demo), main_head)
+
+    def test_local_only_target_branch_is_checked_out_without_pull(self, tmp_path: Path, installer: Path) -> None:
+        """A target branch origin lacks but the working copy has is checked out, not pulled."""
+        upstream = tmp_path / "up"
+        _make_upstream(upstream, "release-2025.03-dev", _xml("demo", "2025.03"))
+        demo = installer / "demo"
+        _clone(upstream, demo, "release-2025.03-dev")
+        with Repo(str(demo)) as repo:
+            repo.refs[b"refs/heads/release-2026.01-dev"] = local_head = repo.head()
+        upgradable = _product_upgrade(installer)
+
+        self._check_and_apply(upgradable)
+
+        assert compare(
+            "eq", upgradable.notes, ["demo: branch 'release-2026.01-dev' is not on origin, it will not be pulled"]
+        )
+        assert compare("eq", DulwichVersioner().current_branch(demo), "release-2026.01-dev")
+        assert compare("eq", _head(demo), local_head)
 
 
 class TestBundleUpgrade:

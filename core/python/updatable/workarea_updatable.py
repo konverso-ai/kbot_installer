@@ -9,7 +9,7 @@ class WorkareaUpdatable:
 
     `SMOOTH` requires no preparation (nothing to clear, no broken links to remove).
     Every other mode first runs the strategy matching `mode` (clearing the workarea,
-    removing broken symlinks, etc.). In every case, `installable.install()` is then
+    removing the product links and broken symlinks, etc.). In every case, `installable.install()` is then
     called to re-apply the workarea rules for every product currently present under
     the installer root, so products added or changed since the last update are picked
     up.

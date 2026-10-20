@@ -187,6 +187,16 @@ class TestCopySource:
 
         assert target.read_text() == "home=/work"
 
+    def test_skips_dangling_symlink(self, tmp_path: Path) -> None:
+        source = tmp_path / "marked"
+        source.symlink_to("/home/runner/work/kbot/build/marked.js")
+        target = tmp_path / "work" / "marked"
+
+        copy_source(source, target)
+
+        assert not target.exists()
+        assert not target.is_symlink()
+
 
 class TestIterSources:
     def test_recursive_yields_nested_files(self, tmp_path: Path) -> None:
@@ -319,6 +329,103 @@ class TestApplyRule:
 
         assert (work_root / "elsewhere" / "a.py").is_symlink()
         assert not (work_root / "core").exists()
+
+    @staticmethod
+    def _copy_setup(tmp_path: Path, source_text: str, target_text: str) -> tuple[Path, Path, Path]:
+        product_root = tmp_path / "product"
+        (product_root / "core").mkdir(parents=True)
+        source_file = product_root / "core" / "a.py"
+        source_file.write_text(source_text)
+        work_root = tmp_path / "work"
+        target = work_root / "core" / "a.py"
+        target.parent.mkdir(parents=True)
+        target.write_text(target_text)
+        return product_root, work_root, target
+
+    def test_refresh_rewrites_outdated_copy(self, tmp_path: Path) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "new", "old")
+
+        rule = _rule(source=Path("core"), action=RuleAction.COPY, refresh=True)
+        apply_rule(product_root, work_root, rule, runtime_variables={})
+
+        assert target.read_text() == "new"
+        assert not target.is_symlink()
+
+    def test_refresh_replaces_symlink_target_without_touching_source(self, tmp_path: Path) -> None:
+        product_root = tmp_path / "product"
+        (product_root / "core").mkdir(parents=True)
+        source_file = product_root / "core" / "a.py"
+        source_file.write_text("src")
+        work_root = tmp_path / "work"
+        target = work_root / "core" / "a.py"
+        target.parent.mkdir(parents=True)
+        target.symlink_to(source_file)
+
+        rule = _rule(
+            source=Path("core"),
+            action=RuleAction.COPY,
+            placeholders=["__KBOT_HOME__"],
+            refresh=True,
+        )
+        apply_rule(product_root, work_root, rule, runtime_variables={"__KBOT_HOME__": "/work"})
+
+        assert not target.is_symlink()
+        assert target.read_text() == "src"
+        assert source_file.read_text() == "src"
+
+    def test_refresh_compares_rendered_placeholders(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "home=__KBOT_HOME__", "home=/work")
+
+        def _no_prompt(_prompt: str) -> str:
+            raise AssertionError("up-to-date rendered copy must not prompt")
+
+        monkeypatch.setattr("builtins.input", _no_prompt)
+
+        rule = _rule(
+            source=Path("core"),
+            action=RuleAction.COPY,
+            placeholders=["__KBOT_HOME__"],
+            refresh=True,
+        )
+        apply_rule(
+            product_root,
+            work_root,
+            rule,
+            runtime_variables={"__KBOT_HOME__": "/work"},
+            interactive=True,
+        )
+
+        assert target.read_text() == "home=/work"
+
+    def test_refresh_interactive_refusal_keeps_copy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        product_root, work_root, target = self._copy_setup(tmp_path, "new", "old")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+        rule = _rule(source=Path("core"), action=RuleAction.COPY, refresh=True)
+        apply_rule(product_root, work_root, rule, runtime_variables={}, interactive=True)
+
+        assert target.read_text() == "old"
+
+    def test_claimed_target_not_refreshed_by_later_product(self, tmp_path: Path) -> None:
+        products = []
+        for name, text in (("product1", "first"), ("product2", "second")):
+            root = tmp_path / name
+            (root / "core").mkdir(parents=True)
+            (root / "core" / "a.py").write_text(text)
+            products.append(root)
+        work_root = tmp_path / "work"
+        rules = [_rule(source=Path("core"), action=RuleAction.COPY, refresh=True)]
+
+        for _ in range(2):
+            claimed: set[Path] = set()
+            for product_root in products:
+                apply_rules(product_root, work_root, rules, runtime_variables={}, claimed=claimed)
+
+            assert (work_root / "core" / "a.py").read_text() == "first"
 
 
 def test_apply_rules_applies_every_rule(tmp_path: Path) -> None:
@@ -575,6 +682,18 @@ class TestCleanupUnusedTestsDir:
 
         assert not tests_dir.exists()
 
+    def test_interactive_removes_on_empty_answer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pressing Enter accepts the [Y/n] default."""
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+
+        cleanup_unused_tests_dir(tmp_path, [], interactive=True)
+
+        assert not tests_dir.exists()
+
     def test_interactive_keeps_on_refusal(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -641,6 +760,18 @@ class TestRepairBrokenLinks:
         broken_link = work_root / "broken_link"
         broken_link.symlink_to(work_root / "missing")
         monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+
+        repair_broken_links(work_root.rglob("*"), interactive=True)
+
+        assert not broken_link.exists()
+
+    def test_interactive_removes_link_on_empty_answer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pressing Enter accepts the [Y/n] default."""
+        work_root = tmp_path / "work"
+        work_root.mkdir()
+        broken_link = work_root / "broken_link"
+        broken_link.symlink_to(work_root / "missing")
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
         repair_broken_links(work_root.rglob("*"), interactive=True)
 

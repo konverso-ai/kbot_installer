@@ -222,6 +222,39 @@ class VersionerBase(ABC):
 
         """
 
+    @abstractmethod
+    def list_remote_tracking_branches(self, repository_path: str | Path) -> list[str]:
+        """List the branch names of the ``origin`` remote known locally.
+
+        Reads the ``refs/remotes/origin/*`` refs as of the last fetch, without
+        contacting the remote.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            Sorted unique branch names, without the ``HEAD`` symbolic ref.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+
+        """
+
+    @abstractmethod
+    def default_remote_branch(self, repository_path: str | Path) -> str | None:
+        """Return the default branch of ``origin``, as recorded by the clone.
+
+        Args:
+            repository_path: Path to the local repository.
+
+        Returns:
+            The branch ``refs/remotes/origin/HEAD`` points to, or None if it is unknown.
+
+        Raises:
+            RepositoryNotFoundError: If the repository cannot be opened.
+
+        """
+
     #
     # Write operations
     #

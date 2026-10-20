@@ -46,6 +46,7 @@ log = logger.get_package_logger("git.versioner")
 DEFAULT_AUTHOR = Author(name="Git Versioner", email="versioner@example.com")
 _LOCAL_BRANCH_PREFIX = b"refs/heads/"
 _REMOTE_BRANCH_PREFIX = b"refs/remotes/origin/"
+_REMOTE_HEAD_REF = _REMOTE_BRANCH_PREFIX + b"HEAD"
 _DULWICH_ERRORS = (
     NotGitRepository,
     GitProtocolError,
@@ -335,6 +336,26 @@ class DulwichVersioner(StrReprMixin):
                 if ref.startswith(_LOCAL_BRANCH_PREFIX)
             ]
         return sorted(set(branches))
+
+    @override
+    def list_remote_tracking_branches(self, repository_path: str | Path) -> list[str]:
+        """List the branch names of the ``origin`` remote known locally."""
+        with self._open_repository(repository_path) as repo:
+            branches = {
+                ref[len(_REMOTE_BRANCH_PREFIX) :].decode()
+                for ref in repo.get_refs()
+                if ref.startswith(_REMOTE_BRANCH_PREFIX) and ref != _REMOTE_HEAD_REF
+            }
+        return sorted(branches)
+
+    @override
+    def default_remote_branch(self, repository_path: str | Path) -> str | None:
+        """Return the default branch of ``origin``, as recorded by the clone."""
+        with self._open_repository(repository_path) as repo:
+            target = cast("bytes | None", repo.refs.get_symrefs().get(_REMOTE_HEAD_REF))
+        if target is None or not target.startswith(_REMOTE_BRANCH_PREFIX):
+            return None
+        return target[len(_REMOTE_BRANCH_PREFIX) :].decode()
 
     @override
     def ahead_behind(

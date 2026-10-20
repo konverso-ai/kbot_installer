@@ -18,7 +18,7 @@ from pythonjsonlogger.json import JsonFormatter
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from errors import ErrorCode
+    from errors.base import ErrorCode
 
 try:
     glevel = int(os.environ["KBOTDEBUG"])
