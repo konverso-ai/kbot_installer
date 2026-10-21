@@ -44,6 +44,15 @@
         ]
     },
     {
+        "source": "infra",
+        "target": "infra",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
         "source": "bin",
         "action": "link",
         "excludes": [
