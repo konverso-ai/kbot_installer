@@ -36,6 +36,37 @@ def is_initialized(settings: InternalDbSettings) -> bool:
     return (settings.pg_data / "PG_VERSION").exists()
 
 
+def major_version(version: str) -> str:
+    """Return the major part of a PostgreSQL version, as written in a data directory's 'PG_VERSION'.
+
+    Majors are 'X.Y' before PostgreSQL 10 ('9.6.1' gives '9.6') and 'X' from 10 on ('16.10' gives '16').
+
+    Args:
+        version: Full or major PostgreSQL version.
+
+    Returns:
+        The major version.
+
+    """
+    parts = version.strip().split(".")
+    return ".".join(parts[:2]) if int(parts[0]) < 10 else parts[0]  # noqa: PLR2004
+
+
+def data_major_version(settings: InternalDbSettings) -> str | None:
+    """Return the PostgreSQL major version the data directory was initialized by.
+
+    Args:
+        settings: Internal database settings, providing the data directory.
+
+    Returns:
+        The content of the data directory's 'PG_VERSION', or None if the cluster is not initialized.
+
+    """
+    if not is_initialized(settings):
+        return None
+    return (settings.pg_data / "PG_VERSION").read_text(encoding="utf-8").strip()
+
+
 def initdb(settings: InternalDbSettings) -> None:
     """Create the PostgreSQL data directory for a new cluster.
 

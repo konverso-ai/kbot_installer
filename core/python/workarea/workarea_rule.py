@@ -26,6 +26,9 @@ class WorkareaRule(JsonModel):
         excludes: Glob patterns a relative source path must not match.
         placeholders: Names of runtime variables to render into copied file
             contents.
+        refresh: For copy rules, whether an existing target whose content
+            differs from the (rendered) source is replaced on each
+            install/update. Ignored by other actions.
 
     """
 
@@ -39,6 +42,8 @@ class WorkareaRule(JsonModel):
     excludes: Annotated[list[str], Field(default_factory=list)]
 
     placeholders: Annotated[list[str], Field(default_factory=list)]
+
+    refresh: Annotated[bool, Field(default=False)]
 
     def target_path(self) -> Path:
         """Return the target path, falling back to the source path.

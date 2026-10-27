@@ -76,7 +76,8 @@ class WorkareaInstallable(BaseModel):
 
         The product layout is written first: it is what marks the directory as
         a kbot workarea for `uninstall`, so a layout failing midway still
-        leaves a workarea that can be uninstalled.
+        leaves a workarea that can be uninstalled. Outdated copies laid out by
+        `refresh` rules are rewritten (after confirmation in update mode).
         """
         self.workarea.work_root.mkdir(parents=True, exist_ok=True)
 
@@ -89,12 +90,15 @@ class WorkareaInstallable(BaseModel):
         else:
             setup_products(self.workarea.work_root, product_roots)
 
+        claimed: set[Path] = set()
         for product_root in product_roots:
             apply_rules(
                 product_root=product_root,
                 work_root=self.workarea.work_root,
                 rules=self.workarea.rules,
                 runtime_variables=variables,
+                claimed=claimed,
+                interactive=self.update_mode,
             )
 
         setup_runtime_dirs(self.workarea.work_root)

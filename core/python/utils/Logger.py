@@ -1,6 +1,6 @@
 """KBot logger."""  # noqa: N999
 
-import datetime
+import datetime as dt
 import importlib
 import io
 import logging
@@ -18,7 +18,7 @@ from pythonjsonlogger.json import JsonFormatter
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from errors import ErrorCode
+    from errors.base import ErrorCode
 
 try:
     glevel = int(os.environ["KBOTDEBUG"])
@@ -485,7 +485,7 @@ class DataDogFormatter(JsonFormatter):
         super().add_fields(log_record, record, message_dict)
         if not log_record.get("timestamp"):
             # this doesn't use record.created, so it is slightly off
-            now = datetime.datetime.now(datetime.timezone.utc).strftime(
+            now = dt.datetime.now(dt.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             )
             log_record["timestamp"] = now
