@@ -73,7 +73,7 @@ class TestValidateLicense:
     def test_validatelicense_invalid_raises_with_checker_reason(self, tmp_path: Path) -> None:
         _write_python_sh(tmp_path, output="ERROR : LICENSE is expired.", exit_code=1)
 
-        with pytest.raises(RuntimeError, match=r"license\.key.*LICENSE is expired"):
+        with pytest.raises(RuntimeError, match=r"var/license\.key.*LICENSE is expired"):
             validate_license(tmp_path)
 
 

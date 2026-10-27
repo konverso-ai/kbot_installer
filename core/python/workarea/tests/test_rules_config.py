@@ -118,24 +118,19 @@ class TestLoadDefaultRules:
         apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables=variables)
         assert target.read_text() == "v2 home=/work\n"
 
-    def test_conf_layout_matches_legacy_setup_conf(self, tmp_path: Path) -> None:
-        """Regression: product `conf` entries are laid out like legacy `_SetupConf`.
+    def test_conf_license_key_is_linked_into_var(self, tmp_path: Path) -> None:
+        """Regression: the product `conf/license.key` must be exposed as `var/license.key`.
 
-        Whitelisted `conf` subdirectories are mirrored with per-file symlinks,
-        whitelisted top-level files (including globs) are symlinked, and every
-        other `conf` entry (e.g. `kbot.conf`, `entities/`) stays in the product,
-        read in place through `products/`. The product root `license.key` is
-        symlinked at the work root, where `Bot.GetLicenseFile` looks first.
+        kbot's `utils.License` validates `$KBOT_HOME/var/license.key` by default.
+        No other product `conf` entry is laid out: kbot reads them in place from
+        the installer directory, so the workarea has no `conf` directory.
         """
         product_root = tmp_path / "product"
         conf = product_root / "conf"
-        (conf / "classifiers" / "nested").mkdir(parents=True)
-        (conf / "classifiers" / "nested" / "c.json").write_text("{}\n")
-        (conf / "entities").mkdir()
-        (conf / "entities" / "e.conf").write_text("# entity\n")
-        for name in ("editable_files_kbot.json", "km_tests.conf", "kbot.conf", "httpd.conf"):
-            (conf / name).write_text(f"# {name}\n")
-        (product_root / "license.key").write_text("key\n")
+        (conf / "classifiers").mkdir(parents=True)
+        (conf / "classifiers" / "c.json").write_text("{}\n")
+        (conf / "license.key").write_text("key\n")
+        (conf / "kbot.conf").write_text("# product conf\n")
 
         work_root = tmp_path / "work"
 
@@ -146,19 +141,12 @@ class TestLoadDefaultRules:
             runtime_variables={},
         )
 
-        work_conf = work_root / "conf"
-        classifier = work_conf / "classifiers" / "nested" / "c.json"
-        assert classifier.is_symlink()
-        assert not (work_conf / "classifiers").is_symlink()
-        assert (work_conf / "editable_files_kbot.json").is_symlink()
-        assert (work_conf / "km_tests.conf").is_symlink()
-        assert not (work_conf / "kbot.conf").exists()
-        assert not (work_conf / "httpd.conf").exists()
-        assert not (work_conf / "entities").exists()
-
-        license_key = work_root / "license.key"
+        license_key = work_root / "var" / "license.key"
         assert license_key.is_symlink()
-        assert license_key.resolve() == (product_root / "license.key").resolve()
+        assert license_key.resolve() == (conf / "license.key").resolve()
+        assert not (work_root / "conf").exists()
+        assert not (work_root / "var" / "kbot.conf").exists()
+        assert not (work_root / "var" / "classifiers").exists()
 
 
 class TestResolveDefaultRulesPath:
