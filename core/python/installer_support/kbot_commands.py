@@ -51,13 +51,13 @@ def run_kbot_command(workarea_path: Path, command: str) -> None:
 
 
 def validate_license(workarea_path: Path) -> None:
-    """Validate the workarea's 'license.key' with kbot's own license checker.
+    """Validate the workarea's 'var/license.key' with kbot's own license checker.
 
-    Runs 'bin/python.sh -m utils.License': kbot's 'utils.License' module
-    validates '$KBOT_HOME/license.key' (host, end date, signed key), the file
-    'Bot.Init' validates at startup, so an invalid license fails the install
-    instead of the first kbot start (mirrors the legacy
-    'setup_workarea._ValidateLicense').
+    Runs 'bin/python.sh -m utils.License <work>/var/license.key': kbot's
+    'utils.License' module checks the host, end date and signed key of the
+    license the workarea rules link from the products' 'conf/license.key', so
+    an invalid license fails the install instead of the first kbot start
+    (mirrors the legacy 'setup_workarea._ValidateLicense').
 
     Args:
         workarea_path: Workarea directory holding 'bin/python.sh'.
@@ -67,10 +67,10 @@ def validate_license(workarea_path: Path) -> None:
 
     """
     python_sh = workarea_path / "bin" / "python.sh"
-    license_key = workarea_path / "license.key"
+    license_key = workarea_path / "var" / "license.key"
     log.info("Validating license '%s'...", license_key)
     result = subprocess.run(  # noqa: S603
-        [str(python_sh), "-m", "utils.License"],
+        [str(python_sh), "-m", "utils.License", str(license_key)],
         check=False,
         capture_output=True,
         text=True,

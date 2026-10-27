@@ -540,7 +540,7 @@ def install(
     bundle descriptor; '-p' then defines the top level product.
 
     The installer directory is built first (download), then the workarea is
-    laid out from it and its 'license.key' is validated (the installation
+    laid out from it and its 'var/license.key' is validated (the installation
     stops on a missing or invalid license), then the database is prepared and
     initialized: every downloaded product's 'db/init/db_schema.sql' is applied,
     in dependency order (dependencies before the products that depend on them).

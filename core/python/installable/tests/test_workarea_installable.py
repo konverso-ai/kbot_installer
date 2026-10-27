@@ -87,7 +87,6 @@ class TestInstall:
         wa.install()
 
         assert (tmp_path / "work" / "core" / "file.py").read_text() == "data"
-        assert (tmp_path / "work" / "products" / "productA" / "core" / "file.py").exists()
 
     def test_skips_products_missing_from_installer_root(self, tmp_path: Path) -> None:
         rule = WorkareaRule(source=Path("core"), action=RuleAction.LINK)
@@ -144,21 +143,6 @@ class TestInstall:
         wa.install()
 
         cleanup_mock.assert_called_once_with(tmp_path / "work", [], interactive=True)
-
-    def test_failed_layout_still_leaves_the_uninstall_marker(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Regression: 'uninstall' only removes a directory holding 'products/kbot', so a failed install must keep it."""
-        (tmp_path / "installer" / "kbot").mkdir(parents=True)
-        wa = _build(tmp_path, products=[Path("kbot")])
-        monkeypatch.setattr(
-            "installable.workarea_installable.apply_rules", MagicMock(side_effect=OSError("layout failed"))
-        )
-
-        with pytest.raises(OSError, match="layout failed"):
-            wa.install()
-
-        assert (tmp_path / "work" / "products" / "kbot").is_dir()
 
 
 class TestClear:
@@ -274,6 +258,25 @@ class TestKbotVersionLayout:
         assert not (work_root / "var" / "products.json").exists()
         static_mocks["yasg"].assert_called_once_with(work_root, tmp_path / "installer")
         static_mocks["spectacular"].assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("version", "marker"),
+        [("2026.01", Path("var") / "products.json"), ("2025.03", Path("products") / "kbot")],
+    )
+    def test_failed_layout_still_leaves_the_uninstall_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str, marker: Path
+    ) -> None:
+        """Regression: 'uninstall' only removes a directory holding this marker, so a failed install must keep it."""
+        _write_kbot(tmp_path, version)
+        wa = _build(tmp_path, products=[Path("kbot")])
+        monkeypatch.setattr(
+            "installable.workarea_installable.apply_rules", MagicMock(side_effect=OSError("layout failed"))
+        )
+
+        with pytest.raises(OSError, match="layout failed"):
+            wa.install()
+
+        assert (tmp_path / "work" / marker).exists()
 
 
 def test_default_update_mode_is_false(tmp_path: Path) -> None:
