@@ -116,13 +116,8 @@ jobs:
       - name: Install Dependencies
         run: uv sync --all-groups --locked --no-editable
 
-      - name: Lint code with Ruff
-        run: uv ruff check
-        continue-on-error: true
-  
-      - name: Run Pylint
-        run: uv pylint .
-        continue-on-error: true
+      - name: Run tox
+        run: uvx tox
 
       - name: Build
         run: uv build --wheel
