@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
 version = "2.0.0"
-requires-python = "~=3.12.0"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
