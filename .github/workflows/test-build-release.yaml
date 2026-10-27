@@ -50,16 +50,18 @@ jobs:
             VALID_PREFIXES="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
             VALID_JIRA_PROJECTS="CS|DO|INFRA|KB|KSEC"
             
-            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\(($VALID_JIRA_PROJECTS)-[0-9]+\\): .+"; then
+            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\((($VALID_JIRA_PROJECTS)-|AB#)[0-9]+\\): .+"; then
               echo -e "\033[32m++ Commit message format is valid: $COMMIT_MSG\033[39m"
             elif echo "$COMMIT_MSG" | grep -qE "^(Merge|Auto merge:) "; then
               echo -e "\033[32m++ Merge commit detected, skipping validation: $COMMIT_MSG\033[39m"
             else
               echo -e "\033[33m++ Invalid commit message format: $COMMIT_MSG\033[39m"
-              echo "Expected format: <prefix>(<jira-project-id>-12345): <message>"
+              echo "Expected format: <prefix>(<jira-project-id>-12345): <message> or <prefix>(AB#12345): <message>"
               echo "Valid prefixes: $VALID_PREFIXES"
               echo "Valid JIRA projects: $VALID_JIRA_PROJECTS"
+              echo "Azure DevOps tickets: AB#<work-item-id>"
               echo "Example: feat(KB-123): add new feature"
+              echo "Example: ci(AB#50739): bring automerge and build push to PyPi"
               echo "Example: fix(DO-456): fix bug"
               exit 1
             fi
