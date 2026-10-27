@@ -49,7 +49,9 @@
         "action": "link",
         "includes": [
             "**/*.py",
-            "**/*.so"
+            "**/*.so",
+            "**/*.json",
+            "**/*.sql"
         ]
     },
     {
