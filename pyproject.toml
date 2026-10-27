@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Korantin Lévêque", email = "korantin.leveque@konverso.ai" }
 ]
-requires-python = "==3.10.15"
+requires-python = "~=3.12.13"
 dependencies = []
 
 [build-system]
