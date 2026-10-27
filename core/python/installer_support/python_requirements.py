@@ -9,12 +9,14 @@ from utils.Logger import logger
 log = logger.get_package_logger("installer_support")
 
 # Product types whose root ``requirements.txt`` must be installed into the
-# 3rdparty Python (mirrors the legacy ``setup_workarea._UpdatePythonPackages``).
+# 3rdparty Python: the legacy ``setup_workarea._UpdatePythonPackages`` types
+# (solution, customer), plus framework since ``kbot_installer``'s modules are
+# linked into the workarea and imported by kbot at runtime.
 _PYTHON_REQUIREMENTS_PRODUCT_TYPES = frozenset({"framework", "solution", "customer"})
 
 
 def install_product_python_requirements(installer_path: Path) -> None:
-    """Install each solution/customer product's ``requirements.txt`` into 3rdparty Python.
+    """Install each framework/solution/customer product's ``requirements.txt`` into 3rdparty Python.
 
     Reuses the downloaded ``kbot/bin/pip3.sh`` wrapper, which sources
     ``kbot/bin/env.sh`` and handles the 3rdparty Python relocation
@@ -36,14 +38,13 @@ def install_product_python_requirements(installer_path: Path) -> None:
 
     service = InstallerService(installer_path)
     for product in service.load_products_from_disk():
-        log.warning("%s, %s", product.name, product.type)
         if product.type not in _PYTHON_REQUIREMENTS_PRODUCT_TYPES:
             continue
         req_path = installer_path / product.name / "requirements.txt"
         if not req_path.is_file():
             continue
 
-        log.warning("Installing Python requirements for '%s' into 3rdparty Python...", product.name)
+        log.info("Installing Python requirements for '%s' into 3rdparty Python...", product.name)
         result = subprocess.run(  # noqa: S603
             [
                 str(pip3),
