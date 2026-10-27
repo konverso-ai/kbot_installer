@@ -5,24 +5,39 @@ on:
   push:
     branches:
       - master
+      - release-2026.02
+      - release-2026.02-dev
+      - release-2026.01
+      - release-2026.01-dev
   pull_request:
     types: [opened, synchronize, closed]
+    branches:
+      - master
+      - release-2026.02
+      - release-2026.02-dev
+      - release-2026.01
+      - release-2026.01-dev
   workflow_dispatch:
   
+permissions:
+  contents: read
+  id-token: write
+
 env:
-  GH_USER: konversoai 
-  NEXUS_USER: github
-  NEXUS_URL: https://nexus.konverso.ai
+  AWS_REGION: eu-west-3
+  AZURE_STORAGE_ACCOUNT: sakbotreleasefcp
+  AZURE_STORAGE_CONTAINER: artifacts
+  SOLUTION_NAME: ${{ github.event.repository.name }}
   VERSION: ${{ github.ref_name }}
 
 jobs:
   pre-test:
     name: Pre Test
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' }}
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.user.login != 'konverso-github-actions[bot]' && startsWith(github.event.pull_request.base.ref, 'release-2026')
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -33,18 +48,20 @@ jobs:
           echo "Commit message: '$COMMIT_MSG'"
           
             VALID_PREFIXES="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
-            VALID_JIRA_PROJECTS="CS|DO|INFRA|KB"
+            VALID_JIRA_PROJECTS="CS|DO|INFRA|KB|KSEC"
             
-            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\(($VALID_JIRA_PROJECTS)-[0-9]+\\): .+"; then
+            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\((($VALID_JIRA_PROJECTS)-|AB#)[0-9]+\\): .+"; then
               echo -e "\033[32m++ Commit message format is valid: $COMMIT_MSG\033[39m"
             elif echo "$COMMIT_MSG" | grep -qE "^(Merge|Auto merge:) "; then
               echo -e "\033[32m++ Merge commit detected, skipping validation: $COMMIT_MSG\033[39m"
             else
               echo -e "\033[33m++ Invalid commit message format: $COMMIT_MSG\033[39m"
-              echo "Expected format: <prefix>(<jira-project-id>-12345): <message>"
+              echo "Expected format: <prefix>(<jira-project-id>-12345): <message> or <prefix>(AB#12345): <message>"
               echo "Valid prefixes: $VALID_PREFIXES"
               echo "Valid JIRA projects: $VALID_JIRA_PROJECTS"
+              echo "Azure DevOps tickets: AB#<work-item-id>"
               echo "Example: feat(KB-123): add new feature"
+              echo "Example: ci(AB#50739): bring automerge and build push to PyPi"
               echo "Example: fix(DO-456): fix bug"
               exit 1
             fi
@@ -54,26 +71,50 @@ jobs:
           ORCA_PROJECT_KEY=$(echo "${{ github.repository }}" | sed 's/\//-/g')
           echo "ORCA_PROJECT_KEY=$ORCA_PROJECT_KEY" >> $GITHUB_ENV
 
-      - name: Orca - SAST Scan
+      - name: Orca - SAST + SCA Scan
         run: |
           curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
+          echo -e "\033[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[39m"
+          echo -e "\033[36m  Orca SAST scan\033[39m"
+          echo -e "\033[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[39m"
           orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
+          echo ""
+          echo -e "\033[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[39m"
+          echo -e "\033[36m  Orca SCA scan (dependency / license checks, ui excluded)\033[39m"
+          echo -e "\033[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[39m"
+          orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sca scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+      - name: Set up Python 3.12.13
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.10'
+          python-version: '3.12.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Install Dependencies
         run: uv sync --all-groups --locked --no-editable
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
 
       - name: Lint code with Ruff
         run: uv ruff check
@@ -84,64 +125,267 @@ jobs:
         continue-on-error: true
 
       - name: Build
-        run: uv build
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+        run: uv build --wheel
 
-  build-release-wheel:
-    name: Build & release wheel ${{ github.ref_name }}
+  build-release-solution:
+    name: Build & release solution ${{ github.ref_name }}
     runs-on: ubuntu-latest
-    if: ${{ github.ref_name == 'master' }}
+    if: ${{ github.event_name != 'pull_request' }}
+    container:
+      image: konversoai.azurecr.io/kbot-builder-2204:06d42ca9
+      credentials:
+        username: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_ID }}
+        password: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_SECRET }}
+ 
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+          repositories: |
+            konverso-ai/kbot-builder
+            konverso-ai/${{ env.SOLUTION_NAME }}
+
+      - name: Checkout kbot-builder and solution repo
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          mkdir -p ${{ github.workspace }}/git
+          cd ${{ github.workspace }}/git ; git clone https://x-access-token:${{ env.GH_TOKEN }}@github.com/konverso-ai/kbot-builder.git
+          cd ${{ github.workspace }}/git ; git clone --branch ${{ env.VERSION }} https://x-access-token:${{ env.GH_TOKEN }}@github.com/konverso-ai/${{ env.SOLUTION_NAME }}.git
+          cd ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }} ; echo "$(git rev-parse HEAD)" >> ${{ github.workspace }}/git/tag.txt
+
+      - name: Build solution
+        run: |
+          rm -f ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/Makefile ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/Definitions.make
+          cp ${{ github.workspace }}/git/kbot-builder/make/* ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}
+          make -C ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}
+
+      - name: Prepare release
+        run: |
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt) ; python3 ${{ github.workspace }}/git/kbot-builder/bin/build_description.py -x ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/description.xml -j ${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json -v ${{ env.VERSION }} -c $tag
+ 
+      - name: Build release archive
+        shell: bash
+        run: |
+          set -eo pipefail
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt)
+          ARCHIVE="/tmp/${{ env.SOLUTION_NAME }}_$tag.tar.gz"
+          TIMESTAMP=$(date '+%Y/%m/%d %H:%M:%S')
+
+          echo "++ Building archive: $ARCHIVE"
+          tar czf "$ARCHIVE" -C "${{ github.workspace }}/installer" "${{ env.SOLUTION_NAME }}"
+          echo "[${TIMESTAMP}]\033[32m ++ Archive built successfully \033[39m"
+
+      - name: Azure login
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_SECRET }}
+          AZURE_CORE_OUTPUT: none
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          az login --service-principal \
+            --username "$AZURE_CLIENT_ID" \
+            --password "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID"
+
+      - name: Push release to Azure
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -eo pipefail
+          blob_prefix="${{ env.VERSION }}/${{ env.SOLUTION_NAME }}"
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt)
+          ARCHIVE="/tmp/${{ env.SOLUTION_NAME }}_$tag.tar.gz"
+          AZ_OPTS="--account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+                  --container-name ${{ env.AZURE_STORAGE_CONTAINER }} \
+                  --auth-mode login --overwrite --only-show-errors --no-progress"
+          TIMESTAMP=$(date '+%Y/%m/%d %H:%M:%S')
+
+          echo -e "[${TIMESTAMP}] ++ Uploading tagged archive to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/${{ env.SOLUTION_NAME }}_$tag.tar.gz" \
+            --file "$ARCHIVE"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded tagged archive to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading latest archive to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/${{ env.SOLUTION_NAME }}_latest.tar.gz" \
+            --file "$ARCHIVE"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded latest archive to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading tagged description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description_$tag.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded tagged description.json to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading latest description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description_latest.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded latest description.json to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded description.json to Azure \033[39m"
+
+  uv-bump-dev-publish:
+    name: UV bump dev, git push & publish DEV
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && endsWith(github.event.pull_request.base.ref, '-dev'))
+      || (github.event_name == 'push' && endsWith(github.ref_name, '-dev') && contains(github.event.head_commit.message, 'Auto-merge-downstream'))
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          fetch-depth: 0
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
-          python-version: '3.10'
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up Python 3.12.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
-      - name: Bump patch version
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
         run: |
-          uv version --bump patch
-          NEW_VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*["'\''"]([^"'\'']+)["'\''"].*/\1/')
-          echo -e "\033[32m++ Bumped patch version to $NEW_VERSION\033[39m"
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Bump dev version
+        run: |
+          uv version --bump dev
+          NEW_VERSION=$(uv version | awk '{print $2}')
+          echo -e "\033[32m++ Bumped dev version to $NEW_VERSION\033[39m"
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Commit and push version bump
         run: |
-          git config --global user.email "73905580+konversoai@users.noreply.github.com" && git config --global user.name "konversoai"   
+          git config --global user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com" && git config --global user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git add pyproject.toml uv.lock
           git commit -m "chore(KB-123): bump version to $NEW_VERSION [skip ci]"
           git push
 
       - name: Install Dependencies
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
         run: uv sync --all-groups --locked --no-editable
 
       - name: Build
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
-        run: uv build
+        run: uv build --wheel
 
-      - name: Publish to Nexus
+      - name: Publish to PyPi
+        run: uv publish
         env:
-          UV_PUBLISH_USERNAME: uv
-          UV_PUBLISH_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  uv-bump-patch-publish-release:
+    name: UV bump patch, git push & publish RELEASE
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.merged == true
+      && startsWith(github.event.pull_request.base.ref, 'release-')
+      && !endsWith(github.event.pull_request.base.ref, '-dev')
+      && (startsWith(github.event.pull_request.head.ref, 'auto-merge/') || startsWith(github.event.pull_request.head.ref, 'hotfix'))
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up Python 3.12.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
         run: |
-          uv publish --index konverso-nexus
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Bump patch version
+        run: |
+          uv version --bump patch
+          NEW_VERSION=$(uv version | awk '{print $2}')
+          echo -e "\033[32m++ Bumped patch version to $NEW_VERSION\033[39m"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Commit and push version bump
+        run: |
+          git config --global user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com" && git config --global user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git add pyproject.toml uv.lock
+          git commit -m "chore(KB-123): bump version to $NEW_VERSION [skip ci]"
+          git push
+
+      - name: Install Dependencies
+        run: uv sync --all-groups --locked --no-editable
+
+      - name: Build
+        run: uv build --wheel
+
+      - name: Publish to PyPi
+        run: uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
