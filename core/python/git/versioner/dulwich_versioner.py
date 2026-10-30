@@ -517,6 +517,32 @@ class DulwichVersioner(StrReprMixin):
             tags = [tag.decode() for tag in porcelain.tag_list(repo)]
         return sorted(tags)
 
+    def _fetch_origin(self, repo: Repo) -> None:
+        """Fetch ``origin`` into ``repo``.
+
+        Thin packs are refused: the server may delta new objects against blobs it
+        assumes we hold, but a partial clone (``--filter=blob:none``) lacks them and
+        Dulwich cannot fetch promised objects lazily, so ``add_thin_pack`` fails
+        with ``UnresolvedDeltas``. A self-contained pack works for every clone.
+
+        Raises:
+            RemoteNotFoundError: If the repository has no ``origin`` remote.
+
+        """
+        try:
+            # errstream swallows the transfer progress dulwich would
+            # otherwise print on stdout, in the middle of a report.
+            porcelain.fetch(
+                repo,
+                b"origin",
+                errstream=BytesIO(),
+                thin_packs=False,
+                **self._dulwich_remote_kwargs(),
+            )
+        except KeyError as e:
+            error_msg = "No 'origin' remote found in repository"
+            raise RemoteNotFoundError(error_msg) from e
+
     @override
     def fetch(self, repository_path: str | Path) -> None:
         """Fetch latest changes from the remote repository using Dulwich.
@@ -530,15 +556,7 @@ class DulwichVersioner(StrReprMixin):
         """
         try:
             with self._open_repository(repository_path) as repo:
-                remote_kwargs = self._dulwich_remote_kwargs()
-
-                try:
-                    # errstream swallows the transfer progress dulwich would
-                    # otherwise print on stdout, in the middle of a report.
-                    porcelain.fetch(repo, b"origin", errstream=BytesIO(), **remote_kwargs)
-                except KeyError as e:
-                    error_msg = "No 'origin' remote found in repository"
-                    raise RemoteNotFoundError(error_msg) from e
+                self._fetch_origin(repo)
 
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to fetch from remote repository: {e}"
@@ -566,16 +584,8 @@ class DulwichVersioner(StrReprMixin):
         """
         try:
             with self._open_repository(repository_path) as repo:
-                remote_kwargs = self._dulwich_remote_kwargs()
                 remote_branch_ref = _REMOTE_BRANCH_PREFIX + branch.encode()
-
-                try:
-                    # errstream swallows the transfer progress dulwich would
-                    # otherwise print on stdout, in the middle of a report.
-                    porcelain.fetch(repo, b"origin", errstream=BytesIO(), **remote_kwargs)
-                except KeyError as e:
-                    error_msg = "No 'origin' remote found in repository"
-                    raise RemoteNotFoundError(error_msg) from e
+                self._fetch_origin(repo)
 
                 self._ensure_remote_branch_exists(repo, remote_branch_ref, branch)
 

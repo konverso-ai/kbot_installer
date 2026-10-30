@@ -523,7 +523,8 @@ def test_fetch_valid_fetches_origin(bare_versioner: DulwichVersioner) -> None:
         patch("git.versioner.dulwich_versioner.porcelain.fetch") as mock_fetch,
     ):
         bare_versioner.fetch("/test/path")
-    mock_fetch.assert_called_once_with(mock_repo, b"origin", errstream=ANY)
+    # Thin packs break on partial clones (UnresolvedDeltas): the fetch must refuse them.
+    mock_fetch.assert_called_once_with(mock_repo, b"origin", errstream=ANY, thin_packs=False)
 
 
 @pytest.mark.parametrize(
