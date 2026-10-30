@@ -19,7 +19,6 @@ dependencies = [
     "psutil",
     "psycopg[binary]",
     "pydantic-settings",
-    "pygit2",
     "python-dotenv",
     "python-json-logger",
     "requests",
@@ -133,7 +132,7 @@ python-json-logger = "pythonjsonlogger"
 
 [tool.deptry.per_rule_ignores]
 DEP001 = ["tomllib", "Bot"]
-DEP002 = ["colorama", "furl", "gitpython", "pygit2", "tqdm"]
+DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]
 
