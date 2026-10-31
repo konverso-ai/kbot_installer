@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+      - release-2027.01
+      - release-2027.01-dev
       - release-2026.02
       - release-2026.02-dev
       - release-2026.01
@@ -13,6 +15,8 @@ on:
     types: [opened, synchronize, closed]
     branches:
       - master
+      - release-2027.01
+      - release-2027.01-dev
       - release-2026.02
       - release-2026.02-dev
       - release-2026.01
@@ -110,6 +114,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
@@ -278,6 +283,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
@@ -357,6 +363,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 

@@ -341,17 +341,30 @@ class TestS3Storage:
 
         assert compare("eq", list(storage.list_files_in_folder("folder/")), ["folder/file.txt"])
 
-    @pytest.mark.parametrize(
-        "method_name",
-        ["list_folders", "restore_soft_deleted_blob"],
-    )
-    def test_unsupported_methods_invalid_raise_not_implemented(
-        self, storage: S3Storage, method_name: str
+    def test_list_folders_valid_yields_direct_children_under_cluster(
+        self, backend: MagicMock, s3_client: MagicMock
     ) -> None:
-        """Test unsupported S3 operations raise NotImplementedError."""
-        method = getattr(storage, method_name)
+        """Test list_folders yields folder names below the cluster-scoped path, across pages."""
+        instance = S3Storage(backend=backend, bucket_name="bucket", cluster_name="cluster")
+        paginator = MagicMock()
+        paginator.paginate.return_value = [
+            {"CommonPrefixes": [{"Prefix": "cluster/env/uuid-1/"}]},
+            {"Contents": [{"Key": "cluster/env/file.txt"}]},
+            {"CommonPrefixes": [{"Prefix": "cluster/env/uuid-2/"}]},
+        ]
+        s3_client.get_paginator.return_value = paginator
+
+        assert compare("eq", list(instance.list_folders("env/")), ["uuid-1", "uuid-2"])
+        paginator.paginate.assert_called_once_with(
+            Bucket="bucket", Prefix="cluster/env/", Delimiter="/"
+        )
+
+    def test_restore_soft_deleted_blob_invalid_raises_not_implemented(
+        self, storage: S3Storage
+    ) -> None:
+        """Test restore_soft_deleted_blob is unsupported on S3."""
         with pytest.raises(NotImplementedError):
-            method("key")
+            storage.restore_soft_deleted_blob("key")
 
     def test_check_authorization_valid_succeeds(
         self, storage: S3Storage, s3_client: MagicMock
