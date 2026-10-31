@@ -771,6 +771,12 @@ class TestInstallCommand:
         req = installer_dir / "acme" / "requirements.txt"
         req.parent.mkdir(parents=True)
         req.write_text("requests\n", encoding="utf-8")
+        site_packages = installer_dir / "3rdparty" / "Python-3.10.15" / "lib" / "python3.10" / "site-packages"
+        site_packages.mkdir(parents=True)
+        (installer_dir / "3rdparty" / "versions.env").write_text(
+            "PYTHON_MAJOR_VERSION=3.10\nPYTHON_DIR=${THIRDPARTY_HOME}/Python-3.10.15\n",
+            encoding="utf-8",
+        )
 
         framework = MagicMock()
         framework.name = "kbot"

@@ -33,6 +33,16 @@ def _write_pip3(installer_dir: Path) -> Path:
     return pip3
 
 
+def _write_thirdparty_python(installer_dir: Path) -> None:
+    """Create a 3rdparty with a versions.env pointing at an existing Python directory."""
+    thirdparty = installer_dir / "3rdparty"
+    (thirdparty / "Python-3.10.15" / "lib" / "python3.10" / "site-packages").mkdir(parents=True)
+    (thirdparty / "versions.env").write_text(
+        "PYTHON_MAJOR_VERSION=3.10\nPYTHON_DIR=${THIRDPARTY_HOME}/Python-3.10.15\n",
+        encoding="utf-8",
+    )
+
+
 class TestInstallProductPythonRequirements:
     """Tests for install_product_python_requirements."""
 
@@ -46,6 +56,7 @@ class TestInstallProductPythonRequirements:
     def test_installs_requirements_for_framework_solution_and_customer_products(self, tmp_path: Path) -> None:
         """requirements.txt is installed for 'framework'/'solution'/'customer' products, via pip3.sh."""
         pip3 = _write_pip3(tmp_path)
+        _write_thirdparty_python(tmp_path)
         _write_product(tmp_path, "kbot_installer", type_="framework")
         _write_product(tmp_path, "my-solution", type_="solution")
         _write_product(tmp_path, "my-customer", type_="customer")
@@ -89,9 +100,23 @@ class TestInstallProductPythonRequirements:
 
         mock_run.assert_not_called()
 
+    def test_raises_without_running_pip_when_thirdparty_python_missing(self, tmp_path: Path) -> None:
+        """Without the 3rdparty Python, pip3.sh is not run: it would use '/bin/python'."""
+        _write_pip3(tmp_path)
+        _write_product(tmp_path, "my-solution", type_="solution")
+
+        with (
+            patch("installer_support.python_requirements.subprocess.run") as mock_run,
+            pytest.raises(RuntimeError, match="3rdparty Python is missing"),
+        ):
+            install_product_python_requirements(tmp_path)
+
+        mock_run.assert_not_called()
+
     def test_raises_when_pip_install_fails(self, tmp_path: Path) -> None:
         """A non-zero pip3.sh exit code raises a RuntimeError."""
         _write_pip3(tmp_path)
+        _write_thirdparty_python(tmp_path)
         _write_product(tmp_path, "my-solution", type_="solution")
 
         with (
