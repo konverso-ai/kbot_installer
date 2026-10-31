@@ -549,7 +549,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.43.32" },
     { name = "click" },
     { name = "colorama" },
-    { name = "dulwich", specifier = ">=1.2.6" },
+    { name = "dulwich", specifier = ">=1.2.9" },
     { name = "furl" },
     { name = "httpx" },
     { name = "more-itertools", specifier = ">=11.1.0" },

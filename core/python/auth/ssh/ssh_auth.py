@@ -1,6 +1,7 @@
 """SSH authentication for Git operations via Dulwich."""
 
 import os
+import shlex
 import stat
 import tempfile
 from collections.abc import Mapping
@@ -108,7 +109,7 @@ class SshAuth(SshAuthBase):
         """Build the SSH command used as ``GIT_SSH_COMMAND`` for git subprocesses."""
         command = self._ssh_command()
         if not self.use_agent:
-            command = f"{command} -i {self._resolve_key_path()}"
+            command = f"{command} -i {shlex.quote(str(self._resolve_key_path()))}"
         return command
 
     @override

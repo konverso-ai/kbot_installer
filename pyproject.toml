@@ -10,7 +10,7 @@ dependencies = [
     "boto3>=1.43.32",
     "click",
     "colorama",
-    "dulwich>=1.2.6",
+    "dulwich>=1.2.9",
     "furl",
     "httpx",
     "more-itertools>=11.1.0",

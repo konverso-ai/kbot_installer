@@ -1,5 +1,6 @@
 """Tests for auth.ssh.ssh_auth module."""
 
+import shlex
 from pathlib import Path
 
 import pytest
@@ -115,6 +116,15 @@ def test_gitsshcommand_valid_includes_key_file(tmp_path: Path) -> None:
         auth.git_ssh_command(),
         f"ssh -o StrictHostKeyChecking=accept-new -i {key_file}",
     )
+
+
+def test_gitsshcommand_valid_quotes_key_path_with_shell_characters(tmp_path: Path) -> None:
+    ssh_dir = tmp_path / "my ssh; touch pwned"
+    ssh_dir.mkdir()
+    key_file = ssh_dir / "id_ed25519"
+    key_file.write_text("fake-private-key")
+    auth = SshAuth(ssh_directory=ssh_dir)
+    assert compare("eq", shlex.split(auth.git_ssh_command())[-2:], ["-i", str(key_file)])
 
 
 def test_gitsshcommand_valid_uses_agent_without_key_file(
