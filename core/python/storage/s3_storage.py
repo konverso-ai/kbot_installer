@@ -293,7 +293,7 @@ class S3Storage(StorageBase):
             )
             for page in pages:
                 for common_prefix in page.get("CommonPrefixes", []):
-                    folder_name = common_prefix["Prefix"][len(storage_prefix) :].rstrip("/")
+                    folder_name = str(common_prefix["Prefix"])[len(storage_prefix) :].rstrip("/")
                     if folder_name:
                         yield folder_name
         except Exception:

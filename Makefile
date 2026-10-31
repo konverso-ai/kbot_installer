@@ -16,7 +16,7 @@ help:
 	@echo "  lint-fix     - Run code linter and automatically fix issues"
 	@echo "  test         - Run all tests using pytest"
 	@echo "  test-cov     - Run tests with coverage report (HTML and terminal output)"
-	@echo "  tox          - Run the full tox matrix (py310/py312: deps/lint/typecheck/test)"
+	@echo "  tox          - Run the full tox matrix (py312: deps/lint/typecheck/test)"
 	@echo ""
 	@echo "Usage examples:"
 	@echo "  make test                    # Run all tests"
@@ -92,7 +92,7 @@ else
 endif
 
 
-# Run the full tox matrix (py310/py312, each with deps/lint/typecheck/test)
+# Run the full tox matrix (py312, each of deps/lint/typecheck/test)
 tox:
 	uvx tox
 

@@ -1,6 +1,6 @@
 """KBot logger."""  # noqa: N999
 
-import datetime
+import datetime as dt
 import importlib
 import io
 import logging
@@ -492,7 +492,7 @@ class DataDogFormatter(JsonFormatter):
         super().add_fields(log_record, record, message_dict)
         if not log_record.get("timestamp"):
             # this doesn't use record.created, so it is slightly off
-            now = datetime.datetime.now(datetime.timezone.utc).strftime(
+            now = dt.datetime.now(dt.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             )
             log_record["timestamp"] = now

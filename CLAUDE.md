@@ -44,7 +44,7 @@ Run a single test directly with pytest (pythonpath is already configured via `py
 uv run python -B -m pytest core/python/database/tests/test_factory.py::test_add_db_internal -v
 ```
 
-`tox` runs the full matrix (py310 and py312, each with `deps`/`lint`/`typecheck`/`test` envs) using
+`tox` runs the full matrix (py312, with `deps`/`lint`/`typecheck`/`test` envs) using
 locked `uv` environments:
 
 ```bash
