@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+      - release-2027.01
+      - release-2027.01-dev
       - release-2026.02
       - release-2026.02-dev
       - release-2026.01
@@ -13,6 +15,8 @@ on:
     types: [opened, synchronize, closed]
     branches:
       - master
+      - release-2027.01
+      - release-2027.01-dev
       - release-2026.02
       - release-2026.02-dev
       - release-2026.01
