@@ -278,7 +278,26 @@ class S3Storage(StorageBase):
     @override
     def list_folders(self, path: str = "") -> Iterator[str]:
         """List folders directly inside the given path."""
-        raise NotImplementedError
+        s3_client = self._get_s3_client()
+        if not s3_client:
+            log.error("S3 client unavailable. Cannot list folders in path '%s'", path)
+            return
+
+        try:
+            storage_prefix = self._storage_prefix(path)
+            paginator = s3_client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=storage_prefix,
+                Delimiter="/",
+            )
+            for page in pages:
+                for common_prefix in page.get("CommonPrefixes", []):
+                    folder_name = str(common_prefix["Prefix"])[len(storage_prefix) :].rstrip("/")
+                    if folder_name:
+                        yield folder_name
+        except Exception:
+            log.exception("Failed to list folders in path '%s'", path)
 
     @override
     def restore_soft_deleted_blob(self, key: str) -> bool:
