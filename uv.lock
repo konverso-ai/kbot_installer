@@ -7,6 +7,9 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+constraints = [{ name = "async-timeout", marker = "python_full_version < '3.11'", specifier = "<5" }]
+
 [[package]]
 name = "aiofiles"
 version = "25.1.0"
@@ -159,11 +162,11 @@ wheels = [
 
 [[package]]
 name = "async-timeout"
-version = "5.0.1"
+version = "4.0.3"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/async-timeout/5.0.1/async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3", size = 9274, upload-time = "2024-11-06T16:41:39.6Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/async-timeout/4.0.3/async-timeout-4.0.3.tar.gz", hash = "sha256:4640d96be84d82d02ed59ea2b7105a0f7b33abe8703703cd0ab0bf87c427522f", size = 8345, upload-time = "2023-08-10T16:35:56.907Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/async-timeout/5.0.1/async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c", size = 6233, upload-time = "2024-11-06T16:41:37.9Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/async-timeout/4.0.3/async_timeout-4.0.3-py3-none-any.whl", hash = "sha256:7405140ff1230c310e51dc27b3145b9092d659ce68ff733fb0cefe3ee42be028", size = 5721, upload-time = "2023-08-10T16:35:55.203Z" },
 ]
 
 [[package]]
@@ -486,7 +489,7 @@ wheels = [
 
 [package.optional-dependencies]
 toml = [
-    { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "tomli" },
 ]
 
 [[package]]
@@ -704,7 +707,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/exceptiongroup/1.3.1/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -963,7 +966,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "python-json-logger" },
     { name = "requests" },
-    { name = "rich" },
+    { name = "rich", specifier = ">=13.7.0,<15" },
     { name = "tomlkit", specifier = ">=0.15.0" },
     { name = "tqdm" },
     { name = "typing-extensions" },
@@ -1088,7 +1091,7 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/multidict/7.1.0/multidict-7.1.0.tar.gz", hash = "sha256:61a4e5d81b8d4e4ad61964b230129e7a2b914793d96289029078fc9009f074ec", size = 362341, upload-time = "2026-10-09T20:31:38.279Z" }
 wheels = [
@@ -1575,9 +1578,9 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "pydantic", marker = "python_full_version < '3.11'" },
-    { name = "python-dotenv", marker = "python_full_version < '3.11'" },
-    { name = "typing-inspection", marker = "python_full_version < '3.11'" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
 ]
 sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/pydantic-settings/2.15.0/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117", size = 261253, upload-time = "2026-08-07T09:24:57.419Z" }
 wheels = [
@@ -1593,10 +1596,10 @@ resolution-markers = [
     "python_full_version == '3.11.*'",
 ]
 dependencies = [
-    { name = "pydantic", marker = "python_full_version >= '3.11'" },
-    { name = "python-dotenv", marker = "python_full_version >= '3.11'" },
-    { name = "typing-extensions", marker = "python_full_version >= '3.11'" },
-    { name = "typing-inspection", marker = "python_full_version >= '3.11'" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
 ]
 sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/pydantic-settings/2.16.2/pydantic_settings-2.16.2.tar.gz", hash = "sha256:3dc08ffabed2bbd5dc2dd55ead7b78b4e4c5cd776aecd04310db5f1224caaf46", size = 309225, upload-time = "2026-10-28T11:14:28.066Z" }
 wheels = [
@@ -1818,15 +1821,15 @@ wheels = [
 
 [[package]]
 name = "rich"
-version = "15.0.0"
+version = "14.3.4"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pygments" },
 ]
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/rich/15.0.0/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/rich/14.3.4/rich-14.3.4.tar.gz", hash = "sha256:817e02727f2b25b40ef56f5aa2217f400c8489f79ca8f46ea2b70dd5e14558a9", size = 230524, upload-time = "2026-04-11T02:57:45.419Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/rich/15.0.0/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/rich/14.3.4/rich-14.3.4-py3-none-any.whl", hash = "sha256:07e7adb4690f68864777b1450859253bed81a99a31ac321ac1817b2313558952", size = 310480, upload-time = "2026-04-11T02:57:47.484Z" },
 ]
 
 [[package]]

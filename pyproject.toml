@@ -22,7 +22,7 @@ dependencies = [
     "python-dotenv",
     "python-json-logger",
     "requests",
-    "rich",
+    "rich>=13.7.0,<15",  # kbot's 3rdparty Python: instructor requires rich<15
     "tomlkit>=0.15.0",
     "tqdm",
     "typing_extensions",
@@ -50,6 +50,13 @@ only-include = ["core/python"]
 "conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[tool.uv]
+# requirements.txt is pip-installed into kbot's 3rdparty Python, alongside kbot's own packages:
+# langchain-classic requires async-timeout<5 (pulled here by aiohttp) on Python < 3.11.
+constraint-dependencies = [
+    "async-timeout<5; python_version < '3.11'",
+]
 
 [[tool.uv.index]]
 name = "konverso-aws-private"
