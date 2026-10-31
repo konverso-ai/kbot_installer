@@ -10,7 +10,8 @@ import uuid
 import sys
 import tarfile
 import time
-import xml.dom.minidom
+
+import xmltodict
 
 from nexus import NexusRepository
 
@@ -141,17 +142,22 @@ def _get_xml_product_description(product_name):
     if not os.path.exists(product_description_path):
         return False
 
-    result = {}
-    dom = xml.dom.minidom.parse(product_description_path)
-    for product in dom.getElementsByTagName("product"):
-        for attr in ("name", "version", "build", "date", "type", "doc"):
-            if product.hasAttribute(attr):
-                result[attr] = product.getAttribute(attr)
+    with open(product_description_path, "rb") as fd:
+        doc = xmltodict.parse(fd, force_list=("parents", "parent"))
+    if "product" not in doc:
+        return {}
 
-        result["parents"] = []
-        for parents in product.getElementsByTagName("parents"):
-            for parent in parents.getElementsByTagName("parent"):
-                result["parents"].append(parent.getAttribute("name"))
+    product = doc["product"] or {}
+    result = {
+        attr: product[f"@{attr}"]
+        for attr in ("name", "version", "build", "date", "type", "doc")
+        if f"@{attr}" in product
+    }
+    result["parents"] = [
+        (parent or {}).get("@name", "")
+        for parents in product.get("parents", [])
+        for parent in (parents or {}).get("parent", [])
+    ]
 
     return result
 
@@ -505,7 +511,8 @@ def _nexus_download_and_install(nexus_file, product_name):
     start = time.time()
     print(f"    Untarring /tmp/{product_name}.tar.gz")
     with tarfile.open(f"/tmp/{product_name}.tar.gz", mode="r:*") as tf:
-        tf.extractall(path=installation_path)
+        for member in tf:
+            tf.extract(member, path=installation_path, filter="data")
     seconds = int(time.time() - start)
     print(f"         => completed in {seconds} seconds")
 
