@@ -1,0 +1,154 @@
+"""Factory function for database backend instances.
+
+Follows the project-wide naming convention: a ``mode`` resolves to the module
+``{mode}_database`` and the class ``{Mode}Database`` (e.g. ``internal`` ->
+``database.internal_database.InternalDatabase``). Each backend declares the
+settings model it expects through its ``settings_cls`` attribute.
+"""
+
+from pathlib import Path
+from typing import Literal, cast
+
+from database.base import DatabaseBackend
+from utils.factory.loader import factory_class
+
+DbMode = Literal["internal", "external"]
+
+
+def add_database(mode: DbMode, **kwargs) -> DatabaseBackend:
+    """Create the database backend instance matching the given mode.
+
+    Args:
+        mode: Database mode, either ``"internal"`` or ``"external"``.
+        **kwargs: Keyword arguments used to build the backend settings model.
+
+    Returns:
+        The database backend instance for the requested mode.
+
+    Raises:
+        ImportError: If no backend module exists for the given mode.
+        AttributeError: If the backend class is not found in its module.
+
+    """
+    backend_cls = factory_class(name=mode, package="database")
+    settings = backend_cls.settings_cls(**kwargs)
+    return cast("DatabaseBackend", backend_cls(settings=settings))
+
+
+def create_database(
+    *,
+    db_host: str | None,
+    db_port: int,
+    db_user: str,
+    password: str,
+    db_name: str,
+    workarea_path: Path,
+    pg_dir: Path | None = None,
+    schema_paths: list[Path] | None = None,
+    admin_user: str = "postgres",
+    admin_password: str = "postgres",  # noqa: S107
+) -> DatabaseBackend:
+    """Create the product database backend, without touching the database.
+
+    See `build_database` for the arguments; ``schema_paths`` defaults to none,
+    for operations that don't apply the schema (e.g. backup or destroy).
+
+    Returns:
+        The external backend when ``db_host`` is set, the internal one otherwise.
+
+    Raises:
+        ValueError: If ``pg_dir`` was not provided.
+
+    """
+    if pg_dir is None:
+        msg = "'pg_dir' is required to locate the 'psql' client used to apply schema files."
+        raise ValueError(msg)
+
+    psql_path = pg_dir / "bin" / "psql"
+
+    if db_host:
+        return add_database(
+            mode="external",
+            host=db_host,
+            port=db_port,
+            database=db_name,
+            user=db_user,
+            password=password,
+            psql_path=psql_path,
+            schema_paths=schema_paths or [],
+            allow_schema_creation=True,
+        )
+    return add_database(
+        mode="internal",
+        host="localhost",
+        port=db_port,
+        database=db_name,
+        user=db_user,
+        password=password,
+        psql_path=psql_path,
+        schema_paths=schema_paths or [],
+        pg_dir=pg_dir,
+        pg_data=workarea_path / "var" / "db",
+        log_path=workarea_path / "logs" / "postgres.log",
+        admin_user=admin_user,
+        admin_password=admin_password,
+    )
+
+
+def build_database(
+    *,
+    schema_paths: list[Path],
+    db_host: str | None,
+    db_port: int,
+    db_user: str,
+    password: str,
+    db_name: str,
+    workarea_path: Path,
+    pg_dir: Path | None = None,
+    admin_user: str = "postgres",
+    admin_password: str = "postgres",  # noqa: S107
+) -> DatabaseBackend:
+    r"""Build, prepare and initialize the product database backend.
+
+    Uses an externally managed database when ``db_host`` is set, otherwise
+    bootstraps a local, installer-owned PostgreSQL cluster under the workarea.
+    Either way, a ``psql`` client (resolved from ``pg_dir``) is required to
+    apply schema/upgrade files, since they may use ``psql``-only syntax (e.g.
+    ``\\set``) unsupported by a plain SQL connector.
+
+    Args:
+        schema_paths: Ordered list of ``db/init/db_schema.sql`` paths to apply, one per
+            product involved in the installation (dependencies first, top level product last).
+        db_host: External Postgres host, or None to use an internal cluster.
+        db_port: Postgres port.
+        db_user: Postgres application user.
+        password: Postgres application password.
+        db_name: Postgres database name.
+        workarea_path: Workarea directory, used for the internal cluster's data/log paths.
+        pg_dir: PostgreSQL installation directory, required in every mode to
+            locate the ``psql`` client used to apply schema files.
+        admin_user: Postgres admin user, used only for the internal cluster.
+        admin_password: Postgres admin password, used only for the internal cluster.
+
+    Returns:
+        The prepared and initialized database backend instance.
+
+    Raises:
+        ValueError: If ``pg_dir`` was not provided.
+
+    """
+    db = create_database(
+        schema_paths=schema_paths,
+        db_host=db_host,
+        db_port=db_port,
+        db_user=db_user,
+        password=password,
+        db_name=db_name,
+        workarea_path=workarea_path,
+        pg_dir=pg_dir,
+        admin_user=admin_user,
+        admin_password=admin_password,
+    )
+    db.prepare()
+    db.initialize()
+    return db

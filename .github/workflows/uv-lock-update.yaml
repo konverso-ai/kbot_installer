@@ -6,6 +6,11 @@ on:
 
 env:
   GH_TOKEN: ${{ secrets.GH_PAT }}
+  AWS_REGION: eu-west-3
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   uv-lock-update:
@@ -32,13 +37,28 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Authenticate uv with AWS CodeArtifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "::add-mask::$TOKEN"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
       - name: Run uv lock
         run: |
           rm uv.lock
           uv lock
-        env:
-          UV_INDEX_KONVERSO_NEXUS_USERNAME: uv
-          UV_INDEX_KONVERSO_NEXUS_PASSWORD: ${{ secrets.NEXUS_UV_PW }}
 
       - name: Commit uv.lock if changed
         run: |
