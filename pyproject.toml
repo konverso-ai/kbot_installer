@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
-version = "2.0.2"
-requires-python = ">=3.10,<3.13"
+version = "2.0.0"
+requires-python = ">=3.10, <3.13"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
@@ -29,13 +29,22 @@ dependencies = [
     "typing_extensions",
     "xmltodict>=1.0.4",
 ]
+license = "MIT"
+authors = [
+    { name = "Konverso", email = "contact@konverso.ai" }
+]
+classifiers=[
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+readme = "README.md"
 
 [project.scripts]
 kbot-installer = "cli.__main__:main"
 kbot-load = "cli.commands:load"
 kbot-learn = "cli.commands:learn"
 kbot-set-admin-password = "cli.commands:set_admin_password_command"
-tries = "tools.tries:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -51,11 +60,6 @@ only-include = ["core/python"]
 "conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
-
-[[tool.uv.index]]
-name = "konverso-aws-private"
-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/simple/"
-publish-url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/"
 
 [[tool.uv.index]]
 name = "konverso-aws-pypi-proxy"
