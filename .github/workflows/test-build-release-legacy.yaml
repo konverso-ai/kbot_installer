@@ -11,6 +11,7 @@ on:
   workflow_dispatch:
  
 env:
+  AWS_REGION: eu-west-3
   AZURE_STORAGE_ACCOUNT: sakbotreleasefcp
   AZURE_STORAGE_CONTAINER: artifacts
   SOLUTION_NAME: ${{ github.event.repository.name }}
@@ -20,6 +21,9 @@ jobs:
   pre-test:
     name: Pre Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     if: github.event_name == 'pull_request' && github.event.pull_request.head.user.login != 'konverso-github-actions[bot]' && !startsWith(github.event.pull_request.base.ref, 'release-2026')
     steps:
       - name: Checkout
@@ -61,6 +65,47 @@ jobs:
         run: |
           curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
           orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
+
+      # release-2025.03 keeps a dependency-less pyproject (auto-merge keeps it): only -dev bases can run tox
+      - name: Set up Python 3.10 and 3.12.13
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: actions/setup-python@v7
+        with:
+          python-version: |
+            3.10
+            3.12.13
+
+      - name: Install uv
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Configure AWS credentials
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "::add-mask::$TOKEN"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Run tox
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        run: uvx tox
  
   build-solution:
     name: Build solution ${{ github.ref_name }}
