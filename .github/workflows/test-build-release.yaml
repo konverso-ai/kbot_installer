@@ -114,6 +114,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
@@ -282,6 +283,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
@@ -361,6 +363,7 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 

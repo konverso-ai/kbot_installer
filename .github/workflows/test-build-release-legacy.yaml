@@ -66,17 +66,23 @@ jobs:
           curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
           orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
 
-      - name: Set up Python 3.12.13
+      # release-2025.03 keeps a dependency-less pyproject (auto-merge keeps it): only -dev bases can run tox
+      - name: Set up Python 3.10 and 3.12.13
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
         uses: actions/setup-python@v7
         with:
-          python-version: '3.12.13'
+          python-version: |
+            3.10
+            3.12.13
 
       - name: Install uv
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
         uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
       - name: Configure AWS credentials
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -85,6 +91,7 @@ jobs:
           role-duration-seconds: 3600
 
       - name: Authenticate uv with AWS CodeArtifact
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
         run: |
           TOKEN=$(aws codeartifact get-authorization-token \
             --domain konverso \
@@ -92,10 +99,12 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
+          echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Run tox
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
         run: uvx tox
  
   build-solution:
