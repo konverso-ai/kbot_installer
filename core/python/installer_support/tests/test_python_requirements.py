@@ -43,9 +43,10 @@ class TestInstallProductPythonRequirements:
 
         mock_run.assert_not_called()
 
-    def test_installs_requirements_for_solution_and_customer_products(self, tmp_path: Path) -> None:
-        """requirements.txt is installed for 'solution'/'customer' products, via pip3.sh."""
+    def test_installs_requirements_for_framework_solution_and_customer_products(self, tmp_path: Path) -> None:
+        """requirements.txt is installed for 'framework'/'solution'/'customer' products, via pip3.sh."""
         pip3 = _write_pip3(tmp_path)
+        _write_product(tmp_path, "kbot_installer", type_="framework")
         _write_product(tmp_path, "my-solution", type_="solution")
         _write_product(tmp_path, "my-customer", type_="customer")
 
@@ -55,29 +56,23 @@ class TestInstallProductPythonRequirements:
         ) as mock_run:
             install_product_python_requirements(tmp_path)
 
-        assert mock_run.call_count == 2
         called_commands = [call.args[0] for call in mock_run.call_args_list]
-        assert [
-            str(pip3),
-            "install",
-            "-r",
-            str(tmp_path / "my-solution" / "requirements.txt"),
-            "--quiet",
-            "--disable-pip-version-check",
-        ] in called_commands
-        assert [
-            str(pip3),
-            "install",
-            "-r",
-            str(tmp_path / "my-customer" / "requirements.txt"),
-            "--quiet",
-            "--disable-pip-version-check",
-        ] in called_commands
+        assert sorted(called_commands) == sorted(
+            [
+                str(pip3),
+                "install",
+                "-r",
+                str(tmp_path / name / "requirements.txt"),
+                "--quiet",
+                "--disable-pip-version-check",
+            ]
+            for name in ("kbot_installer", "my-solution", "my-customer")
+        )
 
     def test_skips_products_of_other_types(self, tmp_path: Path) -> None:
-        """Products whose type is not solution/customer are left untouched."""
+        """Products whose type is not framework/solution/customer are left untouched."""
         _write_pip3(tmp_path)
-        _write_product(tmp_path, "a-dependency", type_="dependency")
+        _write_product(tmp_path, "my-site", type_="site")
 
         with patch("installer_support.python_requirements.subprocess.run") as mock_run:
             install_product_python_requirements(tmp_path)
@@ -85,7 +80,7 @@ class TestInstallProductPythonRequirements:
         mock_run.assert_not_called()
 
     def test_skips_products_without_requirements_file(self, tmp_path: Path) -> None:
-        """A solution/customer product without requirements.txt is skipped."""
+        """A framework/solution/customer product without requirements.txt is skipped."""
         _write_pip3(tmp_path)
         _write_product(tmp_path, "my-solution", type_="solution", with_requirements=False)
 
