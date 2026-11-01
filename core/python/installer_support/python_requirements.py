@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from installer_support.installer_service import InstallerService
+from installer_support.thirdparty_env import resolve_site_packages_dir
 from utils.Logger import logger
 
 log = logger.get_package_logger("installer_support")
@@ -28,7 +29,8 @@ def install_product_python_requirements(installer_path: Path) -> None:
         installer_path: Installer directory holding the downloaded products.
 
     Raises:
-        RuntimeError: If installing a product's requirements fails.
+        RuntimeError: If the 3rdparty Python is missing while requirements must
+            be installed, or if installing a product's requirements fails.
 
     """
     pip3 = installer_path / "kbot" / "bin" / "pip3.sh"
@@ -36,15 +38,26 @@ def install_product_python_requirements(installer_path: Path) -> None:
         log.warning("Skipping product Python requirements: '%s' not found.", pip3)
         return
 
-    service = InstallerService(installer_path)
-    for product in service.load_products_from_disk():
-        if product.type not in _PYTHON_REQUIREMENTS_PRODUCT_TYPES:
-            continue
+    requirements: list[tuple[str, Path]] = []
+    for product in InstallerService(installer_path).load_products_from_disk():
         req_path = installer_path / product.name / "requirements.txt"
-        if not req_path.is_file():
-            continue
+        if product.type in _PYTHON_REQUIREMENTS_PRODUCT_TYPES and req_path.is_file():
+            requirements.append((product.name, req_path))
+    if not requirements:
+        return
 
-        log.info("Installing Python requirements for '%s' into 3rdparty Python...", product.name)
+    # pip3.sh takes the interpreter from 3rdparty/versions.env: without it, it
+    # would run '/bin/python' and rewrite '/lib/python/_sysconfigdata...'.
+    site_packages = resolve_site_packages_dir(installer_path)
+    if site_packages is None or not site_packages.is_dir():
+        msg = (
+            f"Cannot install Python requirements: the 3rdparty Python is missing from '{installer_path}' "
+            f"('3rdparty/versions.env' or its Python directory not found)."
+        )
+        raise RuntimeError(msg)
+
+    for name, req_path in requirements:
+        log.info("Installing Python requirements for '%s' into 3rdparty Python...", name)
         result = subprocess.run(  # noqa: S603
             [
                 str(pip3),
@@ -57,5 +70,5 @@ def install_product_python_requirements(installer_path: Path) -> None:
             check=False,
         )
         if result.returncode:
-            msg = f"Failed to install Python requirements for '{product.name}' (exit {result.returncode})."
+            msg = f"Failed to install Python requirements for '{name}' (exit {result.returncode})."
             raise RuntimeError(msg)
