@@ -10,7 +10,6 @@ unchanged are reported as up to date.
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -250,7 +249,9 @@ class InstallerUpdatable:
         The artifact is not downloaded when the description published next to
         it shows the installed commit. Otherwise, the existing folder is kept
         until the new artifact is fully downloaded, and also when it turns out
-        to hold the installed commit.
+        to hold the installed commit. It is then moved aside, and restored if
+        the new folder cannot be moved into place, so a failure never leaves
+        the product missing.
 
         Args:
             path: Product folder.
@@ -276,7 +277,11 @@ class InstallerUpdatable:
 
             # Download next to the products (same filesystem, so rename works);
             # without a top-level description.xml, product discovery ignores it.
-            with tempfile.TemporaryDirectory(dir=self.installer_path, prefix=".update-") as tmp:
+            # Cleanup errors (e.g. files of the previous folder still written by
+            # running kbot services) must not turn a completed swap into a failure.
+            with tempfile.TemporaryDirectory(
+                dir=self.installer_path, prefix=".update-", ignore_cleanup_errors=True
+            ) as tmp:
                 new_dir = Path(tmp) / path.name
                 self._storage_provider.clone_and_checkout(path.name, new_dir, branch=branch)
                 if not (new_dir / "description.xml").exists():
@@ -292,8 +297,13 @@ class InstallerUpdatable:
                 if new_commit and new_commit == old_commit:
                     return self._report_up_to_date(table, path, branch, old_commit)
 
-                shutil.rmtree(path)
-                new_dir.rename(path)
+                previous_dir = Path(tmp) / f"{path.name}.previous"
+                path.rename(previous_dir)
+                try:
+                    new_dir.rename(path)
+                except OSError:
+                    previous_dir.rename(path)
+                    raise
         except (ProviderError, ValueError, OSError) as e:
             return self._report_error(table, path, _STORAGE_PROVIDER_NAME, str(e))
 

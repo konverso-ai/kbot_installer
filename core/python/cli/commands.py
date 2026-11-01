@@ -773,6 +773,9 @@ def update(
     except click.UsageError:
         raise
     except Exception as e:
+        # Failed product updates often explain a later error (e.g. a missing 3rdparty).
+        if failed:
+            click.echo(f"Update finished with errors for: {', '.join(failed)}", err=True)
         click.echo(f"Error updating: {e}", err=True)
         raise click.Abort from e
 
