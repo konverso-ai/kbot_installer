@@ -257,6 +257,7 @@ class TestDulwichVersioner:
                         message="test message",
                         author=versioner._author.to_bytes(),
                         committer=versioner._author.to_bytes(),
+                        no_verify=True,
                     )
 
     def test_checkout_local_branch(self, versioner: DulwichVersioner) -> None:
@@ -372,92 +373,6 @@ class TestDulwichVersioner:
 
         versioner = add_versioner("dulwich")
         assert isinstance(versioner, DulwichVersioner)
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        (
-            {
-                "staged": {"add": [], "delete": [], "modify": []},
-                "unstaged": [],
-                "untracked": [],
-            },
-            False,
-        ),
-        (
-            {
-                "staged": {"add": ["file.txt"], "delete": [], "modify": []},
-                "unstaged": [],
-                "untracked": [],
-            },
-            True,
-        ),
-        (
-            {
-                "staged": {"add": [], "delete": [], "modify": []},
-                "unstaged": ["file.txt"],
-                "untracked": [],
-            },
-            True,
-        ),
-        (
-            {
-                "staged": {"add": [], "delete": [], "modify": []},
-                "unstaged": [],
-                "untracked": ["file.txt"],
-            },
-            True,
-        ),
-    ],
-)
-def test_has_working_tree_changes_valid_detects_changes(
-    params: dict,
-    expected: bool,
-) -> None:
-    mock_status = MagicMock()
-    mock_status.staged = params["staged"]
-    mock_status.unstaged = params["unstaged"]
-    mock_status.untracked = params["untracked"]
-    mock_repo = MagicMock()
-    with patch(
-        "git.versioner.dulwich_versioner.porcelain.status",
-        return_value=mock_status,
-    ):
-        result = DulwichVersioner._has_working_tree_changes(mock_repo)
-    assert compare("eq", result, expected)
-
-
-@pytest.mark.parametrize(
-    "params, expected",
-    [
-        (
-            {"staged": {"add": [], "delete": [], "modify": []}},
-            False,
-        ),
-        (
-            {"staged": {"add": [], "delete": ["file.txt"], "modify": []}},
-            True,
-        ),
-        (
-            {"staged": {"add": [], "delete": [], "modify": ["file.txt"]}},
-            True,
-        ),
-    ],
-)
-def test_has_staged_changes_valid_detects_staged(
-    params: dict,
-    expected: bool,
-) -> None:
-    mock_status = MagicMock()
-    mock_status.staged = params["staged"]
-    mock_repo = MagicMock()
-    with patch(
-        "git.versioner.dulwich_versioner.porcelain.status",
-        return_value=mock_status,
-    ):
-        result = DulwichVersioner._has_staged_changes(mock_repo)
-    assert compare("eq", result, expected)
 
 
 @pytest.mark.parametrize(

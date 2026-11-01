@@ -127,6 +127,44 @@ def test_status_valid_clean_repository_is_clean(
     assert compare("eq", status.changed, [])
 
 
+def test_status_valid_reports_untracked_like_git(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    (repo_path / ".gitignore").write_text("*.log\nbuild/\n")
+    with Repo(str(repo_path)) as repo:
+        _commit_file(repo, "sub/kept.txt")
+        porcelain.add(repo, paths=[str(repo_path / ".gitignore")])
+    # Untracked file next to tracked ones: listed by itself.
+    (repo_path / "sub" / "new.txt").write_text("new")
+    # Directory without tracked files: listed once, with a trailing slash.
+    (repo_path / "newdir" / "deep").mkdir(parents=True)
+    (repo_path / "newdir" / "a.txt").write_text("a")
+    (repo_path / "newdir" / "deep" / "b.txt").write_text("b")
+    # Ignored: by pattern, by ignored directory, or holding only ignored files.
+    (repo_path / "debug.log").write_text("log")
+    (repo_path / "build").mkdir()
+    (repo_path / "build" / "out.txt").write_text("out")
+    (repo_path / "logs").mkdir()
+    (repo_path / "logs" / "run.log").write_text("log")
+
+    status = versioner.status(repo_path)
+
+    assert compare("eq", sorted(status.untracked), ["newdir/", "sub/new.txt"])
+
+
+def test_status_valid_skips_tracked_symlink_to_directory(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    (repo_path / "target").mkdir()
+    (repo_path / "target" / "file.txt").write_text("content")
+    (repo_path / "link").symlink_to("target")
+    with Repo(str(repo_path)) as repo:
+        porcelain.add(repo, paths=[str(repo_path / "target"), str(repo_path / "link")])
+        porcelain.commit(repo, message=b"msg", author=AUTHOR, committer=AUTHOR)
+
+    assert compare("eq", versioner.status(repo_path).is_clean, True)
+
+
 def test_is_bare_valid_reports_working_tree_repository(
     versioner: DulwichVersioner, repo_path: Path
 ) -> None:
