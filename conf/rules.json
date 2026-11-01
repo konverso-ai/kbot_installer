@@ -93,6 +93,8 @@
         "includes": [
             "client/**",
             "locales/**",
+            "web/client/**",
+            "web/locales/**",
             "widget/**",
             "msteams_app/**",
             "msteams_tab/**",
@@ -110,7 +112,8 @@
         "recursive": true,
         "excludes": [
             "web/images/**"
-        ]
+        ],
+        "refresh": true
     },
     {
         "source": "ui",
