@@ -3,6 +3,7 @@
 This module implements the DulwichVersioner class that handles full git
 operations using Dulwich for any git repository.
 """
+import os
 import shutil
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -12,8 +13,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 from dulwich import porcelain
 from dulwich.diff_tree import CHANGE_ADD, CHANGE_DELETE, CHANGE_MODIFY, tree_changes
-from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
+from dulwich.errors import CommitError, GitProtocolError, HangupException, NotGitRepository
 from dulwich.graph import find_merge_base
+from dulwich.ignore import IgnoreFilterManager
+from dulwich.index import Index
 from dulwich.object_store import tree_lookup_path
 from dulwich.objects import ObjectID, Tag
 from dulwich.objectspec import parse_commit
@@ -51,8 +54,109 @@ _DULWICH_ERRORS = (
     NotGitRepository,
     GitProtocolError,
     HangupException,
+    CommitError,
     DulwichPorcelainError,
 )
+
+
+def _untracked_paths(repo: Repo) -> list[str]:
+    """List the untracked paths of the working tree, as ``git status`` shows them.
+
+    Matches dulwich's ``get_untracked_paths`` in its ``git status`` setup
+    (``untracked_files="normal"``, ignored paths excluded): untracked files in
+    directories holding tracked files are listed one by one, while a directory
+    without any tracked file is reported once, with a trailing slash, unless it
+    only holds ignored files.
+
+    Dulwich looks for tracked files under each directory by scanning the whole
+    index, which costs directories x index entries: about 14 seconds on the kbot
+    repository. The directories holding tracked files are collected once here.
+
+    Args:
+        repo: Repository whose working tree is walked.
+
+    Returns:
+        Repository-relative paths: untracked files first, then untracked
+        directories.
+
+    """
+    root = repo.path.rstrip("/")
+    index = repo.open_index()
+    ignore_manager = IgnoreFilterManager.from_repo(repo)
+    tracked_dirs = _tracked_directories(index)
+
+    untracked_files: list[str] = []
+    untracked_dirs: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        prefix = dirpath[len(root) + 1 :] + "/" if dirpath != root else ""
+        if prefix and (".git" in dirnames or ".git" in filenames):
+            # A nested repository: its content belongs to that repository.
+            dirnames.clear()
+            continue
+
+        untracked_files.extend(
+            rel_path
+            for rel_path in (prefix + name for name in filenames if name != ".git")
+            if os.fsencode(rel_path) not in index and not ignore_manager.is_ignored(rel_path)
+        )
+
+        walked = []
+        for name in dirnames:
+            rel_path = prefix + name
+            if name == ".git" or ignore_manager.may_prune_directory(rel_path + "/"):
+                continue
+            if rel_path in tracked_dirs:
+                walked.append(name)
+            elif _is_untracked_directory(f"{dirpath}/{name}", rel_path, index, ignore_manager):
+                untracked_dirs.append(rel_path + "/")
+        dirnames[:] = walked
+
+    return untracked_files + untracked_dirs
+
+
+def _tracked_directories(index: Index) -> set[str]:
+    """Return every directory holding a tracked path, the root being ``""``."""
+    tracked_dirs = {""}
+    for tree_path in index:
+        parent = os.fsdecode(tree_path).rpartition("/")[0]
+        while parent not in tracked_dirs:
+            tracked_dirs.add(parent)
+            parent = parent.rpartition("/")[0]
+    return tracked_dirs
+
+
+def _is_untracked_directory(
+    path: str,
+    rel_path: str,
+    index: Index,
+    ignore_manager: IgnoreFilterManager,
+) -> bool:
+    """Tell whether a directory without tracked files shows up as untracked.
+
+    A tracked entry of that name (a symlink to a directory, a submodule) is not
+    untracked, and neither is a directory that is ignored or only holds ignored
+    files.
+    """
+    if os.fsencode(rel_path) in index:
+        return False
+    return _has_non_ignored_file(path, rel_path, ignore_manager) and not ignore_manager.is_ignored(rel_path + "/")
+
+
+def _has_non_ignored_file(path: str, rel_path: str, ignore_manager: IgnoreFilterManager) -> bool:
+    """Tell whether a directory holds, at any depth, a file that is not ignored."""
+    try:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                rel_entry = f"{rel_path}/{entry.name}"
+                if entry.is_file():
+                    if ignore_manager.is_ignored(rel_entry) is not True:
+                        return True
+                elif entry.is_dir() and _has_non_ignored_file(entry.path, rel_entry, ignore_manager):
+                    return True
+    except OSError:
+        # Unreadable: assume it holds something worth reporting.
+        return True
+    return False
 
 
 class DulwichVersioner(StrReprMixin):
@@ -164,19 +268,32 @@ class DulwichVersioner(StrReprMixin):
             repo.close()
 
     @staticmethod
-    def _has_working_tree_changes(repo: Repo) -> bool:
+    def _git_status(repo: Repo) -> porcelain.GitStatus:
+        """Return the staged, unstaged and untracked paths of the repository.
+
+        Same result as ``porcelain.status(repo)``, whose untracked file
+        detection is too slow on large repositories: see :func:`_untracked_paths`.
+        """
+        status = porcelain.status(repo, untracked_files="no")
+        return status._replace(untracked=_untracked_paths(repo))
+
+    @classmethod
+    def _has_working_tree_changes(cls, repo: Repo) -> bool:
         """Return True when the repository has unstaged or untracked changes."""
-        status = porcelain.status(repo)
+        status = cls._git_status(repo)
         staged = status.staged
         has_staged = any(staged.get(key) for key in ("add", "delete", "modify"))
         return bool(has_staged or status.unstaged or status.untracked)
 
     @staticmethod
     def _has_staged_changes(repo: Repo) -> bool:
-        """Return True when the index has staged changes."""
-        status = porcelain.status(repo)
-        staged = status.staged
-        return bool(staged.get("add") or staged.get("delete") or staged.get("modify"))
+        """Return True when the index differs from HEAD.
+
+        Only the index is compared with HEAD: ``porcelain.status`` would also walk
+        the working tree for unstaged and untracked files, which takes seconds on
+        large repositories.
+        """
+        return any(porcelain.get_tree_changes(repo).values())
 
     def _get_current_branch_name(self, repo: Repo) -> str:
         """Return the current branch name from HEAD.
@@ -297,7 +414,7 @@ class DulwichVersioner(StrReprMixin):
         """Return the staged, unstaged and untracked paths of the repository."""
         with self._open_repository(repository_path) as repo:
             try:
-                raw = porcelain.status(repo)
+                raw = self._git_status(repo)
             except _DULWICH_ERRORS as e:
                 error_msg = f"Failed to read repository status: {e}"
                 raise VersionerError(error_msg) from e
@@ -702,6 +819,12 @@ class DulwichVersioner(StrReprMixin):
     ) -> str | None:
         """Commit staged changes using Dulwich.
 
+        Client-side hooks (``pre-commit``, ``commit-msg``) are not run, as with
+        ``git commit --no-verify``: commits made here are programmatic, and the
+        hooks are developer tooling that runs in the kbot environment, whose
+        exported ``PYTHONHOME``/``PYTHONPATH`` break any other Python interpreter
+        a hook starts.
+
         Args:
             repository_path: Path to the local repository.
             message: Commit message.
@@ -726,6 +849,7 @@ class DulwichVersioner(StrReprMixin):
                     message=message,
                     author=author_bytes,
                     committer=author_bytes,
+                    no_verify=True,
                 )
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to commit changes: {e}"

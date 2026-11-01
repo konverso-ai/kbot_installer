@@ -253,6 +253,17 @@ def test_commit_valid_without_staged_changes_returns_none(
     assert compare("eq", versioner.commit(repo_path, "nothing"), None)
 
 
+def test_commit_valid_with_only_unstaged_and_untracked_changes_returns_none(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    head = versioner.head_commit_id(repo_path)
+    (repo_path / "a.txt").write_text("a2")
+    (repo_path / "untracked.txt").write_text("u")
+
+    assert compare("eq", versioner.commit(repo_path, "nothing staged"), None)
+    assert compare("eq", versioner.head_commit_id(repo_path), head)
+
+
 def test_commit_valid_uses_per_call_author(
     versioner: DulwichVersioner, repo_path: Path
 ) -> None:
@@ -291,3 +302,20 @@ def test_commit_valid_records_deletions_staged_by_remove(
     assert commit_id is not None
     assert compare("eq", versioner.status(repo_path).is_clean, True)
     assert compare("eq", (repo_path / "a.txt").exists(), False)
+
+
+def test_commit_valid_ignores_failing_client_hooks(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    hooks_dir = repo_path / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    for hook_name in ("pre-commit", "commit-msg"):
+        hook = hooks_dir / hook_name
+        hook.write_text("#!/bin/sh\nexit 1\n")
+        hook.chmod(0o755)
+    (repo_path / "a.txt").write_text("a2")
+    versioner.add(repo_path, ["a.txt"])
+
+    commit_id = versioner.commit(repo_path, "")
+
+    assert compare("eq", versioner.head_commit_id(repo_path), commit_id)

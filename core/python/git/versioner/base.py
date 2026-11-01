@@ -458,7 +458,7 @@ class VersionerBase(ABC):
         message: str,
         author: Author | None = None,
     ) -> str | None:
-        """Commit staged changes.
+        """Commit staged changes, without running client-side hooks.
 
         Args:
             repository_path: Path to the local repository.
