@@ -286,6 +286,8 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Bump dev version
         run: |
@@ -307,10 +309,8 @@ jobs:
       - name: Build
         run: uv build --wheel
 
-      - name: Publish to PyPi
-        run: uv publish
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to AWS CodeArtifact
+        run: uv publish --publish-url https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/
 
   uv-bump-patch-publish-release:
     name: UV bump patch, git push & publish RELEASE
@@ -366,6 +366,8 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
           echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_PUBLISH_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Bump patch version
         run: |
@@ -387,7 +389,5 @@ jobs:
       - name: Build
         run: uv build --wheel
 
-      - name: Publish to PyPi
-        run: uv publish
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to AWS CodeArtifact
+        run: uv publish --publish-url https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/private-pypi/
