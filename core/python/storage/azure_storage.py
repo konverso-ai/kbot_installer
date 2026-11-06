@@ -115,7 +115,7 @@ class AzureStorage(StorageBase):
             )
             return data.decode(encoding)
         except ResourceNotFoundError:
-            log.exception("Path %s was not found in Bucket storage", key)
+            log.debug("Path %s was not found in Bucket storage", key)
         except Exception:
             log.exception(
                 "Retrieval failed for key='%s'; encoding=%s",
