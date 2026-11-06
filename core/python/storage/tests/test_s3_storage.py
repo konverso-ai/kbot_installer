@@ -1,5 +1,6 @@
 """Tests for s3_storage module."""
 
+import logging
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -145,15 +146,19 @@ class TestS3Storage:
         assert compare("eq", instance.get("file.txt"), None)
 
     def test_get_valid_returns_none_on_nosuchkey(
-        self, storage: S3Storage, s3_client: MagicMock
+        self,
+        storage: S3Storage,
+        s3_client: MagicMock,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test get returns None when the object does not exist."""
+        """Test get returns None, without warning or error, when the object does not exist."""
         s3_client.get_object.side_effect = ClientError(
             {"Error": {"Code": "NoSuchKey", "Message": "Not found"}},
             "GetObject",
         )
 
         assert compare("eq", storage.get("missing.txt"), None)
+        assert compare("eq", [r for r in caplog.records if r.levelno >= logging.WARNING], [])
 
     def test_get_valid_returns_none_on_generic_error(
         self, storage: S3Storage, s3_client: MagicMock
