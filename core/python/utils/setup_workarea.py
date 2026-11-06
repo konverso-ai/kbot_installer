@@ -128,6 +128,7 @@ class Installer:
         self._SetupBin()
         self._SetupCore()
         self._SetupRest()
+        self._SetupInfra()
         self._SetupLogs()
         self._SetupUI()
         self._SetupVar()
@@ -178,6 +179,7 @@ class Installer:
         self._SetupBin()
         self._SetupCore()
         self._SetupRest()
+        self._SetupInfra()
         self._SetupUI()
         self._SetupTests()
         self._CopyRedisCertificates()
@@ -235,6 +237,10 @@ class Installer:
             dirname = os.path.join(self.target, 'rest', dname)
             self._Makedirs(dirname)
             self._LinkProductFilesToDir(f'rest/{dname}', dirname, exts=('.py', '.so'))
+
+    def _SetupInfra(self):
+        # Django apps and their migration data (schema_baseline.json, legacy_convergence.sql) of every product.
+        self._LinkProductFilesToDir('infra', os.path.join(self.target, 'infra'), exts=('.py', '.so', '.json', '.sql'))
 
     def _SetupLogs(self):
         dirname = os.path.join(self.target, 'logs', 'httpd')
@@ -694,10 +700,24 @@ class Installer:
                         fd.write('\n')
                     fd.write("%s = %s\n" % (name, value))
 
+    def _RunMigrations(self):
+        """Create or upgrade the schema with bin/migrate.sh; None when this release has no Django migrations."""
+        migrate_script = os.path.join(self.target, 'bin', 'migrate.sh')
+        if not os.path.exists(migrate_script):
+            return None
+        return os.system(f"DB_HOST='{self.db_host}' DB_PORT='{self.db_port}' DB_NAME='{self.db_name}' "
+                         f"DB_USER='{self.db_user}' DB_PASSWORD='{self.db_password}' {migrate_script}")
+
     def _SetupExternalDatabase(self):
-        # load database schema definition
         print("Loading tables to external database...")
         sys.stdout.flush()
+        rc = self._RunMigrations()
+        if rc is not None:
+            if rc != 0:
+                print("Error: can't load tables! Aborting...")
+                sys.exit(1)
+            return
+        # Releases without Django migrations: load the database schema definition
         for product in reversed(self.products):
             sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
@@ -786,6 +806,16 @@ class Installer:
 
     def _InitializeDatabaseFromScratch(self):
         print("=> Initializing database tables...")
+        rc = self._RunMigrations()
+        if rc is not None:
+            if rc != 0:
+                print("Error: can't init DB schema! Aborting...")
+                os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
+                sys.exit(1)
+            sys.stdout.flush()
+            print("=> PostgreSQL DB loaded")
+            return
+        # Releases without Django migrations: load the database schema definition
         for product in reversed(self.products):
             sqlfile = os.path.join(self.path, product.name, 'db', 'init', 'db_schema.sql')
             if os.path.exists(sqlfile):
