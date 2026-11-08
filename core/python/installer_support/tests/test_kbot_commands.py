@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, run_workarea_script, validate_license
+from installer_support.kbot_commands import run_kbot_command, run_kbot_load, run_workarea_script, validate_license
 
 
 class TestRunWorkareaScript:
@@ -77,26 +77,28 @@ class TestValidateLicense:
             validate_license(tmp_path)
 
 
-class TestRunKbotIamLoad:
-    """Tests for run_kbot_iam_load."""
+class TestRunKbotLoad:
+    """Tests for run_kbot_load."""
 
-    def test_runkbotiamload_valid_invokes_core_sh_load_profiles(self, tmp_path: Path) -> None:
-        """'core.sh load -p' is used: unlike 'kbot.sh load', it forwards '-p' to Load.py."""
+    def test_runkbotload_valid_forwards_options_to_core_sh_load(self, tmp_path: Path) -> None:
+        """'core.sh load' is used: unlike 'kbot.sh load', it forwards the options to Load.py."""
         with patch(
             "installer_support.kbot_commands.subprocess.run",
             return_value=MagicMock(returncode=0),
         ) as mock_run:
-            run_kbot_iam_load(tmp_path)
+            run_kbot_load(tmp_path, "--profiles", "--products", "jira")
 
-        mock_run.assert_called_once_with([str(tmp_path / "bin" / "core.sh"), "load", "-p"], check=False)
+        mock_run.assert_called_once_with(
+            [str(tmp_path / "bin" / "core.sh"), "load", "--profiles", "--products", "jira"], check=False
+        )
 
-    def test_runkbotiamload_invalid_raises_when_command_fails(self, tmp_path: Path) -> None:
+    def test_runkbotload_invalid_raises_when_command_fails(self, tmp_path: Path) -> None:
         """A non-zero exit status is reported as an error."""
         with (
             patch(
                 "installer_support.kbot_commands.subprocess.run",
                 return_value=MagicMock(returncode=1),
             ),
-            pytest.raises(RuntimeError, match="load -p"),
+            pytest.raises(RuntimeError, match="load --profiles"),
         ):
-            run_kbot_iam_load(tmp_path)
+            run_kbot_load(tmp_path, "--profiles")
