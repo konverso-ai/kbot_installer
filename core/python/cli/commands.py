@@ -2,6 +2,7 @@
 
 import os
 import shutil
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from git.models import GitProvider
 from installable.dependency_graph import DependencyGraph
 from installable.factory import build_workarea
 from installer_support.installer_service import InstallerService
-from installer_support.kbot_commands import run_kbot_command, run_kbot_iam_load, run_workarea_script, validate_license
+from installer_support.kbot_commands import run_kbot_command, run_kbot_load, run_workarea_script, validate_license
 from installer_support.logging_config import setup_logging
 from installer_support.python_requirements import install_product_python_requirements
 from installer_support.thirdparty_env import prepend_thirdparty_ld_library_path, resolve_pg_dir_str, resolve_pg_version
@@ -331,7 +332,8 @@ def _load_and_learn(
     if with_load:
         run_kbot_command(workarea_path, "load")
     else:
-        run_kbot_iam_load(workarea_path)
+        # Creates the 'users.conf' accounts (including 'admin') without loading the rest of the data.
+        run_kbot_load(workarea_path, "--profiles")
 
     set_admin_password(
         _app_db_settings(
@@ -1279,6 +1281,41 @@ def _rebuild_database_on_pg_major_change(
     db.rebuild_from_backup(backup_path, previous_data)
 
 
+# 'Load.py' object selection flags, in its own '--help' order: (short option, long option, help).
+# The click parameter name derived from the long option is forwarded back as that long option.
+# 'Load.py' '-w' ('--workflow') has no short form here: '-w' is '--workarea-dir'.
+_LOAD_OBJECT_OPTIONS: tuple[tuple[str | None, str, str], ...] = (
+    ("-l", "--labels", "Load the labels."),
+    ("-i", "--intentions", "Load the intentions."),
+    ("-v", "--datasets", "Load the datasets."),
+    ("-c", "--classifiers", "Load the classifiers."),
+    ("-r", "--reports", "Load the reports."),
+    ("-p", "--profiles", "Load the identity and access management (users, roles, permissions)."),
+    ("-m", "--message", "Load the messages (localizations)."),
+    ("-s", "--search", "Load the knowledge bases, data sources and search contexts."),
+    ("-e", "--entity", "Load the entities."),
+    (None, "--workflow", "Load the workflows."),
+    ("-a", "--application", "Load the applications."),
+    (None, "--themes", "Load the themes."),
+    ("-d", "--dashboard", "Load the dashboards."),
+    ("-g", "--agentic", "Load the assistants and agents."),
+    ("-t", "--tools", "Load the agentic tools."),
+    ("-k", "--skills", "Load the agentic skills."),
+    ("-b", "--connections", "Load the connections."),
+    ("-M", "--mcp-configurations", "Load the MCP configurations."),
+    ("-u", "--automations", "Load the automations."),
+    (None, "--widget", "Load the widgets."),
+)
+
+
+def _load_object_options(func: Callable[..., None]) -> Callable[..., None]:
+    """Add the '_LOAD_OBJECT_OPTIONS' flags to a click command."""
+    for short_option, long_option, help_text in reversed(_LOAD_OBJECT_OPTIONS):
+        declarations = (short_option, long_option) if short_option else (long_option,)
+        func = click.option(*declarations, is_flag=True, default=False, help=help_text)(func)
+    return func
+
+
 @cli.command(name="load")
 @click.option(
     "-w",
@@ -1287,18 +1324,46 @@ def _rebuild_database_on_pg_major_change(
     default=lambda: str(Path.home() / "dev" / "work"),
     help="Workarea directory (default: $HOME/dev/work)",
 )
-def load(workarea_dir: str) -> None:
-    """Load initial data into a workarea's database.
+@_load_object_options
+@click.option(
+    "--products",
+    multiple=True,
+    help="Only load objects from this product (repeatable). Default: all the workarea products.",
+)
+@click.option(
+    "--with-customer",
+    is_flag=True,
+    default=False,
+    help="Include customer/site products (default: exclude them).",
+)
+def load(
+    workarea_dir: str,
+    *,
+    products: tuple[str, ...] = (),
+    with_customer: bool = False,
+    **objects: bool,
+) -> None:
+    """Load data from the products' configuration files into a workarea's database.
 
-    Runs the installed workarea's own 'bin/kbot.sh load'.
+    Runs the installed workarea's own 'bin/core.sh load' (i.e. 'Load.py') with
+    the given options. Without object flags, every kind of object is loaded.
 
     \b
     Examples:
         kbot-installer load -w ~/dev/work
+        kbot-installer load -w ~/dev/work --profiles
+        kbot-installer load -l -i --products jira --products ithd
+        kbot-installer load --workflow --with-customer
 
     """
+    options = [f"--{name.replace('_', '-')}" for name, selected in objects.items() if selected]
+    if products:
+        options += ["--products", *products]
+    if with_customer:
+        options.append("--with-customer")
+
     try:
-        run_kbot_command(Path(workarea_dir), "load")
+        run_kbot_load(Path(workarea_dir), *options)
         click.echo("Load completed successfully.")
 
     except Exception as e:
