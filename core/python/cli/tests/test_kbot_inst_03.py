@@ -9,29 +9,15 @@ from dulwich import porcelain
 from dulwich.repo import Repo
 from pytest_bdd import given, parsers, scenarios, then
 
-from cli.tests.bdd.fakes import parse_remote, product_json, product_xml
-from cli.tests.bdd.steps_common import names, step, table_rows, write_product
+from cli.tests.bdd.fakes import product_json, product_xml
+from cli.tests.bdd.steps_common import names, remote_head, remote_of, step, table_rows, write_product
 from cli.tests.bdd.environment import Environment
-from git.versioner.dulwich_versioner import DulwichVersioner
 from utils.bundle import Bundle
 from utils.product.build import Build
 from utils.product.product import Product
 from utils.version import Version
 
 scenarios("features/KBOT-INST-03.feature")
-
-
-def remote_of(env: Environment, path: str) -> tuple[str, str]:
-    """Return (provider, repository) of the origin of a git working copy."""
-    remote = parse_remote(DulwichVersioner().remote_url(env.path(path)))
-    assert remote is not None, f"{path} has no GitHub/Bitbucket origin"
-    return remote
-
-
-def remote_head(env: Environment, path: str, branch: str) -> bytes:
-    """Return the commit a branch of the origin of a git working copy points to."""
-    with Repo(str(env.git.bare_path(*remote_of(env, path)))) as bare:
-        return bare.refs[f"refs/heads/{branch}".encode()]
 
 
 def clone(env: Environment, name: str, directory: str, branch: str, files: dict[str, str]) -> Path:
@@ -59,13 +45,6 @@ def commit_locally(path: Path, files: dict[str, str]) -> None:
 
 
 # Given: installer directory
-
-
-@given(step('the installer directory "{directory}" was installed from bundle "{bundle}" version "{version}"'))
-def installed_from_bundle(env: Environment, directory: str, bundle: str, version: str) -> None:
-    """Write the bundle.json a bundle install leaves in the installer directory."""
-    descriptor = Bundle(name=bundle, version=Version.parse(version), versions=[])
-    (env.path(directory) / "bundle.json").write_text(json.dumps(descriptor.to_json()), encoding="utf-8")
 
 
 @given(
@@ -165,23 +144,7 @@ def remote_branches(env: Environment, path: str, branches: str) -> None:
             push_commit(env, path, branch, {f"{branch.replace('/', '-')}.txt": branch})
 
 
-@given(step('the git working copy "{path}" has uncommitted changes in "{files}"'))
-def uncommitted_changes(env: Environment, path: str, files: str) -> None:
-    """Write and stage files in a working copy without committing them."""
-    target = env.path(path)
-    for file in names(files):
-        (target / file).write_text("local change\n", encoding="utf-8")
-    with Repo(str(target)) as repo:
-        porcelain.add(repo, [str(target / file) for file in names(files)])
-
-
 # Given: prompts
-
-
-@given(step('the operator will answer "{answer}" to "{question}"'))
-def answer(env: Environment, answer: str, question: str) -> None:
-    """Queue an answer on stdin; the question is checked by the Then steps."""
-    env.answers.append(answer)
 
 
 # Then: download table
@@ -226,14 +189,6 @@ def described_by_bundle(env: Environment, directory: str, bundle: str, version: 
 # Then: git working copies
 
 
-@then(step('the git working copy "{path}" is on branch "{branch}" at the head of origin'))
-def at_head_of_origin(env: Environment, path: str, branch: str) -> None:
-    """Check a working copy is on branch, at the commit its origin's branch points to."""
-    assert DulwichVersioner().current_branch(env.path(path)) == branch
-    with Repo(str(env.path(path))) as repo:
-        assert repo.head() == remote_head(env, path, branch)
-
-
 @then(step('the git working copy "{path}" did not fetch the new commit of "{branch}"'))
 def not_fetched(env: Environment, path: str, branch: str) -> None:
     """Check neither HEAD nor the remote-tracking branch of a working copy reached its origin's branch."""
@@ -246,25 +201,11 @@ def not_fetched(env: Environment, path: str, branch: str) -> None:
 # Then: prompts, output, logs and workarea
 
 
-@then(step('the question "{question}" is asked'))
-def question_asked(env: Environment, question: str) -> None:
-    """Check the command printed the question."""
-    assert env.result is not None
-    assert question in env.result.output, env.result.output
-
-
 @then(step('the question "{question}" is asked {count:d} times'))
 def question_asked_times(env: Environment, question: str, count: int) -> None:
     """Check the command printed the question that many times."""
     assert env.result is not None
     assert env.result.output.count(question) == count, env.result.output
-
-
-@then(step("no question is asked"))
-def no_question(env: Environment) -> None:
-    """Check the command printed no yes/no prompt."""
-    assert env.result is not None
-    assert "[Y/n]" not in env.result.output, env.result.output
 
 
 @then(parsers.parse("the output contains '{text}'"))

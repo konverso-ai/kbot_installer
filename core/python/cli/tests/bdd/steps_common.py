@@ -6,17 +6,21 @@ by a suffix (``... of branch "dev"`` / ``... of branch "dev" with parents "kbot"
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
 
 from dulwich import porcelain
+from dulwich.repo import Repo
 from pytest_bdd import given, parsers, then, when
 
 from cli.tests.bdd.fakes import FakeDatabase, FakeServer, parse_remote, product_json, product_xml
 from cli.tests.bdd.environment import Environment
 from database.utils import safe_encrypt
 from git.versioner.dulwich_versioner import DulwichVersioner
+from utils.bundle import Bundle
+from utils.version import Version
 
 
 def _quoted(text: str) -> str:
@@ -536,3 +540,75 @@ def downloaded_products(env: Environment, area: str, backend: str, products: str
     assert [(d.backend, d.area, d.key.split("/")[1]) for d in env.storage.downloads] == [
         (backend, area, name) for name in names(products)
     ]
+
+
+@then(step("the storage is not read"))
+def storage_not_read(env: Environment) -> None:
+    """Check the storage provider was never used."""
+    assert env.storage.downloads == []
+    assert env.storage.reads == []
+
+
+@then(step('the database "{db}" has the table "{table}"'))
+def has_table(env: Environment, db: str, table: str) -> None:
+    """Check a table exists in the public schema of a database."""
+    assert table in find_database(env, db).tables
+
+
+@given(step('the installer directory "{directory}" was installed from bundle "{bundle}" version "{version}"'))
+def installed_from_bundle(env: Environment, directory: str, bundle: str, version: str) -> None:
+    """Write the bundle.json a bundle install leaves in the installer directory."""
+    descriptor = Bundle(name=bundle, version=Version.parse(version), versions=[])
+    (env.path(directory) / "bundle.json").write_text(json.dumps(descriptor.to_json()), encoding="utf-8")
+
+
+@given(step('the operator will answer "{answer}" to "{question}"'))
+def answer(env: Environment, answer: str, question: str) -> None:
+    """Queue an answer on stdin; the question is checked by the Then steps."""
+    env.answers.append(answer)
+
+
+@given(step('the git working copy "{path}" has uncommitted changes in "{files}"'))
+def uncommitted_changes(env: Environment, path: str, files: str) -> None:
+    """Append a line to files of a working copy (comma-separated) and stage them, without committing."""
+    target = env.path(path)
+    for file in names(files):
+        with (target / file).open("a", encoding="utf-8") as f:
+            f.write("\n<!-- local change -->\n")
+    with Repo(str(target)) as repo:
+        porcelain.add(repo, [str(target / file) for file in names(files)])
+
+
+@then(step('the question "{question}" is asked'))
+def question_asked(env: Environment, question: str) -> None:
+    """Check the command printed the question."""
+    assert env.result is not None
+    assert question in env.result.output, env.result.output
+
+
+@then(step("no question is asked"))
+def no_question(env: Environment) -> None:
+    """Check the command prompted nothing (no yes/no question, no value to type)."""
+    assert env.result is not None
+    assert not re.search(r"\[[yY]/[nN]\]|\]: ", env.result.output), env.result.output
+
+
+def remote_of(env: Environment, path: str) -> tuple[str, str]:
+    """Return (provider, repository) of the origin of a git working copy."""
+    remote = parse_remote(DulwichVersioner().remote_url(env.path(path)))
+    assert remote is not None, f"{path} has no GitHub/Bitbucket origin"
+    return remote
+
+
+def remote_head(env: Environment, path: str, branch: str) -> bytes:
+    """Return the commit a branch of the origin of a git working copy points to."""
+    with Repo(str(env.git.bare_path(*remote_of(env, path)))) as bare:
+        return bare.refs[f"refs/heads/{branch}".encode()]
+
+
+@then(step('the git working copy "{path}" is on branch "{branch}" at the head of origin'))
+def at_head_of_origin(env: Environment, path: str, branch: str) -> None:
+    """Check a working copy is on branch, at the commit its origin's branch points to."""
+    assert DulwichVersioner().current_branch(env.path(path)) == branch
+    with Repo(str(env.path(path))) as repo:
+        assert repo.head() == remote_head(env, path, branch)

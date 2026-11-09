@@ -55,12 +55,6 @@ def nothing_created(env: Environment, host: str) -> None:
     assert not env.db.clusters
 
 
-@then(step('the database "{db}" has the table "{table}"'))
-def has_table(env: Environment, db: str, table: str) -> None:
-    """Check a table exists in the public schema of a database."""
-    assert table in find_database(env, db).tables
-
-
 @then(step('the database "{db}" records no schema version'))
 def no_schema_version(env: Environment, db: str) -> None:
     """Check the __schema_version table holds no row."""
