@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
+import psycopg
 from dulwich import porcelain
 from typing_extensions import override
 
@@ -26,18 +27,24 @@ from utils.bundle import Bundle
 from utils.product.build import Build
 from utils.product.product import Product
 
-ProcessEffect = Callable[[list[str]], None]
+ProcessHandler = Callable[[list[str]], "tuple[int, str, str] | None"]
 
 # Remote hosts the git providers clone from, mapped to the provider name.
 GIT_HOSTS = {"github.com": "github", "bitbucket.org": "bitbucket"}
 
 
-def product_xml(name: str, type_: str = "solution", parents: list[str] | None = None) -> str:
+def product_xml(name: str, type_: str = "solution", parents: list[str] | None = None, version: str = "") -> str:
     """Render a description.xml in the format the products ship (see ``_write_product`` in test_commands)."""
     parents_xml = ""
     if parents:
         parents_xml = "<parents>" + "".join(f'<parent name="{p}"/>' for p in parents) + "</parents>"
-    return f'<product name="{name}" type="{type_}">{parents_xml}</product>'
+    version_attr = f' version="{version}"' if version else ""
+    return f'<product name="{name}" type="{type_}"{version_attr}>{parents_xml}</product>'
+
+
+def schema_sql(name: str) -> str:
+    """Render the db/init/db_schema.sql a product ships: one table named after it."""
+    return f"CREATE TABLE {name.replace('-', '_')}_data (id int);\n"
 
 
 def product_json(name: str, version: str, branch: str, commit: str, parents: list[str] | None = None) -> str:
@@ -50,13 +57,18 @@ def product_json(name: str, version: str, branch: str, commit: str, parents: lis
 
 @dataclass
 class ProcessRule:
-    """Canned result of a process whose program basename matches ``match``."""
+    """Canned result of the processes matching ``match``: a program basename, optionally followed by arguments."""
 
     match: str
     returncode: int = 0
     stdout: str = ""
     stderr: str = ""
-    effect: ProcessEffect | None = None
+    handler: ProcessHandler | None = None
+
+    def matches(self, argv: list[str]) -> bool:
+        """Tell whether argv runs this program with these leading arguments."""
+        program, *args = self.match.split()
+        return Path(argv[0]).name == program and argv[1 : 1 + len(args)] == args
 
 
 @dataclass
@@ -64,6 +76,7 @@ class FakeProcesses:
     """Replace ``subprocess.run`` / ``subprocess.Popen``: record each argv and answer from rules."""
 
     sanitize: Callable[[str], str]
+    events: list[str]
     calls: list[list[str]] = field(default_factory=list)
     rules: list[ProcessRule] = field(default_factory=list)
     interrupt: bool = False
@@ -74,38 +87,42 @@ class FakeProcesses:
         returncode: int = 0,
         stdout: str = "",
         stderr: str = "",
-        effect: ProcessEffect | None = None,
+        handler: ProcessHandler | None = None,
     ) -> None:
-        """Declare the result of the programs whose basename is ``match`` (latest rule wins)."""
-        self.rules.insert(0, ProcessRule(match, returncode, stdout, stderr, effect))
+        """Declare the result of the processes matching ``match`` (the latest rule wins).
 
-    def _answer(self, args: object) -> ProcessRule:
-        """Record a call and return the rule that answers it."""
+        A handler gets the real argv and returns ``(returncode, stdout, stderr)``, or None for the canned result.
+        """
+        self.rules.insert(0, ProcessRule(match, returncode, stdout, stderr, handler))
+
+    def _answer(self, args: object) -> tuple[int, str, str]:
+        """Record a call and return its result."""
         if self.interrupt:
             self.interrupt = False
             raise KeyboardInterrupt
         if isinstance(args, (str, bytes)) or not isinstance(args, (list, tuple)):
             msg = f"FakeProcesses: unsupported non-list command {args!r}"
             raise AssertionError(msg)  # noqa: TRY004 - surfaces a fake gap, not a type check
-        argv = [self.sanitize(str(arg)) for arg in args]
+        real = [str(arg) for arg in args]
+        argv = [self.sanitize(arg) for arg in real]
         self.calls.append(argv)
-        rule = next((r for r in self.rules if Path(argv[0]).name == r.match), None)
+        self.events.append("run " + " ".join(argv))
+        rule = next((r for r in self.rules if r.matches(argv)), None)
         if rule is None:
             msg = f"FakeProcesses: unsupported command {argv!r}"
             raise AssertionError(msg)
-        if rule.effect:
-            rule.effect([str(arg) for arg in args])
-        return rule
+        result = rule.handler(real) if rule.handler else None
+        return result or (rule.returncode, rule.stdout, rule.stderr)
 
     def run(self, args: object, *_: object, **kwargs: object) -> subprocess.CompletedProcess[str | bytes]:
         """Stand in for ``subprocess.run``, honouring ``check`` and ``text``/bytes output."""
-        rule = self._answer(args)
+        returncode, stdout, stderr = self._answer(args)
         text = bool(kwargs.get("text") or kwargs.get("universal_newlines") or kwargs.get("encoding"))
-        out: str | bytes = rule.stdout if text else rule.stdout.encode()
-        err: str | bytes = rule.stderr if text else rule.stderr.encode()
-        if kwargs.get("check") and rule.returncode:
-            raise subprocess.CalledProcessError(rule.returncode, list(args), out, err)  # type: ignore[arg-type]
-        return subprocess.CompletedProcess(list(args), rule.returncode, out, err)  # type: ignore[arg-type]
+        out: str | bytes = stdout if text else stdout.encode()
+        err: str | bytes = stderr if text else stderr.encode()
+        if kwargs.get("check") and returncode:
+            raise subprocess.CalledProcessError(returncode, list(args), out, err)  # type: ignore[arg-type]
+        return subprocess.CompletedProcess(list(args), returncode, out, err)  # type: ignore[arg-type]
 
     def popen(self, args: object, *_: object, **__: object) -> object:
         """Stand in for ``subprocess.Popen`` until a scenario needs it."""
@@ -255,7 +272,8 @@ class FakeStorage:
         """Publish a product archive under its commit key and as the branch's latest archive."""
         files = {f"{name}/description.json": product_json(name, version, branch, commit, parents)}
         if with_description_xml:
-            files[f"{name}/description.xml"] = product_xml(name, type_, parents)
+            files[f"{name}/description.xml"] = product_xml(name, type_, parents, version)
+        files[f"{name}/db/init/db_schema.sql"] = schema_sql(name)
         archive = _archive(files)
         for suffix in (commit, "latest"):
             self.artifacts[f"{branch}/{name}/{name}_{suffix}.tar.gz"] = archive
@@ -330,3 +348,220 @@ def parse_remote(location: str) -> tuple[str, str] | None:
     if provider is None:
         return None
     return provider, parsed.path.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+
+
+@dataclass
+class FakeDatabase:
+    """One PostgreSQL database: owner, public tables, kbot users (login to password hash) and schema versions."""
+
+    owner: str
+    tables: set[str] = field(default_factory=set)
+    users: dict[str, str | None] = field(default_factory=dict)
+    versions: set[str] = field(default_factory=set)
+
+
+@dataclass
+class FakeServer:
+    """One PostgreSQL server: login roles (name to password) and databases; ``trust`` accepts any password."""
+
+    roles: dict[str, str] = field(default_factory=dict)
+    databases: dict[str, FakeDatabase] = field(default_factory=dict)
+    trust: bool = False
+
+
+@dataclass
+class FakeCluster:
+    """An internal cluster: its data directory and server, running on ``port`` or stopped (None)."""
+
+    server: FakeServer
+    port: int | None = None
+
+
+class FakeCursor:
+    """Cursor answering exactly the statements of ``database/*.py``; any other statement fails the scenario."""
+
+    def __init__(self, db: FakeDb, server: FakeServer, dbname: str) -> None:
+        """Bind the cursor to the database it was opened on."""
+        self._db, self._server, self._dbname = db, server, dbname
+        self._rows: list[tuple[object, ...]] = []
+        self.rowcount = 0
+
+    def __enter__(self) -> FakeCursor:
+        """Open the cursor."""
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        """Close the cursor."""
+
+    def execute(self, query: object, params: tuple[object, ...] = ()) -> None:  # noqa: C901 - one branch per statement
+        """Apply a statement to the fake server state."""
+        statement = " ".join((query if isinstance(query, str) else query.as_string()).split())  # type: ignore[attr-defined]
+        self._db.executed.append((self._dbname, statement))
+        self._db.events.append(f"sql {self._dbname}: {statement}")
+        database = self._server.databases.get(self._dbname)
+        self._rows, self.rowcount = [], 0
+        if m := re.fullmatch(r"SELECT 1 FROM pg_roles WHERE rolname = %s", statement):
+            self._rows = [(1,)] if params[0] in self._server.roles else []
+        elif m := re.fullmatch(r'CREATE ROLE "?([\w-]+)"? LOGIN PASSWORD \'(.*)\'', statement):
+            self._server.roles[m.group(1)] = m.group(2).replace("''", "'")
+        elif m := re.fullmatch(r"SELECT 1 FROM pg_database WHERE datname = %s", statement):
+            self._rows = [(1,)] if params[0] in self._server.databases else []
+        elif m := re.fullmatch(r'CREATE DATABASE "?([\w-]+)"? TEMPLATE "?\w+"? OWNER "?([\w-]+)"?', statement):
+            self._server.databases[m.group(1)] = FakeDatabase(owner=m.group(2))
+        elif re.fullmatch(r"ALTER SCHEMA public OWNER TO .*|ALTER SYSTEM SET max_connections = .*", statement):
+            pass
+        elif database is None:
+            msg = f"FakeDb: unsupported statement outside a kbot database: {statement}"
+            raise AssertionError(msg)
+        elif statement.startswith("UPDATE users_im_account SET pwd = %s WHERE user_id = (SELECT user_id FROM users WHERE user_name = 'admin')"):
+            if "admin" in database.users:
+                database.users["admin"] = str(params[0])
+                self.rowcount = 1
+        elif statement == "DROP OWNED BY CURRENT_USER":
+            database.tables.clear()
+            database.users.clear()
+            database.versions.clear()
+        elif statement.startswith("CREATE TABLE IF NOT EXISTS __schema_version"):
+            database.tables.add("__schema_version")
+        elif statement == "SELECT version from __schema_version":
+            self._rows = [(v,) for v in sorted(database.versions)]
+        elif statement.startswith("INSERT INTO __schema_version (version) VALUES (%s)"):
+            database.versions.add(str(params[0]))
+        elif statement == "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'":
+            self._rows = [(len(database.tables),)]
+        else:
+            msg = f"FakeDb: unsupported statement: {statement}"
+            raise AssertionError(msg)
+
+    def fetchone(self) -> tuple[object, ...] | None:
+        """Return the first row of the last query."""
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        """Return every row of the last query."""
+        return self._rows
+
+
+class FakeConnection:
+    """psycopg connection to a fake server."""
+
+    def __init__(self, db: FakeDb, server: FakeServer, dbname: str) -> None:
+        """Bind the connection to a database of a server."""
+        self._db, self._server, self._dbname = db, server, dbname
+        self.autocommit = False
+
+    def __enter__(self) -> FakeConnection:
+        """Open the connection."""
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        """Close the connection."""
+
+    def cursor(self) -> FakeCursor:
+        """Open a cursor."""
+        return FakeCursor(self._db, self._server, self._dbname)
+
+    def commit(self) -> None:
+        """Statements apply immediately: nothing to commit."""
+
+    def close(self) -> None:
+        """Nothing to release."""
+
+
+@dataclass
+class FakeDb:
+    """PostgreSQL: external servers by (host, port), internal clusters by data directory, psql/pg_dump/pg_ctl.
+
+    The internal server trusts every password, like a fresh ``initdb`` reached on localhost.
+    """
+
+    events: list[str]
+    sanitize: Callable[[str], str]
+    pg_major: str = "16"
+    servers: dict[tuple[str, int], FakeServer] = field(default_factory=dict)
+    clusters: dict[Path, FakeCluster] = field(default_factory=dict)
+    ports_in_use: dict[int, int | None] = field(default_factory=dict)
+    connections: list[tuple[str, int, str, str, str]] = field(default_factory=list)
+    executed: list[tuple[str, str]] = field(default_factory=list)
+    applied_files: list[str] = field(default_factory=list)
+    load_creates_admin: bool = True
+
+    def server(self, host: str, port: int) -> FakeServer | None:
+        """Return the server answering on host:port, if any."""
+        if host == "localhost":
+            running = [c.server for c in self.clusters.values() if c.port == port]
+            if running:
+                return running[0]
+        return self.servers.get((host, port))
+
+    def connect(self, *, host: str, port: int, dbname: str, user: str, password: str, **_: object) -> FakeConnection:
+        """Stand in for ``psycopg.connect``."""
+        self.connections.append((host, port, dbname, user, password))
+        server = self.server(host, port)
+        if server is None:
+            msg = f'connection to server at "{host}", port {port} failed: Connection refused'
+            raise psycopg.OperationalError(msg)
+        if not server.trust and server.roles.get(user) != password:
+            msg = f'connection to server at "{host}", port {port} failed: FATAL:  password authentication failed for user "{user}"'
+            raise psycopg.OperationalError(msg)
+        if dbname != "postgres" and dbname not in server.databases:
+            msg = f'connection to server at "{host}", port {port} failed: FATAL:  database "{dbname}" does not exist'
+            raise psycopg.OperationalError(msg)
+        return FakeConnection(self, server, dbname)
+
+    def cluster(self, pg_data: Path) -> FakeCluster:
+        """Return the internal cluster of a data directory, created on first use."""
+        return self.clusters.setdefault(pg_data, FakeCluster(FakeServer(trust=True)))
+
+    def pg_ctl(self, argv: list[str]) -> tuple[int, str, str]:
+        """Answer ``pg_ctl initdb|status|start|stop -D <data>``."""
+        pg_data = Path(argv[argv.index("-D") + 1])
+        action = next(a for a in ("initdb", "status", "start", "stop") if a in argv)
+        cluster = self.cluster(pg_data)
+        if action == "initdb":
+            pg_data.mkdir(parents=True, exist_ok=True)
+            (pg_data / "PG_VERSION").write_text(self.pg_major + "\n", encoding="utf-8")
+        elif action == "status":
+            return (0 if cluster.port is not None else 3), "", ""
+        elif action == "start":
+            options = " ".join(argv[i + 1] for i, a in enumerate(argv) if a == "-o")
+            cluster.port = int(re.search(r"-p(\d+)", options).group(1))  # type: ignore[union-attr]
+        else:
+            cluster.port = None
+        return 0, "", ""
+
+    def _target(self, argv: list[str]) -> FakeDatabase | None:
+        """Return the database a psql/pg_dump command line points at."""
+        server = self.server(argv[argv.index("-h") + 1], int(argv[argv.index("-p") + 1]))
+        name = argv[argv.index("-d") + 1] if "-d" in argv else argv[-1]
+        return None if server is None else server.databases.get(name)
+
+    def psql(self, argv: list[str]) -> tuple[int, str, str]:
+        """Answer ``psql -f <file>``: a file containing SYNTAX ERROR fails, else its CREATE TABLEs are applied."""
+        path = Path(argv[argv.index("-f") + 1])
+        database = self._target(argv)
+        if database is None:
+            return 2, "", "psql: error: connection to server failed"
+        content = path.read_text(encoding="utf-8")
+        if "SYNTAX ERROR" in content:
+            return 3, "", f'psql:{self.sanitize(str(path))}:1: ERROR:  syntax error at or near "SYNTAX"'
+        self.applied_files.append(self.sanitize(str(path)))
+        database.tables.update(re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+)", content, re.IGNORECASE))
+        return 0, "", ""
+
+    def pg_dump(self, argv: list[str]) -> tuple[int, str, str]:
+        """Answer ``pg_dump -f <file> <db>``: write the tables of the database as CREATE TABLE statements."""
+        database = self._target(argv)
+        if database is None:
+            return 1, "", "pg_dump: error: connection to server failed"
+        path = Path(argv[argv.index("-f") + 1])
+        path.write_text("".join(f"CREATE TABLE {t} (id int);\n" for t in sorted(database.tables)), encoding="utf-8")
+        return 0, "", ""
+
+    def load(self, _argv: list[str]) -> None:
+        """Answer the kbot data load: users.conf creates the kbot 'admin' user in every kbot database."""
+        for server in [*self.servers.values(), *(c.server for c in self.clusters.values())]:
+            for database in server.databases.values():
+                database.tables.update({"users", "users_im_account"})
+                if self.load_creates_admin:
+                    database.users.setdefault("admin", None)

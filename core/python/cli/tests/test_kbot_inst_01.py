@@ -66,20 +66,6 @@ def storage_not_read(env: Environment) -> None:
     assert env.storage.reads == []
 
 
-@then(step("the git providers are tried in order:"))
-def git_providers_order(env: Environment, datatable: list[list[str]]) -> None:
-    """Check the order in which the git providers were contacted."""
-    tried = list(dict.fromkeys(provider for provider, _ in env.git.attempts))
-    assert tried == [row[0] for row in datatable[1:]]
-
-
-@then(step('the product "{name}" is downloaded from the "{area}" area of the "{backend}" storage'))
-def downloaded_from_area(env: Environment, name: str, area: str, backend: str) -> None:
-    """Check which storage backend and area the product archive came from."""
-    sources = {(d.backend, d.area) for d in env.storage.downloads if d.key.split("/")[1] == name}
-    assert sources == {(backend, area)}, sources
-
-
 @then(step('the products downloaded from the "{area}" area of the "{backend}" storage are "{products}"'))
 def downloaded_products(env: Environment, area: str, backend: str, products: str) -> None:
     """Check exactly these products were downloaded, all from that backend and area."""
