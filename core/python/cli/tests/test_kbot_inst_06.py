@@ -92,9 +92,3 @@ def users_unchanged(env: Environment, db: str, stored_before: dict) -> None:
 def pg_dir_used(env: Environment, path: str, admin_settings: list[DbSettings]) -> None:
     """Check the command resolved PG_DIR to path (its psql client is path/bin/psql)."""
     assert [env.sanitize(str(s.psql_path)) for s in admin_settings] == [f"{path}/bin/psql"]
-
-
-@then(step('the internal PostgreSQL server of "{workarea}" is stopped'))
-def internal_server_still_stopped(env: Environment, workarea: str) -> None:
-    """Check the cluster of a workarea is not running when the command ends."""
-    assert env.db.cluster(env.path(workarea) / "var" / "db").port is None
