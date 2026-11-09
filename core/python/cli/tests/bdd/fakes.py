@@ -323,7 +323,14 @@ class FakeGitRemotes:
         bare = self.bare_path(provider, repository)
         shutil.rmtree(bare, ignore_errors=True)
         bare.parent.mkdir(parents=True, exist_ok=True)
-        porcelain.clone(str(seed), str(bare), bare=True, errstream=io.BytesIO()).close()
+        repo = porcelain.clone(str(seed), str(bare), bare=True, errstream=io.BytesIO())
+        try:
+            # A bare clone keeps the non-default branches as remote-tracking refs: publish them as branches.
+            for ref, sha in repo.refs.as_dict(b"refs/remotes/origin").items():
+                if ref != b"HEAD":
+                    repo.refs[b"refs/heads/" + ref] = sha
+        finally:
+            repo.close()
         return bare
 
     def rewrite(self, location: str) -> str:
