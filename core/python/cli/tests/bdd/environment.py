@@ -120,7 +120,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Environment
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("COLUMNS", "200")
     for name in [*CLEARED_ENV, *(n for n in os.environ if n.startswith("NEXUS_"))]:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "")  # records the original state, so a value the command sets is undone too
+        monkeypatch.delenv(name)
     monkeypatch.setattr(subprocess, "run", w.procs.run)
     monkeypatch.setattr(subprocess, "Popen", w.procs.popen)
     monkeypatch.setattr(
