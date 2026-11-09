@@ -11,7 +11,7 @@ from dulwich import porcelain
 from pytest_bdd import given, scenarios, then
 
 from cli.tests.bdd.fakes import FakeDatabase, product_xml
-from cli.tests.bdd.steps_common import names, step
+from cli.tests.bdd.steps_common import kbot_workarea, names, step
 from cli.tests.bdd.environment import Environment
 from git.versioner.dulwich_versioner import DulwichVersioner
 
@@ -73,13 +73,6 @@ def asked(env: Environment, question: str) -> bool:
 
 
 # Given
-
-
-@given(step('a kbot workarea exists in "{directory}"'))
-def kbot_workarea(env: Environment, directory: str) -> None:
-    """Create a workarea the installer recognizes: var/products.json listing no product."""
-    (env.path(directory) / "var").mkdir(parents=True, exist_ok=True)
-    (env.path(directory) / "var" / "products.json").write_text("[]", encoding="utf-8")
 
 
 @given(step('a kbot workarea exists in "{directory}" with an internal database of PostgreSQL {major:d}'))

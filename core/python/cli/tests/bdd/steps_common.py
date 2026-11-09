@@ -612,3 +612,14 @@ def at_head_of_origin(env: Environment, path: str, branch: str) -> None:
     assert DulwichVersioner().current_branch(env.path(path)) == branch
     with Repo(str(env.path(path))) as repo:
         assert repo.head() == remote_head(env, path, branch)
+
+
+@given(step('a kbot workarea exists in "{directory}"'))
+def kbot_workarea(env: Environment, directory: str) -> None:
+    """Create a workarea: its products list and the bin/ scripts it runs."""
+    workarea = env.path(directory)
+    (workarea / "var").mkdir(parents=True, exist_ok=True)
+    (workarea / "var" / "products.json").write_text("[]", encoding="utf-8")
+    (workarea / "bin").mkdir(exist_ok=True)
+    for script in ("core.sh", "kbot.sh"):
+        (workarea / "bin" / script).touch(mode=0o755)
