@@ -83,6 +83,7 @@ typecheck = [
 test = [
     "pytest",
     "pytest-asyncio",
+    "pytest-bdd>=9.0.1",
     "pytest-cov",
     "pytest-mock",
 ]
@@ -131,7 +132,7 @@ python-json-logger = "pythonjsonlogger"
 DEP001 = ["tomllib", "Bot"]
 DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
-DEP004 = ["pytest"]
+DEP004 = ["pytest", "pytest_bdd"]
 
 [tool.pytest.ini_options]
 pythonpath = ["core/python"]
