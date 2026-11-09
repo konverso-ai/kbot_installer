@@ -5,7 +5,7 @@ from pathlib import Path
 from pytest_bdd import given, scenarios, then
 
 from cli import commands
-from cli.tests.bdd.steps_common import names, step
+from cli.tests.bdd.steps_common import step
 from cli.tests.bdd.environment import Environment
 
 scenarios("features/KBOT-INST-01.feature")
@@ -20,17 +20,6 @@ def command_fails(env: Environment, command: str, message: str) -> None:
         raise RuntimeError(message)
 
     env.monkeypatch.setattr(commands.cli.commands[command], "callback", fail)
-
-
-@given(
-    step(
-        'the storage holds the product "{name}" version "{version}" at commit "{commit}" of branch "{branch}" '
-        "without a description.xml"
-    )
-)
-def storage_product_without_xml(env: Environment, name: str, version: str, commit: str, branch: str) -> None:
-    """Publish a product archive that lacks its description.xml."""
-    env.storage.publish_product(name, version, branch, commit, with_description_xml=False)
 
 
 @given(step('reading the directory "{path}" fails with "{message}"'))
@@ -64,11 +53,3 @@ def storage_not_read(env: Environment) -> None:
     """Check the storage provider was never used."""
     assert env.storage.downloads == []
     assert env.storage.reads == []
-
-
-@then(step('the products downloaded from the "{area}" area of the "{backend}" storage are "{products}"'))
-def downloaded_products(env: Environment, area: str, backend: str, products: str) -> None:
-    """Check exactly these products were downloaded, all from that backend and area."""
-    assert [(d.backend, d.area, d.key.split("/")[1]) for d in env.storage.downloads] == [
-        (backend, area, name) for name in names(products)
-    ]
