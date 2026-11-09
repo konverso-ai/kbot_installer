@@ -6,14 +6,16 @@ by a suffix (``... of branch "dev"`` / ``... of branch "dev" with parents "kbot"
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
 from dulwich import porcelain
 from pytest_bdd import given, parsers, then, when
 
-from cli.tests.bdd.fakes import parse_remote, product_json, product_xml
+from cli.tests.bdd.fakes import FakeDatabase, FakeServer, parse_remote, product_json, product_xml
 from cli.tests.bdd.environment import Environment
+from database.utils import safe_encrypt
 from git.versioner.dulwich_versioner import DulwichVersioner
 
 
@@ -362,3 +364,156 @@ def cloned_from_provider(env: Environment, name: str, provider: str, branch: str
     ]
     assert copies, f"no working copy of {name} cloned from {provider}"
     assert [versioner.current_branch(c) for c in copies] == [branch] * len(copies)
+
+
+@then(step("the git providers are tried in order:"))
+def git_providers_order(env: Environment, datatable: list[list[str]]) -> None:
+    """Check the order in which the git providers were contacted."""
+    tried = list(dict.fromkeys(provider for provider, _ in env.git.attempts))
+    assert tried == [row[0] for row in datatable[1:]]
+
+
+@then(step('the product "{name}" is downloaded from the "{area}" area of the "{backend}" storage'))
+def downloaded_from_area(env: Environment, name: str, area: str, backend: str) -> None:
+    """Check which storage backend and area the product archive came from."""
+    sources = {(d.backend, d.area) for d in env.storage.downloads if d.key.split("/")[1] == name}
+    assert sources == {(backend, area)}, sources
+
+
+# Given: installer directory, 3rdparty
+
+
+@given(step('the installer directory "{directory}" holds a 3rdparty with Python "{python}" and PostgreSQL "{pg}"'))
+def thirdparty(env: Environment, directory: str, python: str, pg: str) -> None:
+    """Lay out the 3rdparty product: versions.env, the Python site-packages and the PostgreSQL directory."""
+    root = env.path(directory) / "3rdparty"
+    major = ".".join(python.split(".")[:2])
+    (root / "python" / "lib" / f"python{major}" / "site-packages").mkdir(parents=True, exist_ok=True)
+    (root / f"postgresql-{pg}" / "bin").mkdir(parents=True, exist_ok=True)
+    (root / "versions.env").write_text(
+        f"PYTHON_VERSION={python}\nPYTHON_DIR=${{THIRDPARTY_HOME}}/python\n"
+        f"PG_VERSION={pg}\nPG_DIR=${{THIRDPARTY_HOME}}/postgresql-{pg}\n",
+        encoding="utf-8",
+    )
+
+
+# Given: workarea scripts and PostgreSQL
+
+
+@given(step('the license "{path}" is invalid with "{message}"'))
+def license_invalid(env: Environment, path: str, message: str) -> None:
+    """Make kbot's license checker reject the license."""
+    env.procs.on(f"python.sh -m utils.License {path}", 1, stdout=message)
+
+
+@given(step('the program "{program}" exits with code {code:d}'))
+def program_exits(env: Environment, program: str, code: int) -> None:
+    """Make a program (basename, optionally with its first arguments) exit with code."""
+    env.procs.on(program, code)
+
+
+
+@given(step("port {port:d} on localhost is used by process {pid:d}"))
+def port_in_use(env: Environment, port: int, pid: int) -> None:
+    """Make another process listen on a local port."""
+    env.db.ports_in_use[port] = pid
+
+
+@given(step('the database "{db}" on "{host}" port {port:d} accepts the user "{user}" with the password "{password}"'))
+def external_database(env: Environment, db: str, host: str, port: int, user: str, password: str) -> None:
+    """Create a database owned by a login role on a PostgreSQL server."""
+    server = env.db.servers.setdefault((host, port), FakeServer())
+    server.roles[user] = password
+    server.databases[db] = FakeDatabase(owner=user)
+
+
+@given(step('the database "{db}" has tables'))
+def database_has_tables(env: Environment, db: str) -> None:
+    """Give a database a table in its public schema."""
+    find_database(env, db).tables.add("existing_data")
+
+
+@given(step('the users load creates no "admin" account'))
+def no_admin_in_users_conf(env: Environment) -> None:
+    """Make the kbot users load (users.conf) create no 'admin' user."""
+    env.db.load_creates_admin = False
+
+
+# Then: processes
+
+
+@then(step('the command ran "{argv}"'))
+def command_ran(env: Environment, argv: str) -> None:
+    """Check a process was run whose command line starts with argv."""
+    lines = [" ".join(call) for call in env.procs.calls]
+    assert any(line.startswith(argv) for line in lines), "\n".join(lines)
+
+
+@then(step('the command did not run "{program}"'))
+def command_not_run(env: Environment, program: str) -> None:
+    """Check no process of that program basename was run."""
+    assert not [c for c in env.procs.calls if Path(c[0]).name == program], env.procs.calls
+
+
+@then(step("the command ran, in order:"))
+def commands_in_order(env: Environment, datatable: list[list[str]]) -> None:
+    """Check processes whose command lines start with each ``| command |`` row ran in that order."""
+    lines = [" ".join(call) for call in env.procs.calls]
+    position = 0
+    for (expected,) in datatable[1:]:
+        found = next((i for i in range(position, len(lines)) if lines[i].startswith(expected)), None)
+        assert found is not None, f"{expected!r} not run after call {position}:\n" + "\n".join(lines)
+        position = found + 1
+
+
+@then(step('the warning "{text}" is logged'))
+def warning_logged(env: Environment, text: str) -> None:
+    """Check a warning holding text was logged."""
+    warnings = [env.sanitize(r.getMessage()) for r in env.logs if r.levelno == logging.WARNING]
+    assert any(text in w for w in warnings), warnings
+
+
+# Then: database
+
+
+def find_database(env: Environment, name: str) -> FakeDatabase:
+    """Return the only database of that name, on any server."""
+    servers = [*env.db.servers.values(), *(c.server for c in env.db.clusters.values())]
+    found = [s.databases[name] for s in servers if name in s.databases]
+    assert len(found) == 1, f"{len(found)} databases named {name!r}"
+    return found[0]
+
+
+@then(step("the schema files were applied in order:"))
+def schema_files_order(env: Environment, datatable: list[list[str]]) -> None:
+    """Check exactly these SQL files were applied by psql, in this order."""
+    assert env.db.applied_files == [row[0] for row in datatable[1:]], env.db.applied_files
+
+
+@then(step('the password of "{login}" in "{db}" verifies "{password}"'))
+def password_verifies(env: Environment, login: str, db: str, password: str) -> None:
+    """Check the stored kbot password hash (SafeEncrypt) matches password, i.e. the user can log in with it."""
+    stored = find_database(env, db).users.get(login)
+    assert stored is not None, f"no password stored for {login!r}"
+    assert safe_encrypt(password, stored) == stored
+
+
+
+@then(step('the database "{db}" exists, owned by "{user}"'))
+def database_exists(env: Environment, db: str, user: str) -> None:
+    """Check a database exists with that owner."""
+    assert find_database(env, db).owner == user
+
+
+@then(step("the database is not contacted"))
+def database_not_contacted(env: Environment) -> None:
+    """Check no connection was opened to any PostgreSQL server."""
+    assert env.db.connections == []
+
+
+@then(step('the user "{user}" on "{host}" port {port:d} has the password "{password}"'))
+def role_password(env: Environment, user: str, host: str, port: int, password: str) -> None:
+    """Check the password of a PostgreSQL login role."""
+    server = env.db.server(host, port)
+    assert server is not None, f"no server on {host}:{port}"
+    assert server.roles.get(user) == password, server.roles
