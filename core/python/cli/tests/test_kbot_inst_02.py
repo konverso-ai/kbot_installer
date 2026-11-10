@@ -79,7 +79,7 @@ def password_set_before(env: Environment, login: str, db: str, command: str) -> 
 
 @then(step('the output, apart from the download table, is the same as for "{cmdline}" on a fresh workarea'))
 def same_output_apart_from_table(env: Environment, cmdline: str) -> None:
-    """Rerun without -V on a deleted workarea (install refuses an existing one) and compare the other lines."""
+    """Rerun without -V on a deleted workarea and database (install refuses an existing one), compare the other lines."""
     assert env.result is not None
 
     def other_lines() -> list[str]:
@@ -89,6 +89,8 @@ def same_output_apart_from_table(env: Environment, cmdline: str) -> None:
         return [line for line in lines if line and line not in rows and "In progress" not in line]
 
     verbose = other_lines()
-    shutil.rmtree(env.path("/home/kbot/dev/work"))
+    workarea = env.path("/home/kbot/dev/work")
+    shutil.rmtree(workarea)
+    env.db.clusters = {d: c for d, c in env.db.clusters.items() if not d.is_relative_to(workarea)}
     env.run(cmdline)
     assert other_lines() == verbose
