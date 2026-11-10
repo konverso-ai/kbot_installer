@@ -51,10 +51,12 @@ def unreadable_directory(env: Environment, path: str, message: str) -> None:
 
 @then(step('the output is the same as for "{cmdline}"'))
 def same_output(env: Environment, cmdline: str) -> None:
-    """Run another command line and compare both outputs."""
-    assert env.result is not None
+    """Run another command line and compare both outputs and exit codes, keeping the first result."""
     first = env.result
-    assert env.run(cmdline).output == first.output
+    assert first is not None
+    other = env.run(cmdline)
+    env.result = first
+    assert (other.output, other.exit_code) == (first.output, first.exit_code)
 
 
 @then(step("the storage is not read"))
