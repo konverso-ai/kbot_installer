@@ -119,6 +119,7 @@ Feature: KBOT-INST-01 Product download and listing
     And the storage holds the product "jira" version "2025.03" at commit "c0ffee0001" of branch "<branch>"
     When the operator runs "kbot-installer download -p jira -v <version> --no-rec"
     Then the product "jira" is downloaded from storage at branch "<branch>"
+    And the exit code is 0
 
     Examples:
       | version     | branch              | rule  |
@@ -202,6 +203,7 @@ Feature: KBOT-INST-01 Product download and listing
     And the download table <display> "jira" from "storage (cached)" with status "⏭️ Skipped" and details "Already installed"
     And the download table <display> "ithd" from "storage (cached)" with status "⏭️ Skipped" and details "Already installed"
     And the download table <display> "kbot" from "storage (cached)" with status "⏭️ Skipped" and details "Already installed"
+    And the exit code is 0
 
     Examples:
       | flag | display       | rule  |

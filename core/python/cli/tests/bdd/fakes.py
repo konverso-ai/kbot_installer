@@ -89,7 +89,10 @@ class FakeProcesses:
             raise AssertionError(msg)  # noqa: TRY004 - surfaces a fake gap, not a type check
         argv = [self.sanitize(str(arg)) for arg in args]
         self.calls.append(argv)
-        rule = next((r for r in self.rules if Path(argv[0]).name == r.match), ProcessRule(argv[0]))
+        rule = next((r for r in self.rules if Path(argv[0]).name == r.match), None)
+        if rule is None:
+            msg = f"FakeProcesses: unsupported command {argv!r}"
+            raise AssertionError(msg)
         if rule.effect:
             rule.effect([str(arg) for arg in args])
         return rule
