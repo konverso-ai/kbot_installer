@@ -45,7 +45,7 @@ def factory_class(name: str, package: str) -> type[T]:
     class_name = build_class_name(name, package)
 
     # Delegate the actual import + attribute lookup to factory_function
-    return cast("type[T]", factory_function(f"{package}.{module_name}", class_name))
+    return factory_function(f"{package}.{module_name}", class_name)
 
 
 def factory_function(module_name: str, attribute_name: str) -> T:
