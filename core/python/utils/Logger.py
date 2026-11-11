@@ -233,21 +233,26 @@ class KbotLogger(logging.Logger):
         GetProducts generates a side effect, the logs are deactivated
         if the code is launched from there.
 
-        If RunBot, we use two handlers
+        If RunBot (RunBot.py or its kbot-run console script) or uvicorn (the
+        ASGI REST process), we use two handlers
             one for kbot with 10 backup files
             one for datadog with 1 backup file
+        uvicorn's own server and access loggers then write to the same files.
 
-        In any other cases a simple streamer is done
+        Any process but RunBot also logs to stdout (docker logs for kbot-run
+        and uvicorn). RunBot does not: bin/core.sh already redirects its
+        stdout to the same log file.
 
         Handlers carry no level: filtering is done per package by
         :meth:`isEnabledFor`, so a package override more verbose than the
         global level (``debug add <pkg> <level>``) still reaches the output.
         """
-        if Path(sys.argv[0]).name.startswith("GetProduct"):
+        script = Path(sys.argv[0]).name
+        if script.startswith("GetProduct"):
             self.addHandler(logging.NullHandler())
             return
 
-        if Path(sys.argv[0]).name.startswith("RunBot"):
+        if script.startswith(("RunBot", "kbot-run", "uvicorn")):
             instance_name = _instance_name()
             datadog_handler = RotatingFileHandler(
                 Path(os.environ["KBOT_HOME"]) / "logs" / f"{instance_name}.json",
@@ -264,11 +269,16 @@ class KbotLogger(logging.Logger):
             )
             kbot_handler.setFormatter(KbotFormatter())
             self.addHandler(kbot_handler)
-            return
 
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(KbotFormatter())
-        self.addHandler(handler)
+            # Before the stdout handler: uvicorn already prints its own records to docker logs
+            for name in ("uvicorn", "uvicorn.access"):
+                logging.getLogger(name).addHandler(datadog_handler)
+                logging.getLogger(name).addHandler(kbot_handler)
+
+        if not script.startswith("RunBot"):
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(KbotFormatter())
+            self.addHandler(handler)
 
     def buildHandler(self, level: int, path: str | None = None) -> None:  # noqa: N802 - camelCase alias kept for the kbot callers
         """Alias of :meth:`build_handler`, spelled the way kbot calls it."""
@@ -471,6 +481,9 @@ class KbotFormatter(logging.Formatter):
     @override
     def format(self, record: logging.LogRecord) -> str:
         record.kmodule = _derive_kmodule(record)
+        # Records from non-kbot loggers (uvicorn) carry no package
+        if not hasattr(record, "package"):
+            record.package = record.name
         return super().format(record)
 
 
