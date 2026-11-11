@@ -227,7 +227,7 @@ class DulwichVersioner(StrReprMixin):
                     continue
                 if (Path(dirpath) / name).is_symlink():
                     entries.append(name)
-                elif ignore.is_ignored(prefix + name) is not True:
+                elif not ignore.may_prune_directory(f"{prefix}{name}/"):
                     walked.append(name)
             dirnames[:] = walked
             for name in entries:
