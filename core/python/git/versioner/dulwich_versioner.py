@@ -3,8 +3,9 @@
 This module implements the DulwichVersioner class that handles full git
 operations using Dulwich for any git repository.
 """
+import os
 import shutil
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -14,6 +15,7 @@ from dulwich import porcelain
 from dulwich.diff_tree import CHANGE_ADD, CHANGE_DELETE, CHANGE_MODIFY, tree_changes
 from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
 from dulwich.graph import find_merge_base
+from dulwich.ignore import IgnoreFilterManager
 from dulwich.object_store import tree_lookup_path
 from dulwich.objects import ObjectID, Tag
 from dulwich.objectspec import parse_commit
@@ -53,6 +55,21 @@ _DULWICH_ERRORS = (
     HangupException,
     DulwichPorcelainError,
 )
+
+
+class _WorkTreeIgnore(IgnoreFilterManager):
+    """Ignore rules of a working tree, read the way git reads them.
+
+    Git takes the type of an entry from ``lstat``: a symbolic link is never a directory, so a ``build/`` rule
+    does not hide a ``build`` link to a folder. Dulwich follows the link and would hide it.
+    """
+
+    @override
+    def _is_dir(self, path: str) -> bool:
+        if path.endswith("/"):
+            return True
+        full_path = Path(self._top_path, path)
+        return full_path.is_dir() and not full_path.is_symlink()
 
 
 class DulwichVersioner(StrReprMixin):
@@ -165,11 +182,58 @@ class DulwichVersioner(StrReprMixin):
 
     @staticmethod
     def _has_working_tree_changes(repo: Repo) -> bool:
-        """Return True when the repository has unstaged or untracked changes."""
-        status = porcelain.status(repo)
+        """Return True when the repository has staged, unstaged or untracked changes.
+
+        The untracked scan stops at the first untracked file, and only runs when the index shows no change.
+        """
+        status = porcelain.status(repo, untracked_files="no")
         staged = status.staged
-        has_staged = any(staged.get(key) for key in ("add", "delete", "modify"))
-        return bool(has_staged or status.unstaged or status.untracked)
+        if any(staged.get(key) for key in ("add", "delete", "modify")) or status.unstaged:
+            return True
+        return next(DulwichVersioner._iter_untracked_files(repo), None) is not None
+
+    @staticmethod
+    def _iter_untracked_files(repo: Repo) -> Iterator[str]:
+        """Yield the untracked files one by one, as ``git status --untracked-files=all`` lists them.
+
+        Git stores a symbolic link as a file, whatever it points to, and never enters it. Dulwich's own walk
+        takes a link to a folder for a folder: it lists a tracked link as an untracked ``link/`` folder, and
+        drops an untracked link to an empty folder, or to any folder in its "all" mode. Another repository
+        found in the working tree (a submodule, a nested clone) is left out, as Dulwich does.
+
+        A folder is skipped only when a rule excludes the folder itself, as git does: ``logs/`` does, while
+        ``logs/*`` only excludes what the folder holds and lets ``!logs/keep.txt`` bring a file back. The walk
+        is lazy, so a caller that only needs to know whether there is an untracked file stops at the first one.
+
+        Args:
+            repo: Open repository.
+
+        Yields:
+            The repository-relative path of each untracked file or link.
+
+        """
+        index = repo.open_index()
+        ignore = _WorkTreeIgnore.from_repo(repo)
+        for dirpath, dirnames, filenames in os.walk(repo.path):
+            relative = Path(dirpath).relative_to(repo.path).as_posix()
+            prefix = "" if relative == "." else f"{relative}/"
+            if prefix and (".git" in dirnames or ".git" in filenames):
+                dirnames.clear()
+                continue
+            entries = [name for name in filenames if prefix or name != ".git"]
+            walked = []
+            for name in dirnames:
+                if not prefix and name == ".git":
+                    continue
+                if (Path(dirpath) / name).is_symlink():
+                    entries.append(name)
+                elif not ignore.may_prune_directory(f"{prefix}{name}/"):
+                    walked.append(name)
+            dirnames[:] = walked
+            for name in entries:
+                path = prefix + name
+                if os.fsencode(path) not in index and ignore.is_ignored(path) is not True:
+                    yield path
 
     @staticmethod
     def _has_staged_changes(repo: Repo) -> bool:
@@ -297,7 +361,8 @@ class DulwichVersioner(StrReprMixin):
         """Return the staged, unstaged and untracked paths of the repository."""
         with self._open_repository(repository_path) as repo:
             try:
-                raw = porcelain.status(repo)
+                raw = porcelain.status(repo, untracked_files="no")
+                untracked = list(self._iter_untracked_files(repo))
             except _DULWICH_ERRORS as e:
                 error_msg = f"Failed to read repository status: {e}"
                 raise VersionerError(error_msg) from e
@@ -308,7 +373,7 @@ class DulwichVersioner(StrReprMixin):
                 staged_deleted=self._decode_paths(staged.get("delete")),
                 staged_modified=self._decode_paths(staged.get("modify")),
                 unstaged=self._decode_paths(raw.unstaged),
-                untracked=self._decode_paths(raw.untracked),
+                untracked=untracked,
             )
 
     @override
