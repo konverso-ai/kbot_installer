@@ -1,4 +1,4 @@
-"""Run workarea 'bin/' scripts ('kbot.sh' subcommands, DB upgrade scripts), the IAM-only load and the license check."""
+"""Run workarea 'bin/' scripts ('kbot.sh' subcommands, DB upgrade scripts), the data load and the license check."""
 
 import subprocess
 from pathlib import Path
@@ -81,19 +81,20 @@ def validate_license(workarea_path: Path) -> None:
         raise RuntimeError(msg)
 
 
-def run_kbot_iam_load(workarea_path: Path) -> None:
-    """Load only the identity and access management data (permissions, roles, users).
+def run_kbot_load(workarea_path: Path, *options: str) -> None:
+    """Load data from the products' configuration files into the workarea's database.
 
-    Runs 'bin/core.sh load -p': unlike 'kbot.sh load', 'core.sh' forwards its
-    arguments to 'Load.py', whose '-p/--profiles' option restricts the load to
-    the IAM step. This creates the 'users.conf' accounts (including 'admin' and
-    its 'Administrator' role) without loading the rest of the data.
+    Runs 'bin/core.sh load <options>': unlike 'kbot.sh load', 'core.sh' forwards
+    its arguments to 'Load.py' (e.g. '--profiles' restricts the load to the
+    identity and access management data, '--products' to some products).
+    Without options, everything is loaded, like 'kbot.sh load'.
 
     Args:
         workarea_path: Workarea directory holding 'bin/core.sh'.
+        *options: 'Load.py' command-line options.
 
     Raises:
         RuntimeError: If the command exits with a non-zero status.
 
     """
-    run_workarea_script(workarea_path, "core.sh", "load", "-p")
+    run_workarea_script(workarea_path, "core.sh", "load", *options)
