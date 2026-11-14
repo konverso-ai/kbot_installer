@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import psycopg
 import pytest
 from click.testing import CliRunner
 from dulwich import porcelain
 
 import cli.__main__
 from cli import commands
-from cli.tests.bdd.fakes import FakeGitRemotes, FakeProcesses, FakeStorage
+from cli.tests.bdd.fakes import FakeDb, FakeGitRemotes, FakeProcesses, FakeStorage
 
 # Console scripts of pyproject.toml [project.scripts]; kbot-installer goes through main() for its error handling.
 CONSOLE_SCRIPTS: dict[str, Callable[[], object]] = {
@@ -48,14 +50,28 @@ class Environment:
     monkeypatch: pytest.MonkeyPatch
     answers: list[str] = field(default_factory=list)
     result: Result | None = None
+    events: list[str] = field(default_factory=list)
+    logs: list[logging.LogRecord] = field(default_factory=list)
     procs: FakeProcesses = field(init=False)
     storage: FakeStorage = field(default_factory=FakeStorage)
     git: FakeGitRemotes = field(init=False)
+    db: FakeDb = field(init=False)
 
     def __post_init__(self) -> None:
-        """Create the fakes that need the sandbox."""
-        self.procs = FakeProcesses(sanitize=self.sanitize)
+        """Create the fakes that need the sandbox, sharing one event log."""
+        self.procs = FakeProcesses(sanitize=self.sanitize, events=self.events)
         self.git = FakeGitRemotes(self.root)
+        self.db = FakeDb(events=self.events, sanitize=self.sanitize)
+        for match in ("python.sh -m utils.License", "pip3.sh install"):
+            self.procs.on(match)
+        for match, handler in (
+            ("pg_ctl", self.db.pg_ctl),
+            ("psql", self.db.psql),
+            ("pg_dump", self.db.pg_dump),
+            ("core.sh load", self.db.load),
+            ("kbot.sh load", self.db.load),
+        ):
+            self.procs.on(match, handler=handler)
 
     def path(self, p: str) -> Path:
         """Map an absolute path written in a step into the sandbox."""
@@ -96,7 +112,7 @@ class Environment:
 
 
 @pytest.fixture
-def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Environment:
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Environment]:
     """Provide a fresh sandboxed env, with every external system replaced by a fake."""
     w = Environment(root=tmp_path, monkeypatch=monkeypatch)
     home = w.path("/home/kbot")
@@ -104,7 +120,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Environment:
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("COLUMNS", "200")
     for name in [*CLEARED_ENV, *(n for n in os.environ if n.startswith("NEXUS_"))]:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "")  # records the original state, so a value the command sets is undone too
+        monkeypatch.delenv(name)
     monkeypatch.setattr(subprocess, "run", w.procs.run)
     monkeypatch.setattr(subprocess, "Popen", w.procs.popen)
     monkeypatch.setattr(
@@ -117,6 +134,28 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Environment:
         "get_transport_and_path",
         lambda location, *a, **kw: original_transport(w.git.rewrite(location), *a, **kw),
     )
+    monkeypatch.setattr(psycopg, "connect", w.db.connect)
+    monkeypatch.setattr("database.postgres_cluster._port_in_use", lambda _host, port: port in w.db.ports_in_use)
+    monkeypatch.setattr("database.postgres_cluster._find_port_owner_pid", w.db.ports_in_use.get)
     # Under "python -m pytest", click would name the program after pytest instead of the console script.
     monkeypatch.setattr("click.core._detect_program_name", lambda *_a, **_kw: Path(sys.argv[0]).name)
-    return w
+    handler = _ListHandler(w.logs)
+    loggers = [logging.getLogger(), logging.getLogger("kbot")]  # the "kbot" logger does not propagate
+    for logger in loggers:
+        logger.addHandler(handler)
+    yield w
+    for logger in loggers:
+        logger.removeHandler(handler)
+
+
+class _ListHandler(logging.Handler):
+    """Keep the log records of a scenario, for the steps that check what was logged."""
+
+    def __init__(self, records: list[logging.LogRecord]) -> None:
+        """Collect into records."""
+        super().__init__(logging.DEBUG)
+        self.records = records
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Keep the record."""
+        self.records.append(record)
