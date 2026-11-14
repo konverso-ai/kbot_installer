@@ -527,6 +527,7 @@ class FakeDb:
         action = next(a for a in ("initdb", "status", "start", "stop") if a in argv)
         cluster = self.cluster(pg_data)
         if action == "initdb":
+            cluster = self.clusters[pg_data] = FakeCluster(FakeServer(trust=True))  # fresh, even on a rebuild
             pg_data.mkdir(parents=True, exist_ok=True)
             (pg_data / "PG_VERSION").write_text(self.pg_major + "\n", encoding="utf-8")
         elif action == "status":
