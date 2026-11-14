@@ -26,6 +26,10 @@ All actual Python source lives under `core/python/` (this is the package root â€
 `errors/base.py` holds `ErrorCode`, and each code has its own lowercase module (`errors/kb0002.py` â†’ `KB0002`,
 imported as `from errors.kb0002 import KB0002`); kbot adds `errors/factory.py` and its own codes.
 
+`service` is a namespace package shared with kbot (no `service/__init__.py`, in either repo). Import its modules
+directly (`from service.nexus_service import NexusService`). kbot adds `service/base.py`, `service/factory.py` and one
+`<name>_service.py` per Konverso microservice, so never add a module with one of these names here.
+
 ## Common commands
 
 Package management and running use `uv`; a `Makefile` wraps the common workflows (also exposed as

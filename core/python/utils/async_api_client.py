@@ -2,7 +2,7 @@
 
 import asyncio
 import tempfile
-from collections.abc import Coroutine, Iterator
+from collections.abc import Coroutine, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import IO, Any
@@ -124,6 +124,33 @@ class AsyncAPIClient:
         if response.status_code == httpx.codes.NO_CONTENT:
             return {}
         return response.json()
+
+    async def post_form(
+        self,
+        endpoint: str,
+        data: Mapping[str, Any] | None = None,
+        files: Mapping[str, Any] | Sequence[tuple[str, Any]] | None = None,
+        timeout: float | None = None,
+    ) -> httpx.Response:
+        """Make a form POST, multipart when files are given, and return the raw response.
+
+        Fields whose value is None are not sent (as requests does). timeout overrides the
+        client's 30 s for this request only. The body is never parsed: 204 and binary
+        answers are returned as they are.
+        """
+        if not self.__client:
+            msg = "Client not initialized. Use 'async with'."
+            raise RuntimeError(msg)
+
+        fields = {k: v for k, v in (data or {}).items() if v is not None}
+        response = await self.__client.post(
+            endpoint,
+            data=fields,
+            files=files,
+            timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+        )
+        response.raise_for_status()
+        return response
 
     async def get_multiple(self, endpoints: Iterator[str]) -> list[dict[str, Any]]:
         """Retrieve multiple endpoints in parallel."""
