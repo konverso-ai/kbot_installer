@@ -313,6 +313,7 @@ class FakeGitRemotes:
             for branch, files in branches.items():
                 repo.refs.set_symbolic_ref(b"HEAD", f"refs/heads/{branch}".encode())
                 for name, text in files.items():
+                    (seed / name).parent.mkdir(parents=True, exist_ok=True)
                     (seed / name).write_text(text, encoding="utf-8")
                 porcelain.add(repo, [str(seed / name) for name in files])
                 porcelain.commit(repo, message=branch.encode(), author=b"t <t@t>", committer=b"t <t@t>")
