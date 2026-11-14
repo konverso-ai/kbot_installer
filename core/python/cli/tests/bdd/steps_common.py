@@ -639,3 +639,25 @@ def password_verifies_printed(env: Environment, login: str, db: str, prefix: str
     stored = find_database(env, db).users.get(login)
     assert stored is not None, f"no password stored for {login!r}"
     assert safe_encrypt(printed_after(env, prefix), stored) == stored
+
+
+@given(step('a kbot workarea exists in "{directory}" with an internal database of PostgreSQL {major:d}'))
+def kbot_workarea_with_db(env: Environment, directory: str, major: int) -> None:
+    """Create a workarea whose stopped internal cluster holds kbot_db, initialized by a PostgreSQL major."""
+    kbot_workarea(env, directory)
+    pg_data = env.path(directory) / "var" / "db"
+    pg_data.mkdir(parents=True, exist_ok=True)
+    (pg_data / "PG_VERSION").write_text(f"{major}\n", encoding="utf-8")
+    env.db.cluster(pg_data).server.databases["kbot_db"] = FakeDatabase(owner="kbot_db_user")
+
+
+@then(step('the internal PostgreSQL server of "{workarea}" is running on port {port:d}'))
+def internal_server_running(env: Environment, workarea: str, port: int) -> None:
+    """Check the cluster of a workarea is still running when the command ends."""
+    assert env.db.cluster(env.path(workarea) / "var" / "db").port == port
+
+
+@then(step('the internal PostgreSQL server of "{workarea}" is stopped'))
+def internal_server_still_stopped(env: Environment, workarea: str) -> None:
+    """Check the cluster of a workarea is not running when the command ends."""
+    assert env.db.cluster(env.path(workarea) / "var" / "db").port is None

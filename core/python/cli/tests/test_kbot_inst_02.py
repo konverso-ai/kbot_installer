@@ -25,12 +25,6 @@ def contacted_as(env: Environment, host: str, port: int, user: str, password: st
     assert any(c[0] == host and c[1] == port and c[3:] == (user, password) for c in env.db.connections)
 
 
-@then(step('the internal PostgreSQL server of "{workarea}" is running on port {port:d}'))
-def internal_server_running(env: Environment, workarea: str, port: int) -> None:
-    """Check the cluster of a workarea is still running when the command ends."""
-    assert env.db.cluster(env.path(workarea) / "var" / "db").port == port
-
-
 @then(step('no role and no database is created on "{host}"'))
 def nothing_created(env: Environment, host: str) -> None:
     """Check the installer created no PostgreSQL role nor database (on any server, the internal one included)."""
