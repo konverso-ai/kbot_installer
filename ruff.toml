@@ -141,6 +141,7 @@ known-first-party = [
     "installer_support",
     "interactivity",
     "publisher",
+    "security",
     "service",
     "storage",
     "updatable",

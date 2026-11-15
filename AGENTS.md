@@ -18,13 +18,20 @@ dependencies, and lays out/updates the resulting workspace on disk.
 All actual Python source lives under `core/python/` (this is the package root — see
 `pythonpath = ["core/python"]` in `pyproject.toml` and `PYTHONPATH` in `tox.ini`). Top-level packages
 (`auth`, `backend`, `cli`, `credentials`, `database`, `errors`, `git`, `installable`,
-`installer_support`, `interactivity`, `publisher`, `service`, `setup`, `storage`, `updatable`, `utils`,
+`installer_support`, `interactivity`, `publisher`, `security`, `service`, `setup`, `storage`, `updatable`, `utils`,
 `workarea`, `writer`) are imported as absolute imports, e.g. `from installable.base import InstallableBase`, not
 `from core.python.installable...`.
 
 `errors` is a namespace package shared with kbot (no `errors/__init__.py`, in either repo).
 `errors/base.py` holds `ErrorCode`, and each code has its own lowercase module (`errors/kb0002.py` → `KB0002`,
 imported as `from errors.kb0002 import KB0002`); kbot adds `errors/factory.py` and its own codes.
+
+`security` is likewise a namespace package shared with kbot (no `security/__init__.py`, in either repo).
+`security/vault/` holds the secret vaults: implementations (`{name}_vault.py`), `factory.py`, and
+`registry.py`, kbot's `VaultRegistry` mapping the kbot vault names used in `<VAULT>::<key>` setting values
+(`VARIABLE`, `VALUE`, `ALIAS`, `SECRET`, `AZUREKEYVAULT`, `AWSSECRETMANAGER`, `OCIVAULT`) to `factory.py`
+builders. It receives kbot's settings functions (`get_config`, `expand`) instead of importing them; kbot
+owns the instance (`Settings().vaults`).
 
 ## Common commands
 
