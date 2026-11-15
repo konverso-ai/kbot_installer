@@ -138,6 +138,7 @@ extra-paths = ["core/python"]
 
 [tool.ty.src]
 exclude = [
+    "core/python/conftest.py",
     "core/python/**/tests/**",
     "core/python/installer_tests/**",
     "core/python/git/versioner/examples.py",
