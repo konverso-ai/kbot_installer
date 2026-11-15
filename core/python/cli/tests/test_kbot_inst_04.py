@@ -10,8 +10,8 @@ import pytest
 from dulwich import porcelain
 from pytest_bdd import given, scenarios, then
 
-from cli.tests.bdd.fakes import FakeDatabase, product_xml
-from cli.tests.bdd.steps_common import kbot_workarea, names, step
+from cli.tests.bdd.fakes import product_xml
+from cli.tests.bdd.steps_common import names, step
 from cli.tests.bdd.environment import Environment
 from git.versioner.dulwich_versioner import DulwichVersioner
 
@@ -73,16 +73,6 @@ def asked(env: Environment, question: str) -> bool:
 
 
 # Given
-
-
-@given(step('a kbot workarea exists in "{directory}" with an internal database of PostgreSQL {major:d}'))
-def kbot_workarea_with_db(env: Environment, directory: str, major: int) -> None:
-    """Create a workarea whose stopped internal cluster holds kbot_db, initialized by a PostgreSQL major."""
-    kbot_workarea(env, directory)
-    pg_data = env.path(directory) / "var" / "db"
-    pg_data.mkdir(parents=True, exist_ok=True)
-    (pg_data / "PG_VERSION").write_text(f"{major}\n", encoding="utf-8")
-    env.db.cluster(pg_data).server.databases["kbot_db"] = FakeDatabase(owner="kbot_db_user")
 
 
 @given(step('the product "{name}" in "{directory}" is at version "{version}"'))
