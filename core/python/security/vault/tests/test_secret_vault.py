@@ -20,24 +20,13 @@ def delegate() -> MagicMock:
 class TestSecretVault:
     """Test cases for SecretVault class."""
 
-    def test_get_valid_delegates_key_unchanged_without_expander(self, delegate: MagicMock) -> None:
-        """Test get forwards the key as is when no expander is configured."""
+    def test_get_valid_delegates_key_unchanged(self, delegate: MagicMock) -> None:
+        """Test get forwards the key as is to the underlying vault."""
         vault = SecretVault(vault=delegate)
 
         result = vault.get("my-vault::db-password")
 
         delegate.get.assert_called_once_with("my-vault::db-password")
-        assert compare("eq", result, "super-secret")
-
-    def test_get_valid_delegates_expanded_key(self, delegate: MagicMock) -> None:
-        """Test get expands the key before delegating."""
-        expand = MagicMock(return_value="site-store::db-password")
-        vault = SecretVault(vault=delegate, expand=expand)
-
-        result = vault.get("%(site_secret_store)v::db-password")
-
-        expand.assert_called_once_with("%(site_secret_store)v::db-password")
-        delegate.get.assert_called_once_with("site-store::db-password")
         assert compare("eq", result, "super-secret")
 
     def test_get_invalid_propagates_delegate_errors(self, delegate: MagicMock) -> None:

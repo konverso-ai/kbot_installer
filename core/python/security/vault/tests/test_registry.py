@@ -1,155 +1,72 @@
-"""Tests for security.vault.registry: kbot vault names resolved through ``security.vault`` implementations."""
+"""Tests for security.vault.registry: kbot vault names registered on first request."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from security.vault.alias_vault import AliasVault
 from security.vault.base import VaultBase
+from security.vault.environment_vault import EnvironmentVault
 from security.vault.registry import VaultRegistry
-
-SETTINGS = {
-    "cloud_provider": "AZUREKEYVAULT",
-    "aws_secret_vault_region": "eu-west-3",
-    "site_secret_store": "my-key-vault",
-    "target": "target-value",
-}
-
-CLOUD_FACTORIES = ("add_azure_vault", "add_s3_vault", "add_oci_vault")
+from security.vault.secret_vault import SecretVault
+from security.vault.value_vault import ValueVault
 
 
-class FakeCloudVault(VaultBase):
-    """In-memory writable vault standing in for a cloud vault."""
+def test_get_builds_the_vault_on_first_call_then_returns_the_registered_one():
+    registry = VaultRegistry()
 
-    def __init__(self, fail=False):
-        self.secrets = {"my-key-vault::db-password": "s3cr3t"}
-        self.fail = fail
+    vault = registry.get("VARIABLE")
 
-    def get(self, key):
-        if self.fail:
-            raise RuntimeError("cloud unavailable")
-        return self.secrets[key]
-
-    def set(self, key, value):
-        if self.fail:
-            raise RuntimeError("cloud unavailable")
-        self.secrets[key] = value
-
-
-def _expand(value):
-    for name, setting in SETTINGS.items():
-        value = value.replace(f"%({name})v", setting)
-    return value
-
-
-@pytest.fixture
-def cloud_vault():
-    """Fake cloud vault returned by every cloud vault factory."""
-    return FakeCloudVault()
-
-
-@pytest.fixture
-def cloud_factories(cloud_vault):
-    """Patch the cloud vault factories to return the fake cloud vault."""
-    with (
-        patch("security.vault.factory.add_azure_vault", return_value=cloud_vault) as azure,
-        patch("security.vault.factory.add_s3_vault", return_value=cloud_vault) as s3,
-        patch("security.vault.factory.add_oci_vault", return_value=cloud_vault) as oci,
-    ):
-        yield dict(zip(CLOUD_FACTORIES, (azure, s3, oci), strict=True))
-
-
-@pytest.fixture
-def registry(cloud_factories):
-    """Registry reading the fake settings, with cloud vaults replaced by the fake."""
-    return VaultRegistry(SETTINGS.get, _expand)
-
-
-def test_variable_reads_environment_and_defaults_to_empty_string(registry, monkeypatch):
-    monkeypatch.setenv("KBOT_TEST_VAR", "from-env")
-    monkeypatch.delenv("KBOT_TEST_UNSET", raising=False)
-
-    assert registry.get("VARIABLE", "KBOT_TEST_VAR") == "from-env"
-    assert registry.get("VARIABLE", "KBOT_TEST_UNSET") == ""
-
-
-def test_value_and_alias_expand_settings_references(registry):
-    assert registry.get("VALUE", "x-%(target)v") == "x-target-value"
-    assert registry.get("ALIAS", "target") == "target-value"
-
-
-def test_alias_to_undefined_setting_returns_none(registry):
-    assert registry.get("ALIAS", "undefined") is None
-
-
-def test_secret_delegates_to_cloud_provider_vault_with_expanded_key(registry, cloud_factories):
-    value = registry.get("SECRET", "%(site_secret_store)v::db-password")
-
-    assert value == "s3cr3t"
-    cloud_factories["add_azure_vault"].assert_called_once_with()
-
-
-def test_secret_with_invalid_cloud_provider_returns_none(registry, monkeypatch):
-    monkeypatch.setitem(SETTINGS, "cloud_provider", "NOPE")
-
-    assert registry.get("SECRET", "my-key-vault::db-password") is None
-
-
-def test_cloud_vault_is_built_once(registry, cloud_factories):
-    registry.get("AZUREKEYVAULT", "my-key-vault::db-password")
-    registry.get("AZUREKEYVAULT", "my-key-vault::db-password")
-
-    cloud_factories["add_azure_vault"].assert_called_once_with()
+    assert isinstance(vault, EnvironmentVault)
+    assert registry.get("VARIABLE") is vault
 
 
 @pytest.mark.parametrize(
-    ("name", "factory_name", "factory_kwargs"),
+    ("name", "kwargs", "expected_cls"),
     [
-        ("AZUREKEYVAULT", "add_azure_vault", {}),
-        ("AWSSECRETMANAGER", "add_s3_vault", {"region_name": "eu-west-3"}),
-        ("OCIVAULT", "add_oci_vault", {"resolve_secret_id": SETTINGS.get}),
+        ("VALUE", {}, ValueVault),
+        ("ALIAS", {"get_config": {}.get}, AliasVault),
+        ("SECRET", {"vault": MagicMock(spec=VaultBase)}, SecretVault),
     ],
 )
-def test_cloud_vaults_are_built_with_settings(registry, cloud_factories, name, factory_name, factory_kwargs):
-    registry.get(name, "my-key-vault::db-password")
-
-    cloud_factories[factory_name].assert_called_once_with(**factory_kwargs)
+def test_get_builds_the_matching_vault_with_its_arguments(name, kwargs, expected_cls):
+    assert isinstance(VaultRegistry().get(name, **kwargs), expected_cls)
 
 
-def test_cloud_vault_failure_returns_none(registry, cloud_vault):
-    cloud_vault.fail = True
+def test_arguments_are_only_used_to_build_the_vault():
+    builder = MagicMock()
+    with patch.dict("security.vault.registry._BUILDERS", {"OCIVAULT": builder}):
+        registry = VaultRegistry()
+        vault = registry.get("OCIVAULT", resolve_secret_id=str)
+        again = registry.get("OCIVAULT", resolve_secret_id=repr)
 
-    assert registry.get("AZUREKEYVAULT", "my-key-vault::db-password") is None
-
-
-def test_azure_set_value_stores_secret(registry, cloud_vault):
-    assert registry.set("AZUREKEYVAULT", "my-key-vault::token", "t0k3n") is True
-    assert cloud_vault.secrets["my-key-vault::token"] == "t0k3n"
-
-
-def test_set_value_failure_returns_false(registry, cloud_vault):
-    cloud_vault.fail = True
-
-    assert registry.set("AZUREKEYVAULT", "my-key-vault::token", "t0k3n") is False
+    builder.assert_called_once_with(resolve_secret_id=str)
+    assert vault is again is builder.return_value
 
 
-def test_set_value_on_read_only_vault_returns_false(registry):
-    assert registry.set("VARIABLE", "KBOT_TEST_VAR", "value") is False
+def test_failed_build_registers_nothing_and_is_retried():
+    vault = MagicMock(spec=VaultBase)
+    builder = MagicMock(side_effect=[RuntimeError("boom"), vault])
+    with patch.dict("security.vault.registry._BUILDERS", {"AZUREKEYVAULT": builder}):
+        registry = VaultRegistry()
+        with pytest.raises(RuntimeError, match="boom"):
+            registry.get("AZUREKEYVAULT")
+
+        assert registry.get("AZUREKEYVAULT") is vault
+        assert registry.get("AZUREKEYVAULT") is vault
+    assert builder.call_count == 2
 
 
-def test_unknown_vault_is_not_registered_and_resolves_to_none(registry):
-    assert "UNKNOWN" not in registry
-    assert "AZUREKEYVAULT" in registry
-    assert registry.get("UNKNOWN", "key") is None
+def test_membership_tells_kbot_vault_names_without_building_them():
+    builder = MagicMock()
+    with patch.dict("security.vault.registry._BUILDERS", {"AZUREKEYVAULT": builder}):
+        registry = VaultRegistry()
+
+        assert "AZUREKEYVAULT" in registry
+        assert "UNKNOWN" not in registry
+    builder.assert_not_called()
 
 
-def test_membership_does_not_build_the_vault(registry, cloud_factories):
-    assert "AZUREKEYVAULT" in registry
-
-    cloud_factories["add_azure_vault"].assert_not_called()
-
-
-def test_build_failure_is_retried(registry, cloud_factories, cloud_vault):
-    cloud_factories["add_azure_vault"].side_effect = [RuntimeError("boom"), cloud_vault]
-
-    assert registry.get("AZUREKEYVAULT", "my-key-vault::db-password") is None
-    assert registry.get("AZUREKEYVAULT", "my-key-vault::db-password") == "s3cr3t"
+def test_get_unknown_vault_raises_key_error():
+    with pytest.raises(KeyError):
+        VaultRegistry().get("UNKNOWN")

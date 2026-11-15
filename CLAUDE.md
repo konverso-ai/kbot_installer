@@ -22,10 +22,10 @@ imported as `from errors.kb0002 import KB0002`); kbot adds `errors/factory.py` a
 
 `security` is likewise a namespace package shared with kbot (no `security/__init__.py`, in either repo).
 `security/vault/` holds the secret vaults: implementations (`{name}_vault.py`), `factory.py`, and
-`registry.py`, kbot's `VaultRegistry` mapping the kbot vault names used in `<VAULT>::<key>` setting values
-(`VARIABLE`, `VALUE`, `ALIAS`, `SECRET`, `AZUREKEYVAULT`, `AWSSECRETMANAGER`, `OCIVAULT`) to `factory.py`
-builders. It receives kbot's settings functions (`get_config`, `expand`) instead of importing them; kbot
-owns the instance (`Settings().vaults`).
+`registry.py`, kbot's `VaultRegistry`: `get(name, **kwargs)` builds the vault of a kbot vault name used in
+`<VAULT>::<key>` setting values (`VARIABLE`, `VALUE`, `ALIAS`, `SECRET`, `AZUREKEYVAULT`, `AWSSECRETMANAGER`,
+`OCIVAULT`) with the `factory.py` builder on first request, then returns the registered one. Vaults only look
+a key up: the settings reader (kbot's `Settings`) expands `%(name)v` references before passing the key.
 
 ## Common commands
 

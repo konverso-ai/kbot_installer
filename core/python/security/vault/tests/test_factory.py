@@ -85,8 +85,8 @@ class TestAddVault:
         ("name", "kwargs", "expected_cls"),
         [
             ("environment", {}, EnvironmentVault),
-            ("value", {"expand": str}, ValueVault),
-            ("alias", {"get_config": str, "expand": str}, AliasVault),
+            ("value", {}, ValueVault),
+            ("alias", {"get_config": str}, AliasVault),
             ("secret", {"vault": MagicMock(spec=VaultBase)}, SecretVault),
         ],
     )
