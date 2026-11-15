@@ -623,3 +623,19 @@ def kbot_workarea(env: Environment, directory: str) -> None:
     (workarea / "bin").mkdir(exist_ok=True)
     for script in ("core.sh", "kbot.sh"):
         (workarea / "bin" / script).touch(mode=0o755)
+
+
+def printed_after(env: Environment, prefix: str) -> str:
+    """Return the value the last command printed after prefix, up to the end of the line."""
+    assert env.result is not None
+    match = re.search(re.escape(prefix) + r"(\S+)", env.result.output)
+    assert match, f"{prefix!r} not printed:\n{env.result.output}"
+    return match.group(1)
+
+
+@then(step('the password of "{login}" in "{db}" verifies the password printed after "{prefix}"'))
+def password_verifies_printed(env: Environment, login: str, db: str, prefix: str) -> None:
+    """Check the stored kbot password hash matches the generated password the command printed."""
+    stored = find_database(env, db).users.get(login)
+    assert stored is not None, f"no password stored for {login!r}"
+    assert safe_encrypt(printed_after(env, prefix), stored) == stored
