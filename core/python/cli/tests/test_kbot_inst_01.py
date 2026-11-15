@@ -46,10 +46,3 @@ def same_output(env: Environment, cmdline: str) -> None:
     other = env.run(cmdline)
     env.result = first
     assert (other.output, other.exit_code) == (first.output, first.exit_code)
-
-
-@then(step("the storage is not read"))
-def storage_not_read(env: Environment) -> None:
-    """Check the storage provider was never used."""
-    assert env.storage.downloads == []
-    assert env.storage.reads == []

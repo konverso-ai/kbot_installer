@@ -62,7 +62,17 @@ class Environment:
         self.procs = FakeProcesses(sanitize=self.sanitize, events=self.events)
         self.git = FakeGitRemotes(self.root)
         self.db = FakeDb(events=self.events, sanitize=self.sanitize)
-        for match in ("python.sh -m utils.License", "pip3.sh install"):
+        for match in (
+            "python.sh -m utils.License",
+            "pip3.sh install",
+            "kbot.sh stop",
+            "kbot.sh restart",
+            "kbot.sh learn",
+            "pg.sh start",
+            "redis.sh start",
+            "upgrade_db.sh",
+            "upgrade_patch.sh",
+        ):
             self.procs.on(match)
         for match, handler in (
             ("pg_ctl", self.db.pg_ctl),
