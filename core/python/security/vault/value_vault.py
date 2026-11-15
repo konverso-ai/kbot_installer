@@ -2,44 +2,27 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from typing_extensions import override
 
 from security.vault.base import VaultBase
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class ValueVault(VaultBase):
     """``VaultBase`` implementation returning the key itself as the value.
 
-    The key is a literal value that may embed references to other settings;
-    those references are expanded before the value is returned.
+    Settings references embedded in the key are expanded by the settings reader
+    before the key reaches the vault.
     """
-
-    _expand: Callable[[str], str]
-
-    def __init__(self, expand: Callable[[str], str]) -> None:
-        """Initialize the value vault.
-
-        Args:
-            expand: Function expanding settings references embedded in a
-                value (e.g. kbot's ``Settings()._ExpandConfigValue``).
-
-        """
-        self._expand = expand
 
     @override
     def get(self, key: str) -> str:
-        """Return the key, with its embedded settings references expanded.
+        """Return the key.
 
         Args:
             key: Literal value, used as is (no ``<vault-name>::`` prefix).
 
         Returns:
-            The expanded value.
+            The key.
 
         """
-        return self._expand(key)
+        return key
