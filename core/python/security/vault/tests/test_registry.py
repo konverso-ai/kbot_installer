@@ -12,6 +12,19 @@ from security.vault.secret_vault import SecretVault
 from security.vault.value_vault import ValueVault
 
 
+@pytest.fixture(autouse=True)
+def fresh_registry(monkeypatch):
+    """Give every test its own registry: the singleton is reset, then restored afterwards."""
+    monkeypatch.setattr(VaultRegistry, "_instance", None)
+
+
+def test_registry_is_a_singleton_sharing_its_vaults():
+    vault = VaultRegistry().get("VARIABLE")
+
+    assert VaultRegistry() is VaultRegistry()
+    assert VaultRegistry().get("VARIABLE") is vault
+
+
 def test_get_builds_the_vault_on_first_call_then_returns_the_registered_one():
     registry = VaultRegistry()
 
