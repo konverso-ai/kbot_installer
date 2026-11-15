@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, final
 
 from security.vault import factory
 
@@ -23,12 +23,23 @@ _BUILDERS: dict[str, Callable[..., VaultBase]] = {
 }
 
 
+@final
 class VaultRegistry:
-    """Registry of the kbot vaults, each registered when it is first requested."""
+    """Registry of the kbot vaults, each registered when it is first requested.
 
-    def __init__(self) -> None:
-        """Start with no vault registered."""
-        self._vaults: dict[str, VaultBase] = {}
+    A singleton: every ``VaultRegistry()`` call returns the same registry.
+    """
+
+    _instance: ClassVar[VaultRegistry | None] = None
+    _vaults: dict[str, VaultBase]
+
+    def __new__(cls) -> VaultRegistry:
+        """Return the registry, creating it with no vault registered on first call."""
+        if cls._instance is None:
+            instance = super().__new__(cls)
+            instance._vaults = {}
+            cls._instance = instance
+        return cls._instance
 
     def __contains__(self, name: object) -> bool:
         """Tell whether ``name`` is a kbot vault name, without building the vault."""
