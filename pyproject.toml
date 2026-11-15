@@ -133,9 +133,6 @@ DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]
 
-[tool.pytest.ini_options]
-pythonpath = ["core/python"]
-
 [tool.ty.environment]
 extra-paths = ["core/python"]
 
