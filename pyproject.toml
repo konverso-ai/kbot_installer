@@ -134,14 +134,12 @@ DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest", "pytest_bdd"]
 
-[tool.pytest.ini_options]
-pythonpath = ["core/python"]
-
 [tool.ty.environment]
 extra-paths = ["core/python"]
 
 [tool.ty.src]
 exclude = [
+    "core/python/conftest.py",
     "core/python/**/tests/**",
     "core/python/installer_tests/**",
     "core/python/git/versioner/examples.py",
