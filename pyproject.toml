@@ -80,6 +80,7 @@ typecheck = [
 test = [
     "pytest",
     "pytest-asyncio",
+    "pytest-bdd>=9.0.1",
     "pytest-cov",
     "pytest-mock",
 ]
@@ -128,7 +129,7 @@ python-json-logger = "pythonjsonlogger"
 DEP001 = ["tomllib", "Bot"]
 DEP002 = ["colorama", "furl", "gitpython", "pygit2", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
-DEP004 = ["pytest"]
+DEP004 = ["pytest", "pytest_bdd"]
 
 [tool.pytest.ini_options]
 pythonpath = ["core/python"]
@@ -138,6 +139,7 @@ extra-paths = ["core/python"]
 
 [tool.ty.src]
 exclude = [
+    "core/python/conftest.py",
     "core/python/**/tests/**",
     "core/python/installer_tests/**",
     "core/python/git/versioner/examples.py",
@@ -149,7 +151,7 @@ exclude = [
 [tool.ty.rules]
 all = "warn"
 invalid-method-override = "ignore"
-unresolved-import = "ignore"
+import-not-found = "ignore"
 possibly-missing-import = "ignore"
 missing-argument = "ignore"
 truthiness-test-of-none-union = "ignore"
