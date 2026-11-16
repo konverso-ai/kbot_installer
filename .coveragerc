@@ -3,7 +3,10 @@
 
 [run]
 data_file = /tmp/.coverage
-omit = */*example*,*/*examples*,*/test_*,*/tests/*,*/__pycache__/*,*/.*,gitpassword.py,nexus.py,kbot.py,setup_workarea.py,work_in_progress.py
+omit = */*example*,*/*examples*,*/test_*,*/tests/*,*/conftest.py,*/__pycache__/*,*/.*,gitpassword.py,nexus.py,kbot.py,setup_workarea.py,work_in_progress.py
+# sys.monitoring (PEP 669, Python >= 3.12) instead of the default C tracer: collection under
+# coverage drops from ~12s to ~4.5s. On Python < 3.12 coverage warns and falls back to ctrace.
+core = sysmon
 
 [html]
 directory = /tmp/htmlcov
