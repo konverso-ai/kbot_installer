@@ -133,14 +133,12 @@ DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
 DEP004 = ["pytest"]
 
-[tool.pytest.ini_options]
-pythonpath = ["core/python"]
-
 [tool.ty.environment]
 extra-paths = ["core/python"]
 
 [tool.ty.src]
 exclude = [
+    "core/python/conftest.py",
     "core/python/**/tests/**",
     "core/python/installer_tests/**",
     "core/python/git/versioner/examples.py",
@@ -152,7 +150,7 @@ exclude = [
 [tool.ty.rules]
 all = "warn"
 invalid-method-override = "ignore"
-unresolved-import = "ignore"
+import-not-found = "ignore"
 possibly-missing-import = "ignore"
 missing-argument = "ignore"
 truthiness-test-of-none-union = "ignore"
