@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -883,7 +883,7 @@ wheels = [
 
 [[package]]
 name = "kbot-installer"
-version = "2.0.dev7"
+version = "2.0.dev8"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
