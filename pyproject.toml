@@ -28,13 +28,22 @@ dependencies = [
     "typing_extensions",
     "xmltodict>=1.0.4",
 ]
+license = "MIT"
+authors = [
+    { name = "Konverso", email = "contact@konverso.ai" }
+]
+classifiers=[
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+readme = "README.md"
 
 [project.scripts]
 kbot-installer = "cli.__main__:main"
 kbot-load = "cli.commands:load"
 kbot-learn = "cli.commands:learn"
 kbot-set-admin-password = "cli.commands:set_admin_password_command"
-tries = "tools.tries:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -112,12 +121,12 @@ known_first_party = [
     "installer_support",
     "interactivity",
     "publisher",
+    "security",
     "service",
     "storage",
     "updatable",
     "upgradable",
     "utils",
-    "vault",
     "workarea",
     "writer",
 ]
@@ -150,7 +159,7 @@ exclude = [
 [tool.ty.rules]
 all = "warn"
 invalid-method-override = "ignore"
-unresolved-import = "ignore"
+import-not-found = "ignore"
 possibly-missing-import = "ignore"
 missing-argument = "ignore"
 truthiness-test-of-none-union = "ignore"

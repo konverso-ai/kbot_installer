@@ -330,7 +330,7 @@ class TestInstallCommand:
         monkeypatch.setenv("KBOT_ADMIN_PASSWORD", "K0nversOK!")
         with (
             patch("cli.commands.validate_license") as self.mock_validate_license,
-            patch("cli.commands.run_kbot_iam_load") as self.mock_run_kbot_iam_load,
+            patch("cli.commands.run_kbot_load") as self.mock_run_kbot_load,
             patch("cli.commands.set_admin_password") as self.mock_set_admin_password,
         ):
             yield
@@ -771,6 +771,12 @@ class TestInstallCommand:
         req = installer_dir / "acme" / "requirements.txt"
         req.parent.mkdir(parents=True)
         req.write_text("requests\n", encoding="utf-8")
+        site_packages = installer_dir / "3rdparty" / "Python-3.10.15" / "lib" / "python3.10" / "site-packages"
+        site_packages.mkdir(parents=True)
+        (installer_dir / "3rdparty" / "versions.env").write_text(
+            "PYTHON_MAJOR_VERSION=3.10\nPYTHON_DIR=${THIRDPARTY_HOME}/Python-3.10.15\n",
+            encoding="utf-8",
+        )
 
         framework = MagicMock()
         framework.name = "kbot"
@@ -882,7 +888,7 @@ class TestInstallCommand:
 
         assert result.exit_code == 0, result.output
         mock_run_kbot_command.assert_called_once_with(workarea_dir, "load")
-        self.mock_run_kbot_iam_load.assert_not_called()
+        self.mock_run_kbot_load.assert_not_called()
         mock_set_admin_password.assert_called_once()
         assert mock_set_admin_password.call_args.args[1] == "K0nversOK!"
 
@@ -958,7 +964,7 @@ class TestInstallCommand:
         )
 
         assert result.exit_code == 0, result.output
-        self.mock_run_kbot_iam_load.assert_called_once_with(workarea_dir)
+        self.mock_run_kbot_load.assert_called_once_with(workarea_dir, "--profiles")
         mock_run_kbot_command.assert_not_called()
         self.mock_set_admin_password.assert_called_once()
         assert self.mock_set_admin_password.call_args.args[1] == "K0nversOK!"
@@ -1313,20 +1319,48 @@ class TestLoadCommand:
         """Set up test fixtures."""
         self.runner = CliRunner()
 
-    @patch("cli.commands.run_kbot_command")
-    def test_load_runs_kbot_load(self, mock_run_kbot_command, tmp_path) -> None:
-        """'load' runs 'kbot.sh load' against the workarea directory."""
+    @patch("cli.commands.run_kbot_load")
+    def test_load_without_options_loads_everything(self, mock_run_kbot_load, tmp_path) -> None:
+        """Without options, 'load' runs 'core.sh load' with no Load.py option (everything is loaded)."""
         workarea_dir = tmp_path / "work"
 
         result = self.runner.invoke(cli, ["load", "--workarea-dir", str(workarea_dir)])
 
         assert result.exit_code == 0, result.output
-        mock_run_kbot_command.assert_called_once_with(workarea_dir, "load")
+        mock_run_kbot_load.assert_called_once_with(workarea_dir)
 
-    @patch("cli.commands.run_kbot_command")
-    def test_load_reports_error(self, mock_run_kbot_command, tmp_path) -> None:
-        """A failing 'kbot.sh load' aborts with an error message."""
-        mock_run_kbot_command.side_effect = RuntimeError("boom")
+    @patch("cli.commands.run_kbot_load")
+    def test_load_forwards_load_py_options(self, mock_run_kbot_load, tmp_path) -> None:
+        """Short and long object flags, products and '--with-customer' are forwarded as Load.py long options."""
+        workarea_dir = tmp_path / "work"
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "load",
+                "-w",
+                str(workarea_dir),
+                "-l",
+                "--workflow",
+                "-M",
+                "--products",
+                "jira",
+                "--products",
+                "ithd",
+                "--with-customer",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        args = mock_run_kbot_load.call_args.args
+        assert args[0] == workarea_dir
+        assert set(args[1:4]) == {"--labels", "--workflow", "--mcp-configurations"}
+        assert args[4:] == ("--products", "jira", "ithd", "--with-customer")
+
+    @patch("cli.commands.run_kbot_load")
+    def test_load_reports_error(self, mock_run_kbot_load, tmp_path) -> None:
+        """A failing 'core.sh load' aborts with an error message."""
+        mock_run_kbot_load.side_effect = RuntimeError("boom")
 
         result = self.runner.invoke(cli, ["load", "--workarea-dir", str(tmp_path / "work")])
 
