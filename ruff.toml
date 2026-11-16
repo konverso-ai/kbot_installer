@@ -84,6 +84,10 @@ ignore = [
     "INP001", # errors is a namespace package shared with the products: no __init__.py
 ]
 
+"core/python/service/*.py" = [
+    "INP001", # service is a namespace package shared with kbot: no __init__.py
+]
+
 "**/*example*.py" = [
     "T201", # print found (acceptable in example files)
 ]
