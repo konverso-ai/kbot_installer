@@ -27,14 +27,18 @@ class OciStorageBackend:
 
         Args:
             credentials: OCI connection config used to configure the underlying
-                client. Authentication itself is resolved by the OCI SDK's own
-                default config file.
+                client. Authentication is resolved by the OCI SDK's own default
+                config file, or by the instance/resource principal signer the
+                credentials select.
 
         """
         self.__credentials = credentials
-        self.__client = oci.object_storage.ObjectStorageClient(
-            self.__credentials.to_client_config()
-        )
+        config = self.__credentials.to_client_config()
+        signer = self.__credentials.to_signer()
+        if signer is None:
+            self.__client = oci.object_storage.ObjectStorageClient(config)
+        else:
+            self.__client = oci.object_storage.ObjectStorageClient(config, signer=signer)
 
     def get_client(self) -> ObjectStorageClient:
         """Return the OCI Object Storage client."""
