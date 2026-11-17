@@ -120,7 +120,7 @@ class TestAddS3Vault:
         mock_vault = MagicMock(spec=VaultBase)
         with (
             patch("credentials.s3_credentials.S3Credentials") as mock_credentials_cls,
-            patch("security.vault.factory.add_backend") as mock_add_backend,
+            patch("backend.factory.add_backend") as mock_add_backend,
             patch("security.vault.factory.add_vault") as mock_add_vault,
         ):
             mock_credentials_cls.return_value = "s3-credentials"
@@ -145,7 +145,7 @@ class TestAddAzureVault:
         mock_vault = MagicMock(spec=VaultBase)
         with (
             patch("credentials.azure_credentials.AzureCredentials") as mock_credentials_cls,
-            patch("security.vault.factory.add_backend") as mock_add_backend,
+            patch("backend.factory.add_backend") as mock_add_backend,
             patch("security.vault.factory.add_vault") as mock_add_vault,
         ):
             mock_credentials_cls.return_value = "azure-credentials"
@@ -177,7 +177,7 @@ class TestAddOciVault:
         mock_vault = MagicMock(spec=VaultBase)
         resolve = MagicMock()
         with (
-            patch("security.vault.factory.add_backend") as mock_add_backend,
+            patch("backend.factory.add_backend") as mock_add_backend,
             patch("security.vault.factory.add_vault") as mock_add_vault,
         ):
             mock_add_backend.return_value = mock_backend
