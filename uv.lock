@@ -1230,6 +1230,18 @@ wheels = [
 ]
 
 [[package]]
+name = "hvac"
+version = "2.4.0"
+source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/hvac/2.4.0/hvac-2.4.0.tar.gz", hash = "sha256:e0056ad9064e7923e874e6769015b032580b639e29246f5ab1044f7959c1c7e0", size = 332543, upload-time = "2025-10-30T12:57:47.512Z" }
+wheels = [
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/hvac/2.4.0/hvac-2.4.0-py3-none-any.whl", hash = "sha256:008db5efd8c2f77bd37d2368ea5f713edceae1c65f11fd608393179478649e0f", size = 155921, upload-time = "2025-10-30T12:57:46.253Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.20"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
@@ -1318,6 +1330,7 @@ dependencies = [
     { name = "dulwich" },
     { name = "furl" },
     { name = "httpx" },
+    { name = "hvac" },
     { name = "more-itertools", version = "11.1.0", source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }, marker = "python_full_version < '3.11'" },
     { name = "more-itertools", version = "11.2.1", source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }, marker = "python_full_version >= '3.11'" },
     { name = "oci" },
@@ -1381,6 +1394,7 @@ requires-dist = [
     { name = "dulwich", specifier = ">=1.2.6" },
     { name = "furl" },
     { name = "httpx" },
+    { name = "hvac", specifier = ">=2.3.0" },
     { name = "more-itertools", specifier = ">=11.1.0" },
     { name = "oci", specifier = ">=2.181.1" },
     { name = "packaging" },
