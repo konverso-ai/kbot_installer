@@ -3,14 +3,13 @@
 from typing import TYPE_CHECKING, cast
 
 from backend.base import BackendBase
-from credentials.azure_credentials import AzureCredentials
-from credentials.oci_credentials import OciCredentials
-from credentials.s3_credentials import S3Credentials
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from credentials.oci_credentials import OciAuthMethod
 
 
 def add_backend(name: str, **kwargs: object) -> BackendBase:
@@ -27,14 +26,20 @@ def add_backend(name: str, **kwargs: object) -> BackendBase:
     return cast("BackendBase", factory_method(name, "backend", **kwargs))
 
 
-def add_s3_storage_backend() -> BackendBase:
+def add_s3_storage_backend(region_name: str | None = None) -> BackendBase:
     """Create an S3 storage backend using default boto3 credentials.
+
+    Args:
+        region_name: AWS region of the bucket. If None, ``AWS_DEFAULT_REGION``
+            (or its default) is used.
 
     Returns:
         A ready-to-use S3 storage backend.
 
     """
-    credentials = S3Credentials()
+    from credentials.s3_credentials import S3Credentials  # noqa: PLC0415
+
+    credentials = S3Credentials(AWS_DEFAULT_REGION=region_name) if region_name else S3Credentials()
     return add_backend(name="s3_storage", credentials=credentials)
 
 
@@ -49,6 +54,8 @@ def add_azure_blob_backend(account_url: str) -> BackendBase:
         A ready-to-use Azure Blob Storage backend.
 
     """
+    from credentials.azure_credentials import AzureCredentials  # noqa: PLC0415
+
     credentials = AzureCredentials()
     return add_backend(
         name="azure_blob",
@@ -57,14 +64,21 @@ def add_azure_blob_backend(account_url: str) -> BackendBase:
     )
 
 
-def add_oci_storage_backend() -> BackendBase:
-    """Create an OCI Object Storage backend using the default OCI config file.
+def add_oci_storage_backend(auth_method: "OciAuthMethod | None" = None) -> BackendBase:
+    """Create an OCI Object Storage backend using the default OCI credentials.
+
+    Args:
+        auth_method: How to authenticate (``config_file``, ``instance_principal``
+            or ``resource_principal``). If None, ``OCI_AUTH_METHOD`` (or its
+            ``config_file`` default) is used.
 
     Returns:
         A ready-to-use OCI Object Storage backend.
 
     """
-    credentials = OciCredentials()
+    from credentials.oci_credentials import OciCredentials  # noqa: PLC0415
+
+    credentials = OciCredentials(OCI_AUTH_METHOD=auth_method) if auth_method else OciCredentials()
     return add_backend(name="oci_storage", credentials=credentials)
 
 
