@@ -434,6 +434,12 @@ class DulwichVersioner(StrReprMixin):
             raise VersionerError(error_msg) from e
 
     @staticmethod
+    def _repo_relative(repo: Repo, files: list[str]) -> list[str]:
+        """Return the paths relative to the working tree, with ``/``; an absolute path out of it raises ValueError."""
+        root = Path(repo.path).resolve()
+        return [Path(path).resolve().relative_to(root).as_posix() if Path(path).is_absolute() else path for path in files]
+
+    @staticmethod
     def _split_by_head(repo: Repo, files: list[str]) -> tuple[list[str], list[str]]:
         """Split repository-relative paths into those HEAD holds and the others."""
         try:
@@ -464,7 +470,7 @@ class DulwichVersioner(StrReprMixin):
 
         try:
             with self._open_repository(repository_path) as repo:
-                in_head, added = self._split_by_head(repo, files)
+                in_head, added = self._split_by_head(repo, self._repo_relative(repo, files))
                 if in_head:
                     porcelain.restore(repo, paths=in_head, staged=True, worktree=False)
                 if added:
@@ -472,7 +478,7 @@ class DulwichVersioner(StrReprMixin):
                     for path in added:
                         del index[path.encode()]
                     index.write()
-        except (*_DULWICH_ERRORS, KeyError) as e:
+        except (*_DULWICH_ERRORS, KeyError, ValueError) as e:
             error_msg = f"Failed to unstage files: {e}"
             raise VersionerError(error_msg) from e
 
