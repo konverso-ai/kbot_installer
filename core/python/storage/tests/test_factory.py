@@ -19,6 +19,7 @@ from storage.factory import (
     add_s3_storage,
     add_storage,
     add_storage_from_config,
+    add_storage_from_settings,
 )
 from utils.utils_for_unit_tests import compare
 
@@ -102,7 +103,9 @@ class TestAddS3Storage:
 
             result = add_s3_storage(bucket_name="bucket", cluster_name="cluster")
 
-            mock_add_builtin_backend.assert_called_once_with(name="s3_storage")
+            mock_add_builtin_backend.assert_called_once_with(
+                name="s3_storage", region_name=None
+            )
             mock_add_storage.assert_called_once_with(
                 name="s3",
                 backend=mock_backend,
@@ -159,7 +162,9 @@ class TestAddOciStorage:
 
             result = add_oci_storage(bucket_name="bucket", namespace_name="namespace")
 
-            mock_add_builtin_backend.assert_called_once_with(name="oci_storage")
+            mock_add_builtin_backend.assert_called_once_with(
+                name="oci_storage", auth_method=None
+            )
             mock_add_storage.assert_called_once_with(
                 name="oci",
                 backend=mock_backend,
@@ -257,6 +262,93 @@ class TestAddStorageFromConfig:
         """An unknown backend name raises ValueError."""
         with pytest.raises(ValueError, match="Unknown storage backend"):
             add_storage_from_config(_storage_config(), "unknown")
+
+    def test_legacy_provider_name_resolves_to_backend(self) -> None:
+        """A historical kbot provider name (e.g. BUNDLE_PROVIDER) builds the matching backend."""
+        with patch("storage.factory.add_builtin_storage") as mock_builtin:
+            add_storage_from_config(_storage_config(), "azure_blob", "doc")
+
+        mock_builtin.assert_called_once_with(
+            "azure",
+            account_url="https://acct.blob.core.windows.net",
+            container_name="doc",
+        )
+
+
+_SETTINGS = {
+    "storage_bucket_provider": "azure_blob",
+    "kbot_storage_account": "https://acct.blob.core.windows.net",
+    "storage_account_container_name": "container",
+    "aws_s3_bucket_name": "bucket",
+    "cluster_name": "cluster",
+    "aws_s3_region": "eu-west-3",
+    "oci_object_storage_bucket_name": "oci-bucket",
+    "oci_object_storage_namespace": "ns",
+}
+
+
+class TestAddStorageFromSettings:
+    """Test cases for add_storage_from_settings."""
+
+    @pytest.mark.parametrize(
+        ("provider", "builder", "expected_kwargs"),
+        [
+            (
+                None,
+                "add_azure_storage",
+                {
+                    "account_url": "https://acct.blob.core.windows.net",
+                    "container_name": "container",
+                },
+            ),
+            (
+                "amazon_s3",
+                "add_s3_storage",
+                {
+                    "bucket_name": "bucket",
+                    "cluster_name": "cluster",
+                    "region_name": "eu-west-3",
+                },
+            ),
+            (
+                "oci",
+                "add_oci_storage",
+                {
+                    "bucket_name": "oci-bucket",
+                    "namespace_name": "ns",
+                    "auth_method": "instance_principal",
+                },
+            ),
+        ],
+    )
+    def test_builds_provider_from_settings(
+        self,
+        provider: str | None,
+        builder: str,
+        expected_kwargs: dict,
+    ) -> None:
+        """Provider (given, or the storage_bucket_provider setting) selects the settings to read."""
+        with patch(f"storage.factory.{builder}") as mock_builder:
+            result = add_storage_from_settings(_SETTINGS.get, provider)
+
+        mock_builder.assert_called_once_with(**expected_kwargs)
+        assert compare("eq", result, mock_builder.return_value)
+
+    @pytest.mark.parametrize(
+        ("settings", "provider", "match"),
+        [
+            ({}, None, "storage_bucket_provider"),
+            ({}, "azure_blob", "kbot_storage_account"),
+            (_SETTINGS, "nexus", "cannot be built from settings"),
+            (_SETTINGS, "unknown", "Unknown storage backend"),
+        ],
+    )
+    def test_invalid_settings_raise(
+        self, settings: dict, provider: str | None, match: str
+    ) -> None:
+        """Missing provider/settings and non-bucket or unknown providers raise ValueError."""
+        with pytest.raises(ValueError, match=match):
+            add_storage_from_settings(settings.get, provider)
 
 
 class TestAddBuiltinStorage:
