@@ -418,12 +418,11 @@ def test_has_working_tree_changes_valid_detects_changes(
     mock_status = MagicMock()
     mock_status.staged = params["staged"]
     mock_status.unstaged = params["unstaged"]
-    mock_status.untracked = params["untracked"]
     mock_repo = MagicMock()
     with patch(
         "git.versioner.dulwich_versioner.porcelain.status",
         return_value=mock_status,
-    ):
+    ), patch.object(DulwichVersioner, "_iter_untracked_files", return_value=iter(params["untracked"])):
         result = DulwichVersioner._has_working_tree_changes(mock_repo)
     assert compare("eq", result, expected)
 
