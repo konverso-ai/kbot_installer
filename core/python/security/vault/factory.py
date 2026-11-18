@@ -3,7 +3,6 @@
 from typing import TYPE_CHECKING, cast
 
 from backend.base import BackendBase
-from backend.factory import add_backend
 from security.vault.base import VaultBase
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
@@ -37,6 +36,7 @@ def add_s3_vault(region_name: str | None = None) -> VaultBase:
         A ready-to-use AWS Secrets Manager vault instance.
 
     """
+    from backend.factory import add_backend  # noqa: PLC0415
     from credentials.s3_credentials import S3Credentials  # noqa: PLC0415
 
     credentials = S3Credentials(AWS_DEFAULT_REGION=region_name) if region_name else S3Credentials()
@@ -54,6 +54,7 @@ def add_azure_vault() -> VaultBase:
         A ready-to-use Azure Key Vault vault instance.
 
     """
+    from backend.factory import add_backend  # noqa: PLC0415
     from credentials.azure_credentials import AzureCredentials  # noqa: PLC0415
 
     credentials = AzureCredentials()
@@ -77,6 +78,8 @@ def add_oci_vault(
         A ready-to-use OCI Vault vault instance.
 
     """
+    from backend.factory import add_backend  # noqa: PLC0415
+
     backend = add_backend(name="oci_vault")
     return add_vault(name="oci", backend=backend, resolve_secret_id=resolve_secret_id)
 
