@@ -3,7 +3,7 @@
 import pytest
 
 from utils.utils_for_unit_tests import compare
-from vault.base import VaultBase
+from security.vault.base import VaultBase
 
 
 class _DummyVault(VaultBase):
@@ -23,6 +23,11 @@ class TestVaultBase:
         vault = _DummyVault()
 
         assert compare("eq", vault.get("my-vault::db-password"), "value-for-db-password")
+
+    def test_set_invalid_is_read_only_by_default(self) -> None:
+        """Test vaults that do not override set reject writes."""
+        with pytest.raises(NotImplementedError, match="_DummyVault is read-only"):
+            _DummyVault().set("my-vault::db-password", "value")
 
 
 class TestParseKey:
@@ -55,3 +60,39 @@ class TestParseKey:
         """Test parse_key raises ValueError on malformed keys."""
         with pytest.raises(ValueError, match="Invalid vault key"):
             VaultBase.parse_key(key)
+
+
+class TestReadJsonField:
+    """Test cases for VaultBase.read_json_field static method."""
+
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            ('{"field": "text"}', "text"),
+            ('{"field": 5432}', "5432"),
+            ('{"field": true}', "true"),
+            ('{"field": {"nested": 1}}', '{"nested": 1}'),
+        ],
+    )
+    def test_read_json_field_valid_returns_field_as_string(
+        self, content: str, expected: str
+    ) -> None:
+        """Test string fields are returned as is and others JSON-encoded."""
+        result = VaultBase.read_json_field(content, "field", "my-secret")
+
+        assert compare("eq", result, expected)
+
+    @pytest.mark.parametrize(
+        ("content", "error", "match"),
+        [
+            ("not json", RuntimeError, "is not valid JSON"),
+            ('["field"]', TypeError, "must be a JSON object"),
+            ('{"other": "x"}', RuntimeError, "Field 'field' not found in secret 'my-secret'"),
+        ],
+    )
+    def test_read_json_field_invalid_raises(
+        self, content: str, error: type[Exception], match: str
+    ) -> None:
+        """Test invalid JSON, non-object content and missing fields are rejected."""
+        with pytest.raises(error, match=match):
+            VaultBase.read_json_field(content, "field", "my-secret")
