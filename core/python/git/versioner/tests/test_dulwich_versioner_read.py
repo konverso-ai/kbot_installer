@@ -130,59 +130,65 @@ def test_status_valid_clean_repository_is_clean(
     assert compare("eq", status.changed, [])
 
 
-def _link_to_folder(repo_path: Path) -> Path:
-    """Commit a folder and a symbolic link to it, as a repository sharing a folder under two names.
-
-    ``porcelain.add`` skips a link to a folder, so the link goes into the index as git stores it: a blob
-    holding the target.
-    """
+def test_status_valid_reports_untracked_like_git(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    (repo_path / ".gitignore").write_text("*.log\nbuild/\n")
     with Repo(str(repo_path)) as repo:
-        _commit_file(repo, "folder/a.txt")
-        link = repo_path / "link"
-        try:
-            link.symlink_to("folder", target_is_directory=True)
-        except OSError:
-            pytest.skip("creating a symbolic link needs a privilege on this platform")
+        _commit_file(repo, "sub/kept.txt")
+        porcelain.add(repo, paths=[str(repo_path / ".gitignore")])
+    # Untracked file next to tracked ones: listed by itself.
+    (repo_path / "sub" / "new.txt").write_text("new")
+    # Directory without tracked files: listed file by file, as git status --untracked-files=all does.
+    (repo_path / "newdir" / "deep").mkdir(parents=True)
+    (repo_path / "newdir" / "a.txt").write_text("a")
+    (repo_path / "newdir" / "deep" / "b.txt").write_text("b")
+    # Ignored: by pattern, by ignored directory, or holding only ignored files.
+    (repo_path / "debug.log").write_text("log")
+    (repo_path / "build").mkdir()
+    (repo_path / "build" / "out.txt").write_text("out")
+    (repo_path / "logs").mkdir()
+    (repo_path / "logs" / "run.log").write_text("log")
+
+    status = versioner.status(repo_path)
+
+    assert compare("eq", sorted(status.untracked), ["newdir/a.txt", "newdir/deep/b.txt", "sub/new.txt"])
+
+
+def test_status_valid_skips_tracked_symlink_to_directory(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    (repo_path / "target").mkdir()
+    (repo_path / "target" / "file.txt").write_text("content")
+    link = repo_path / "link"
+    link.symlink_to("target")
+    with Repo(str(repo_path)) as repo:
+        porcelain.add(repo, paths=[str(repo_path / "target")])
+        # porcelain.add follows a link to a folder and indexes link/file.txt; git stores the link itself, as a
+        # blob holding its target
         blob = Blob.from_string(os.fsencode(os.readlink(link)))
         repo.object_store.add_object(blob)
         index = repo.open_index()
         index[b"link"] = index_entry_from_stat(os.lstat(link), blob.id)
         index.write()
-        porcelain.commit(repo, message=b"link", author=AUTHOR, committer=AUTHOR)
-    return link
+        porcelain.commit(repo, message=b"msg", author=AUTHOR, committer=AUTHOR)
+
+    assert compare("eq", versioner.status(repo_path).is_clean, True)
 
 
-def test_status_valid_a_tracked_link_to_a_folder_is_clean(
-    versioner: DulwichVersioner, repo_path: Path
-) -> None:
-    _link_to_folder(repo_path)
-
-    status = versioner.status(repo_path)
-
-    assert compare("eq", status.untracked, [])
-    assert compare("eq", status.is_clean, True)
-
-
-def test_status_valid_lists_untracked_files_and_links_as_git_does(
+def test_status_valid_lists_untracked_links_as_files(
     versioner: DulwichVersioner, repo_path: Path, tmp_path: Path
 ) -> None:
-    _link_to_folder(repo_path)
-    (repo_path / ".gitignore").write_text("logs/\n")
+    (repo_path / "folder").mkdir()
+    (repo_path / "folder" / "a.txt").write_text("a")
     (repo_path / "new_link").symlink_to("folder", target_is_directory=True)
     (tmp_path / "empty").mkdir()
     (repo_path / "empty_link").symlink_to(tmp_path / "empty", target_is_directory=True)
-    (repo_path / "new" / "deep").mkdir(parents=True)
-    (repo_path / "new" / "n.txt").write_text("n")
-    (repo_path / "new" / "deep" / "d.txt").write_text("d")
-    (repo_path / "logs").mkdir()
-    (repo_path / "logs" / "kbot.log").write_text("ignored")
 
     status = versioner.status(repo_path)
 
-    # As git status --untracked-files=all: a link is a file, never entered; a new folder is listed file by file
-    assert compare(
-        "eq", sorted(status.untracked), [".gitignore", "empty_link", "new/deep/d.txt", "new/n.txt", "new_link"]
-    )
+    # As git: a link is a file, never entered, whether its folder is empty or not
+    assert compare("eq", sorted(status.untracked), ["empty_link", "folder/a.txt", "new_link"])
 
 
 @pytest.mark.parametrize(

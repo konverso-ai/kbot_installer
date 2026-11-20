@@ -8,7 +8,7 @@ import shutil
 from collections.abc import Iterable, Iterator
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from installer_support.thirdparty_env import resolve_site_packages_dir
 from interactivity.base import InteractivePrompter
@@ -16,9 +16,6 @@ from utils.Logger import logger
 from utils.product.product import Product
 from workarea.rule_action import RuleAction
 from workarea.workarea_rule import WorkareaRule
-
-if TYPE_CHECKING:
-    from workarea.workarea_rule import WorkAreaRule
 
 log = logger.get_package_logger("workarea")
 
@@ -73,7 +70,7 @@ def matches_pattern(relative: str, pattern: str) -> bool:
     return _matches_glob(tuple(relative.split("/")), tuple(pattern.split("/")))
 
 
-def should_keep(path: Path, root: Path, rule: "WorkAreaRule") -> bool:
+def should_keep(path: Path, root: Path, rule: WorkareaRule) -> bool:
     """Determine whether a path matches a rule's include/exclude patterns.
 
     Args:
@@ -227,7 +224,7 @@ def copy_source(
     shutil.copy2(source, target)
 
 
-def iter_sources(root: Path, rule: "WorkAreaRule") -> Iterator[Path]:
+def iter_sources(root: Path, rule: WorkareaRule) -> Iterator[Path]:
     """Yield the paths under a root that a rule should keep.
 
     Args:
@@ -370,7 +367,7 @@ def apply_rule(
 def apply_rules(
     product_root: Path,
     work_root: Path,
-    rules: list["WorkAreaRule"],
+    rules: list[WorkareaRule],
     *,
     runtime_variables: dict[str, str],
     claimed: set[Path] | None = None,

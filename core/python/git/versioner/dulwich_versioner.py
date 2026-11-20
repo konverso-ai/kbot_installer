@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from dulwich import porcelain
 from dulwich.diff_tree import CHANGE_ADD, CHANGE_DELETE, CHANGE_MODIFY, tree_changes
-from dulwich.errors import GitProtocolError, HangupException, NotGitRepository
+from dulwich.errors import CommitError, GitProtocolError, HangupException, NotGitRepository
 from dulwich.graph import find_merge_base
 from dulwich.ignore import IgnoreFilterManager
 from dulwich.object_store import tree_lookup_path
@@ -53,6 +53,7 @@ _DULWICH_ERRORS = (
     NotGitRepository,
     GitProtocolError,
     HangupException,
+    CommitError,
     DulwichPorcelainError,
 )
 
@@ -237,10 +238,13 @@ class DulwichVersioner(StrReprMixin):
 
     @staticmethod
     def _has_staged_changes(repo: Repo) -> bool:
-        """Return True when the index has staged changes."""
-        status = porcelain.status(repo)
-        staged = status.staged
-        return bool(staged.get("add") or staged.get("delete") or staged.get("modify"))
+        """Return True when the index differs from HEAD.
+
+        Only the index is compared with HEAD: ``porcelain.status`` would also walk
+        the working tree for unstaged and untracked files, which takes seconds on
+        large repositories.
+        """
+        return any(porcelain.get_tree_changes(repo).values())
 
     def _get_current_branch_name(self, repo: Repo) -> str:
         """Return the current branch name from HEAD.
@@ -777,6 +781,12 @@ class DulwichVersioner(StrReprMixin):
     ) -> str | None:
         """Commit staged changes using Dulwich.
 
+        Client-side hooks (``pre-commit``, ``commit-msg``) are not run, as with
+        ``git commit --no-verify``: commits made here are programmatic, and the
+        hooks are developer tooling that runs in the kbot environment, whose
+        exported ``PYTHONHOME``/``PYTHONPATH`` break any other Python interpreter
+        a hook starts.
+
         Args:
             repository_path: Path to the local repository.
             message: Commit message.
@@ -801,6 +811,7 @@ class DulwichVersioner(StrReprMixin):
                     message=message,
                     author=author_bytes,
                     committer=author_bytes,
+                    no_verify=True,
                 )
         except _DULWICH_ERRORS as e:
             error_msg = f"Failed to commit changes: {e}"
