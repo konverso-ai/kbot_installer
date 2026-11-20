@@ -141,7 +141,7 @@ class S3Storage(StorageBase):
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code == "NoSuchKey":
-                log.exception("Path %s was not found in Bucket storage", key)
+                log.debug("Path %s was not found in Bucket storage", key)
             else:
                 log.exception(
                     "Retrieval failed for key='%s'; encoding=%s",

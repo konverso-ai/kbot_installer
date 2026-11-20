@@ -16,7 +16,7 @@ import re
 import utils.base as utils
 from common.Errors import KbotLicenseError
 from common.Product import ProductList, Product
-import deps
+from utils import deps
 from dialog.User import User
 from utils.License import License
 from utils.env import Env
@@ -380,7 +380,7 @@ class Installer:
 
                 if not self.db_internal:
                     if os.system("export PGPASSWORD='%s';%s -h %s -p %s -d %s -U %s -c 'select 1' > /dev/null"\
-                            %(self.db_password, pg_psql, self.db_host, self.db_port, self.db_name, self.db_user)) == 0:
+                            %(self.db_password, os.path.join(os.environ['PG_DIR'], 'bin', 'psql'), self.db_host, self.db_port, self.db_name, self.db_user)) == 0:
                         break
                     print("Can't connect to an external database with specified parameters!")
                 else:
@@ -818,7 +818,7 @@ class Installer:
                 if self.db_internal:
                     if os.system('%s -q -p %s %s -c "%s"'%(self.pg_psql, self.db_port, self.db_name, query)) != 0:
                         print("Error: can't save predefined classifiers! Aborting...")
-                        os.system('%s -D %s/var/db --silent stop'%(pg_ctl, self.target))
+                        os.system('%s -D %s/var/db --silent stop'%(self.pg_ctl, self.target))
                         sys.exit(1)
                 elif os.system("""export PGPASSWORD='%s';%s -q -h %s -p %s -d %s -U %s -c "%s"
                                """%(self.db_password, self.pg_psql, self.db_host, self.db_port, self.db_name, self.db_user, query)) != 0:
@@ -917,7 +917,7 @@ class Installer:
         self.products.populate(products_definition_file="/tmp/products.json")
 
     def _GetProduct(self, path, name):
-        from product import Product as BaseProduct
+        from utils.product.product import Product as BaseProduct
 
         if path:
             if os.path.exists(path):

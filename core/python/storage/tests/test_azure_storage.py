@@ -1,5 +1,6 @@
 """Tests for azure_storage module."""
 
+import logging
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -99,14 +100,18 @@ class TestAzureStorage:
         assert compare("eq", storage.get("file.txt"), "hello")
 
     def test_get_valid_returns_none_on_missing_blob(
-        self, storage: AzureStorage, container_client: MagicMock
+        self,
+        storage: AzureStorage,
+        container_client: MagicMock,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test get returns None when the blob does not exist."""
+        """Test get returns None, without warning or error, when the blob does not exist."""
         blob_client = MagicMock()
         blob_client.download_blob.side_effect = ResourceNotFoundError("missing")
         container_client.get_blob_client.return_value = blob_client
 
         assert compare("eq", storage.get("missing.txt"), None)
+        assert compare("eq", [r for r in caplog.records if r.levelno >= logging.WARNING], [])
 
     def test_get_valid_returns_none_without_client(self, backend: MagicMock) -> None:
         """Test get returns None when the container client is unavailable."""
