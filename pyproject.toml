@@ -112,12 +112,12 @@ known_first_party = [
     "installer_support",
     "interactivity",
     "publisher",
+    "security",
     "service",
     "storage",
     "updatable",
     "upgradable",
     "utils",
-    "vault",
     "workarea",
     "writer",
 ]
