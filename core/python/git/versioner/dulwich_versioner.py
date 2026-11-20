@@ -472,7 +472,7 @@ class DulwichVersioner(StrReprMixin):
             with self._open_repository(repository_path) as repo:
                 in_head, added = self._split_by_head(repo, self._repo_relative(repo, files))
                 if in_head:
-                    porcelain.restore(repo, paths=in_head, staged=True, worktree=False)
+                    porcelain.restore(repo, paths=[*in_head], staged=True, worktree=False)
                 if added:
                     index = repo.open_index()
                     for path in added:
