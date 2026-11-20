@@ -10,15 +10,22 @@ git providers (GitHub, Bitbucket, Nexus) or object storage (S3, Azure Blob), tra
 dependencies, and lays out/updates the resulting workspace on disk.
 
 All actual Python source lives under `core/python/` (this is the package root — see
-`pythonpath = ["core/python"]` in `pyproject.toml` and `PYTHONPATH` in `tox.ini`). Top-level packages
+`pythonpath = core/python` in `pytest.ini` and `PYTHONPATH` in `tox.ini`). Top-level packages
 (`auth`, `backend`, `cli`, `credentials`, `database`, `errors`, `git`, `installable`,
-`installer_support`, `interactivity`, `publisher`, `service`, `setup`, `storage`, `updatable`, `utils`,
+`installer_support`, `interactivity`, `publisher`, `security`, `service`, `setup`, `storage`, `updatable`, `utils`,
 `workarea`, `writer`) are imported as absolute imports, e.g. `from installable.base import InstallableBase`, not
 `from core.python.installable...`.
 
 `errors` is a namespace package shared with kbot (no `errors/__init__.py`, in either repo).
 `errors/base.py` holds `ErrorCode`, and each code has its own lowercase module (`errors/kb0002.py` → `KB0002`,
 imported as `from errors.kb0002 import KB0002`); kbot adds `errors/factory.py` and its own codes.
+
+`security` is likewise a namespace package shared with kbot (no `security/__init__.py`, in either repo).
+`security/vault/` holds the secret vaults: implementations (`{name}_vault.py`), `factory.py`, and
+`registry.py`, kbot's `VaultRegistry` (a singleton): `get(name, **kwargs)` builds the vault of a kbot vault name used in
+`<VAULT>::<key>` setting values (`VARIABLE`, `VALUE`, `ALIAS`, `SECRET`, `AZUREKEYVAULT`, `AWSSECRETMANAGER`,
+`OCIVAULT`) with the `factory.py` builder on first request, then returns the registered one. Vaults only look
+a key up: the settings reader (kbot's `Settings`) expands `%(name)v` references before passing the key.
 
 ## Common commands
 
@@ -31,17 +38,17 @@ make format              # ruff format .
 make lint                # ruff check . (no fixes)
 make lint-fix            # ruff check --fix .
 make check                # format then lint
-make test                # uv run python -B -m pytest -v
+make test                # uv run python -m pytest -v (bytecode cached in /tmp/.pycache)
 make test PKG=auth        # scope to one package, e.g. auth, backend, database, installable, workarea
 make test PKG=auth/http_auth   # scope to a subpackage
 make test-cov [PKG=...]   # same as test but with coverage (html + terminal)
 make clean                # remove __pycache__, .pytest_cache, .coverage, htmlcov, .ruff_cache
 ```
 
-Run a single test directly with pytest (pythonpath is already configured via `pyproject.toml`):
+Run a single test directly with pytest (pythonpath is already configured via `pytest.ini`):
 
 ```bash
-uv run python -B -m pytest core/python/database/tests/test_factory.py::test_add_db_internal -v
+uv run python -m pytest core/python/database/tests/test_factory.py::test_add_db_internal -v
 ```
 
 `tox` runs the full matrix (py312, with `deps`/`lint`/`typecheck`/`test` envs) using
@@ -192,6 +199,9 @@ Tests live in a `tests/` subpackage next to the code they cover (e.g. `database/
 `core/python/installer_tests/` covers `installer_support`. Coverage config lives in `.coveragerc`
 (data file written to `/tmp/.coverage`, html to `/tmp/htmlcov`) and is loaded explicitly via
 `pytest.ini`'s `addopts = --cov-config=.coveragerc` since `coverage.py` does not read `pytest.ini`.
+`core/python/conftest.py` applies session-wide to every test: `os.fsync` is a no-op and
+`GIT_CONFIG_GLOBAL`/`GIT_CONFIG_NOSYSTEM` hide the user/system gitconfig (speed + isolation for
+dulwich-backed tests); tests must not rely on `~/.gitconfig` or on real fsync calls.
 
 ## Docstrings
 

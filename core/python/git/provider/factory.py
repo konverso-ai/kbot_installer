@@ -166,7 +166,8 @@ def build_configured_storage(
 
     Args:
         backend_name: Storage backend to build (e.g. ``"nexus"``, ``"s3"``,
-            ``"azure"``, ``"oci"``).
+            ``"azure"``, ``"oci"``), or its historical kbot provider name
+            (e.g. ``"azure_blob"``).
         area: Logical area scoping the backend's storage (e.g.
             ``"bundles"`` / ``"artifacts"``). For S3 this is a folder prefix
             appended under the configured bucket/cluster; for

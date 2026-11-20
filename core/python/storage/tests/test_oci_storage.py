@@ -1,5 +1,6 @@
 """Tests for oci_storage module."""
 
+import logging
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -122,12 +123,16 @@ class TestOciStorage:
         assert compare("eq", instance.get("file.txt"), None)
 
     def test_get_valid_returns_none_on_not_found(
-        self, storage: OciStorage, oci_client: MagicMock
+        self,
+        storage: OciStorage,
+        oci_client: MagicMock,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Test get returns None when the object does not exist."""
+        """Test get returns None, without warning or error, when the object does not exist."""
         oci_client.get_object.side_effect = _service_error(404)
 
         assert compare("eq", storage.get("missing.txt"), None)
+        assert compare("eq", [r for r in caplog.records if r.levelno >= logging.WARNING], [])
 
     def test_get_valid_returns_none_on_other_service_error(
         self, storage: OciStorage, oci_client: MagicMock

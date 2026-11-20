@@ -13,7 +13,7 @@ import time
 
 import xmltodict
 
-from nexus import NexusRepository
+from utils.nexus import NexusRepository
 
 DEV_DIR = "/home/konverso/dev/"
 WORK_DIR = os.path.join(DEV_DIR, "work")

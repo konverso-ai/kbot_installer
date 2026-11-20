@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING, cast
 
 from backend.factory import add_builtin_backend
-from storage.base import StorageBase
+from storage.base import StorageBackendEnum, StorageBase
 from utils.factory import factory_function
 from utils.factory.loader import factory_method
 
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
     import httpx
 
+    from credentials.oci_credentials import OciAuthMethod
     from storage.config import StorageSectionConfig
 
 
@@ -29,18 +30,24 @@ def add_storage(name: str, **kwargs: object) -> StorageBase:
     return cast("StorageBase", factory_method(name, "storage", **kwargs))
 
 
-def add_s3_storage(bucket_name: str, cluster_name: str | None = None) -> StorageBase:
+def add_s3_storage(
+    bucket_name: str,
+    cluster_name: str | None = None,
+    region_name: str | None = None,
+) -> StorageBase:
     """Create an S3 storage instance using default boto3 credentials.
 
     Args:
         bucket_name: S3 bucket name.
         cluster_name: Optional root directory prefix inside the bucket.
+        region_name: AWS region of the bucket. If None, ``AWS_DEFAULT_REGION``
+            (or its default) is used.
 
     Returns:
         A ready-to-use S3 storage instance.
 
     """
-    backend = add_builtin_backend(name="s3_storage")
+    backend = add_builtin_backend(name="s3_storage", region_name=region_name)
     return add_storage(
         name="s3",
         backend=backend,
@@ -65,24 +72,115 @@ def add_azure_storage(account_url: str, container_name: str) -> StorageBase:
     return add_storage(name="azure", backend=backend, container_name=container_name)
 
 
-def add_oci_storage(bucket_name: str, namespace_name: str) -> StorageBase:
-    """Create an OCI Object Storage instance using the default OCI config file.
+def add_oci_storage(
+    bucket_name: str,
+    namespace_name: str,
+    auth_method: "OciAuthMethod | None" = None,
+) -> StorageBase:
+    """Create an OCI Object Storage instance using the default OCI credentials.
 
     Args:
         bucket_name: OCI Object Storage bucket name.
         namespace_name: Object Storage namespace of the tenancy.
+        auth_method: How to authenticate (``config_file``, ``instance_principal``
+            or ``resource_principal``). If None, ``OCI_AUTH_METHOD`` (or its
+            ``config_file`` default) is used.
 
     Returns:
         A ready-to-use OCI storage instance.
 
     """
-    backend = add_builtin_backend(name="oci_storage")
+    backend = add_builtin_backend(name="oci_storage", auth_method=auth_method)
     return add_storage(
         name="oci",
         backend=backend,
         bucket_name=bucket_name,
         namespace_name=namespace_name,
     )
+
+
+def _resolve_backend(name: str) -> StorageBackendEnum:
+    """Resolve a storage backend from its name or historical kbot provider name.
+
+    Raises:
+        ValueError: If ``name`` is not a known storage backend.
+
+    """
+    try:
+        return StorageBackendEnum(name)
+    except ValueError:
+        msg = f"Unknown storage backend: {name}"
+        raise ValueError(msg) from None
+
+
+def _require_setting(get_config: "Callable[[str], str | None]", key: str) -> str:
+    """Return a mandatory setting value.
+
+    Raises:
+        ValueError: If the setting is undefined or empty.
+
+    """
+    value = get_config(key)
+    if not value:
+        msg = f"Setting '{key}' is not defined."
+        raise ValueError(msg)
+    return value
+
+
+def add_storage_from_settings(
+    get_config: "Callable[[str], str | None]",
+    provider: str | None = None,
+) -> StorageBase:
+    """Build the bucket storage described by kbot settings.
+
+    Reads the connection settings of the selected provider (``kbot_storage_account``
+    / ``storage_account_container_name`` for Azure, ``aws_s3_bucket_name`` /
+    ``cluster_name`` / ``aws_s3_region`` for S3, ``oci_object_storage_bucket_name`` /
+    ``oci_object_storage_namespace`` / ``oci_object_storage_auth`` for OCI).
+
+    Args:
+        get_config: Function returning the value of a setting by name, or None
+            when the setting is undefined (e.g. kbot's ``Settings().GetConfig``).
+        provider: Storage provider name, historical (``azure_blob``,
+            ``amazon_s3``, ``oci_object_storage``) or backend name (``azure``,
+            ``s3``, ``oci``). Defaults to the ``storage_bucket_provider`` setting.
+
+    Returns:
+        A ready-to-use storage instance.
+
+    Raises:
+        ValueError: If no provider is configured, if it is unknown or not a
+            bucket provider (Nexus), or if a mandatory setting is undefined.
+
+    """
+    name = provider or get_config("storage_bucket_provider")
+    if not name:
+        msg = "No storage provider given and setting 'storage_bucket_provider' is not defined."
+        raise ValueError(msg)
+
+    backend = _resolve_backend(name)
+    if backend is StorageBackendEnum.AZURE:
+        return add_azure_storage(
+            account_url=_require_setting(get_config, "kbot_storage_account"),
+            container_name=_require_setting(get_config, "storage_account_container_name"),
+        )
+    if backend is StorageBackendEnum.S3:
+        return add_s3_storage(
+            bucket_name=_require_setting(get_config, "aws_s3_bucket_name"),
+            cluster_name=get_config("cluster_name"),
+            region_name=get_config("aws_s3_region"),
+        )
+    if backend is StorageBackendEnum.OCI:
+        return add_oci_storage(
+            bucket_name=_require_setting(get_config, "oci_object_storage_bucket_name"),
+            namespace_name=_require_setting(get_config, "oci_object_storage_namespace"),
+            auth_method=cast(
+                "OciAuthMethod",
+                get_config("oci_object_storage_auth") or "instance_principal",
+            ),
+        )
+    msg = f"Storage backend '{backend.value}' cannot be built from settings."
+    raise ValueError(msg)
 
 
 def add_storage_from_config(
@@ -95,7 +193,8 @@ def add_storage_from_config(
 
     Args:
         config: Settings for every storage backend (nexus/s3/azure/oci).
-        backend_name: Backend to build (``"nexus"``, ``"s3"``, ``"azure"`` or ``"oci"``).
+        backend_name: Backend to build (``"nexus"``, ``"s3"``, ``"azure"`` or ``"oci"``),
+            or its historical kbot provider name (e.g. ``"azure_blob"``).
         area: Logical area scoping the backend's storage (e.g. ``"bundles"`` /
             ``"artifacts"``). For S3 this is a folder prefix appended under the
             configured bucket/cluster; for Nexus/Azure/OCI it replaces the
@@ -109,7 +208,8 @@ def add_storage_from_config(
         ValueError: If ``backend_name`` is not one of the known backends.
 
     """
-    if backend_name == "nexus":
+    backend = _resolve_backend(backend_name)
+    if backend is StorageBackendEnum.NEXUS:
         settings = config.nexus
         return add_storage(
             "nexus",
@@ -117,7 +217,7 @@ def add_storage_from_config(
             repository=area or settings.repository,
             auth=auth,
         )
-    if backend_name == "s3":
+    if backend is StorageBackendEnum.S3:
         settings = config.s3
         prefix = "/".join(segment for segment in (settings.cluster_name, area) if segment)
         return add_builtin_storage(
@@ -125,23 +225,19 @@ def add_storage_from_config(
             bucket_name=settings.bucket_name,
             cluster_name=prefix or None,
         )
-    if backend_name == "azure":
+    if backend is StorageBackendEnum.AZURE:
         settings = config.azure
         return add_builtin_storage(
             "azure",
             account_url=settings.account_url,
             container_name=area or settings.container_name,
         )
-    if backend_name == "oci":
-        settings = config.oci
-        return add_builtin_storage(
-            "oci",
-            bucket_name=area or settings.bucket_name,
-            namespace_name=settings.namespace_name,
-        )
-
-    msg = f"Unknown storage backend: {backend_name}"
-    raise ValueError(msg)
+    settings = config.oci
+    return add_builtin_storage(
+        "oci",
+        bucket_name=area or settings.bucket_name,
+        namespace_name=settings.namespace_name,
+    )
 
 
 def add_builtin_storage(name: str, **kwargs: object) -> StorageBase:
