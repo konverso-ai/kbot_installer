@@ -1,0 +1,216 @@
+name: Test Build Release Legacy
+run-name: "${{github.ref_name}} -- Test Build Release Legacy"
+ 
+on:
+  push:
+    branches:
+      - release-2025.03
+      - release-2025.03-dev
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+ 
+env:
+  AWS_REGION: eu-west-3
+  AZURE_STORAGE_ACCOUNT: sakbotreleasefcp
+  AZURE_STORAGE_CONTAINER: artifacts
+  SOLUTION_NAME: ${{ github.event.repository.name }}
+  VERSION: ${{ github.ref_name }}
+ 
+jobs:
+  pre-test:
+    name: Pre Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.user.login != 'konverso-github-actions[bot]' && !startsWith(github.event.pull_request.base.ref, 'release-2026')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+ 
+      - name: Validate commit message
+        run: |
+          PR_HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          COMMIT_MSG=$(git show --no-patch --format="%s" $PR_HEAD_SHA)
+          echo "Commit message: '$COMMIT_MSG'"
+           
+            VALID_PREFIXES="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
+            VALID_JIRA_PROJECTS="CS|DO|INFRA|KB|KSEC"
+             
+            if echo "$COMMIT_MSG" | grep -qE "^($VALID_PREFIXES)\\((($VALID_JIRA_PROJECTS)-|AB#)[0-9]+\\): .+"; then
+              echo -e "\033[32m++ Commit message format is valid: $COMMIT_MSG\033[39m"
+            elif echo "$COMMIT_MSG" | grep -qE "^(Merge|Auto merge:) "; then
+              echo -e "\033[32m++ Merge commit detected, skipping validation: $COMMIT_MSG\033[39m"
+            else
+              echo -e "\033[33m++ Invalid commit message format: $COMMIT_MSG\033[39m"
+              echo "Expected format: <prefix>(<jira-project-id>-12345): <message> or <prefix>(AB#12345): <message>"
+              echo "Valid prefixes: $VALID_PREFIXES"
+              echo "Valid JIRA projects: $VALID_JIRA_PROJECTS"
+              echo "Azure DevOps tickets: AB#<work-item-id>"
+              echo "Example: feat(KB-123): add new feature"
+              echo "Example: ci(AB#50739): bring automerge and build push to PyPi"
+              echo "Example: fix(DO-456): fix bug"
+              exit 1
+            fi
+ 
+      - name: Orca - Set repository name
+        run: |
+          ORCA_PROJECT_KEY=$(echo "${{ github.repository }}" | sed 's/\//-/g')
+          echo "ORCA_PROJECT_KEY=$ORCA_PROJECT_KEY" >> $GITHUB_ENV
+ 
+      - name: Orca - SAST Scan
+        run: |
+          curl -sfL 'https://raw.githubusercontent.com/orcasecurity/orca-cli/main/install.sh' | bash
+          orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sast scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
+
+      # release-2025.03 keeps a dependency-less pyproject (auto-merge keeps it): only -dev bases can run tox
+      - name: Set up Python 3.10 and 3.12.13
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: actions/setup-python@v7
+        with:
+          python-version: |
+            3.10
+            3.12.13
+
+      - name: Install uv
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Configure AWS credentials
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          retry-max-attempts: 3
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_P }}
+          role-duration-seconds: 3600
+
+      - name: Authenticate uv with AWS CodeArtifact
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain konverso \
+            --domain-owner 872515286329 \
+            --region "${AWS_REGION}" \
+            --query authorizationToken \
+            --output text)
+          echo "::add-mask::$TOKEN"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_USERNAME=aws" >> "$GITHUB_ENV"
+          echo "UV_INDEX_KONVERSO_AWS_PYPI_PROXY_PASSWORD=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Run tox
+        if: endsWith(github.event.pull_request.base.ref, '-dev')
+        run: uvx tox
+ 
+  build-solution:
+    name: Build solution ${{ github.ref_name }}
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    container:
+      image: konversoai.azurecr.io/kbot-builder-2204:06d42ca9
+      credentials:
+        username: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_ID }}
+        password: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_SECRET }}
+ 
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+          repositories: |
+            konverso-ai/kbot-builder
+            konverso-ai/${{ env.SOLUTION_NAME }}
+
+      - name: Checkout kbot-builder and solution repo
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          mkdir -p ${{ github.workspace }}/git
+          cd ${{ github.workspace }}/git ; git clone https://x-access-token:${{ env.GH_TOKEN }}@github.com/konverso-ai/kbot-builder.git
+          cd ${{ github.workspace }}/git ; git clone --branch ${{ env.VERSION }} https://x-access-token:${{ env.GH_TOKEN }}@github.com/konverso-ai/${{ env.SOLUTION_NAME }}.git
+          cd ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }} ; echo "$(git rev-parse HEAD)" >> ${{ github.workspace }}/git/tag.txt
+ 
+      - name: Build solution
+        run: |
+          rm -f ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/Makefile ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/Definitions.make
+          cp ${{ github.workspace }}/git/kbot-builder/make/* ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}
+          make -C ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}
+ 
+      - name: Prepare release
+        run: |
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt) ; python3 ${{ github.workspace }}/git/kbot-builder/bin/build_description.py -x ${{ github.workspace }}/git/${{ env.SOLUTION_NAME }}/description.xml -j ${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json -v ${{ env.VERSION }} -c $tag
+ 
+      - name: Build release archive
+        shell: bash
+        run: |
+          set -eo pipefail
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt)
+          ARCHIVE="/tmp/${{ env.SOLUTION_NAME }}_$tag.tar.gz"
+          TIMESTAMP=$(date '+%Y/%m/%d %H:%M:%S')
+
+          echo "++ Building archive: $ARCHIVE"
+          tar czf "$ARCHIVE" -C "${{ github.workspace }}/installer" "${{ env.SOLUTION_NAME }}"
+          echo "[${TIMESTAMP}]\033[32m ++ Archive built successfully \033[39m"
+
+      - name: Azure login
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.ACR_SP_GITHUB_P_CLIENT_SECRET }}
+          AZURE_CORE_OUTPUT: none
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          az login --service-principal \
+            --username "$AZURE_CLIENT_ID" \
+            --password "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID"
+
+      - name: Push release to Azure
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: none
+        run: |
+          set -eo pipefail
+          blob_prefix="${{ env.VERSION }}/${{ env.SOLUTION_NAME }}"
+          tag=$(head -n 1 ${{ github.workspace }}/git/tag.txt)
+          ARCHIVE="/tmp/${{ env.SOLUTION_NAME }}_$tag.tar.gz"
+          AZ_OPTS="--account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+                  --container-name ${{ env.AZURE_STORAGE_CONTAINER }} \
+                  --auth-mode login --overwrite --only-show-errors --no-progress"
+          TIMESTAMP=$(date '+%Y/%m/%d %H:%M:%S')
+
+          echo -e "[${TIMESTAMP}] ++ Uploading tagged archive to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/${{ env.SOLUTION_NAME }}_$tag.tar.gz" \
+            --file "$ARCHIVE"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded tagged archive to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading latest archive to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/${{ env.SOLUTION_NAME }}_latest.tar.gz" \
+            --file "$ARCHIVE"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded latest archive to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading tagged description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description_$tag.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded tagged description.json to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading latest description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description_latest.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded latest description.json to Azure \033[39m"
+
+          echo -e "[${TIMESTAMP}] ++ Uploading description.json to Azure"
+          az storage blob upload $AZ_OPTS \
+            --name "${blob_prefix}/description.json" \
+            --file "${{ github.workspace }}/installer/${{ env.SOLUTION_NAME }}/description.json"
+          echo -e "[${TIMESTAMP}]\033[32m ++ Successfully uploaded description.json to Azure \033[39m"

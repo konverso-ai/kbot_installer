@@ -1,0 +1,117 @@
+[
+    {
+        "source": "core/python",
+        "target": "core/python",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ],
+        "excludes": [
+            "RunBot.py",
+            "Learn.py",
+            "Load.py"
+        ]
+    },
+    {
+        "source": "core/python",
+        "target": "core/python",
+        "action": "copy",
+        "recursive": false,
+        "includes": [
+            "RunBot.py",
+            "Learn.py",
+            "Load.py"
+        ],
+        "refresh": true
+    },
+    {
+        "source": "rest/api",
+        "target": "rest/api",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
+        "source": "rest/rest_addons",
+        "target": "rest/rest_addons",
+        "action": "link",
+        "includes": [
+            "**/*.py",
+            "**/*.so"
+        ]
+    },
+    {
+        "source": "bin",
+        "action": "link",
+        "excludes": [
+            "rc/kbot"
+        ]
+    },
+    {
+        "source": "bin",
+        "action": "copy",
+        "includes": ["rc/kbot"],
+        "placeholders": ["__KBOT_HOME__", "__KBOT_USER__"],
+        "refresh": true
+    },
+    {
+        "source": "ui",
+        "target": "ui",
+        "action": "link",
+        "includes": [
+            "client/**",
+            "locales/**",
+            "widget/**",
+            "msteams_app/**",
+            "msteams_tab/**",
+            "in_tab_auth/**",
+            "jira_ext/**",
+            "chrome_ext/**",
+            "ignoreDirs/**",
+            "static/**"
+        ]
+    },
+    {
+        "source": "ui",
+        "target": "ui",
+        "action": "copy",
+        "recursive": true,
+        "excludes": [
+            "web/images/**"
+        ]
+    },
+    {
+        "source": "ui",
+        "action": "link",
+        "recursive": true,
+        "includes": [
+            "web/images/**"
+        ]
+    },
+    {
+        "source": "var",
+        "target": "var",
+        "action": "copy"
+    },
+    {
+        "source": "conf",
+        "target": "var",
+        "action": "link",
+        "recursive": false,
+        "includes": ["license.key"]
+    },
+    {
+        "source": "tests",
+        "target": "tests",
+        "action": "link"
+    },
+    {
+        "source": ".",
+        "action": "link",
+        "recursive": false,
+        "includes": ["uninstall.sh"]
+    }
+]

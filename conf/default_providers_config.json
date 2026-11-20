@@ -1,0 +1,44 @@
+{
+  "provider": {
+    "storage": {
+      "kwargs": {},
+      "auth_type": "basic",
+      "branches": ["master", "dev"]
+    },
+    "github": {
+      "kwargs": {
+        "account_name": "konverso-ai"
+      },
+      "auth_type": "ssh",
+      "branches": ["main", "dev"]
+    },
+    "bitbucket": {
+      "kwargs": {
+        "account_name": "konversoai"
+      },
+      "auth_type": "ssh",
+      "branches": ["master", "dev"]
+    }
+  },
+  "storage": {
+    "nexus": {
+      "domain": "nexus.konverso.ai",
+      "repository": "kbot_raw"
+    },
+    "s3": {
+      "bucket_name": "",
+      "cluster_name": "",
+      "region_name": "eu-west-1"
+    },
+    "azure": {
+      "account_url": "https://sakbotreleasefcp.blob.core.windows.net",
+      "container_name": "sakbotreleasefcp",
+      "credential_type": "default_azure"
+    },
+    "oci": {
+      "bucket_name": "",
+      "namespace_name": "",
+      "region": "eu-frankfurt-1"
+    }
+  }
+}

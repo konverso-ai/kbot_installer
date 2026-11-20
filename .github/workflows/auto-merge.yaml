@@ -1,0 +1,334 @@
+name: Auto-merge
+run-name: "Auto-merge from ${{ github.ref_name }}"
+
+on:
+  push:
+    branches:
+      - release-2026.02
+      - release-2026.02-dev
+      - release-2026.01
+      - release-2026.01-dev
+      - release-2025.03
+      - release-2025.03-dev
+
+jobs:
+  auto-merge-upstream:
+    name: "Upstream: ${{ github.ref_name }} → next release"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && !endsWith(github.ref_name, '-dev')
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config --global user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+      - name: Find upstream target
+        id: config
+        run: |
+          CURRENT_BRANCH="${{ github.ref_name }}"
+
+          cat << 'EOF' > branch_hierarchy.json
+          {
+            "branches": [
+              "release-2025.03-dev", "release-2025.03",
+              "release-2026.01-dev", "release-2026.01",
+              "release-2026.02-dev", "release-2026.02",
+              "master"
+            ]
+          }
+          EOF
+
+          CURRENT_INDEX=$(jq -r --arg branch "$CURRENT_BRANCH" '.branches | index($branch)' branch_hierarchy.json)
+          TOTAL_BRANCHES=$(jq '.branches | length' branch_hierarchy.json)
+
+          TARGET_BRANCH=""
+          if [[ "$CURRENT_INDEX" != "null" ]]; then
+            for ((i=CURRENT_INDEX+1; i<TOTAL_BRANCHES; i++)); do
+              CANDIDATE=$(jq -r --argjson index "$i" '.branches[$index]' branch_hierarchy.json)
+              if [[ ! "$CANDIDATE" =~ -dev$ ]]; then
+                TARGET_BRANCH="$CANDIDATE"
+                break
+              fi
+            done
+          fi
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Auto-merge upstream
+        if: steps.config.outputs.target_branch != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          SOURCE_BRANCH="${{ github.ref_name }}"
+          TARGET_BRANCH="${{ steps.config.outputs.target_branch }}"
+
+          if ! git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            echo "Target branch $TARGET_BRANCH does not exist, skipping"
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$TARGET_BRANCH"; then
+            echo "$TARGET_BRANCH is already up to date"
+            exit 0
+          fi
+
+          DIFF_FILES_LIST=$(git diff --name-only "origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH")
+          DIFF_FILES=$(echo "$DIFF_FILES_LIST" | wc -l)
+          if [ "$DIFF_FILES" -eq 0 ]; then
+            echo "No file differences, skipping merge"
+            exit 0
+          fi
+
+          NON_VERSION_FILES=$(echo "$DIFF_FILES_LIST" | grep -v -E '^(pyproject\.toml|uv\.lock)$' || true)
+          if [ -z "$NON_VERSION_FILES" ]; then
+            echo -e "\033[33m++ Only pyproject.toml/uv.lock changed, skipping upstream merge\033[39m"
+            exit 0
+          fi
+
+          MERGE_BRANCH="auto-merge/${SOURCE_BRANCH}-to-${TARGET_BRANCH}"
+          git checkout -B "$MERGE_BRANCH" "origin/$TARGET_BRANCH"
+          git merge --no-ff --no-commit "origin/$SOURCE_BRANCH" || true
+
+          git checkout "origin/$TARGET_BRANCH" -- pyproject.toml uv.lock 2>/dev/null || true
+          git add pyproject.toml uv.lock 2>/dev/null || true
+
+          REMAINING_CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+
+          if [ -n "$REMAINING_CONFLICTS" ]; then
+            git merge --abort
+            echo -e "\033[33m++ Non-version conflicts detected in: $(echo "$REMAINING_CONFLICTS" | tr '\n' ' ')\033[39m"
+
+            git checkout -B "$MERGE_BRANCH" "origin/$SOURCE_BRANCH"
+            git push -f origin "$MERGE_BRANCH"
+
+            EXISTING_PR=$(gh pr list --head "$MERGE_BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+            if [ -n "$EXISTING_PR" ]; then
+              echo "PR #$EXISTING_PR already exists, skipping creation"
+            else
+              PR_URL=$(gh pr create \
+                --title "Auto-merge-upstream: $TARGET_BRANCH ← $SOURCE_BRANCH" \
+                --body "## Upstream Cascade Merge (Conflicts Detected)
+
+              **Source:** \`$SOURCE_BRANCH\`  
+              **Target:** \`$TARGET_BRANCH\`  
+              **Files changed:** $DIFF_FILES  
+              **Conflicting files:** \`$(echo "$REMAINING_CONFLICTS" | tr '\n' ', ' | sed 's/, $//')\`  
+              **Created:** $(TZ=Europe/Paris date)
+
+              > pyproject.toml and uv.lock conflicts are auto-resolved (target version kept).
+
+              ---
+              *Auto-merge pipeline*" \
+                --head "$MERGE_BRANCH" \
+                --base "$TARGET_BRANCH")
+              echo "Conflicts detected, PR left open: $PR_URL"
+            fi
+          else
+            git commit -m "chore(KB-21000): Auto-merge-upstream: $TARGET_BRANCH ← $SOURCE_BRANCH"
+            git push origin "$MERGE_BRANCH:$TARGET_BRANCH"
+            echo -e "\033[32m++ Successfully merged $SOURCE_BRANCH into $TARGET_BRANCH\033[39m"
+          fi
+
+  auto-merge-downstream:
+    name: "Downstream: ${{ github.ref_name }} → ${{ github.ref_name }}-dev"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && !endsWith(github.ref_name, '-dev')
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config --global user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+      - name: Auto-merge downstream to -dev
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          SOURCE_BRANCH="${{ github.ref_name }}"
+          TARGET_BRANCH="${{ github.ref_name }}-dev"
+
+          if ! git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            echo "Target branch $TARGET_BRANCH does not exist, skipping"
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$TARGET_BRANCH"; then
+            echo "$TARGET_BRANCH is already up to date"
+            exit 0
+          fi
+
+          DIFF_FILES_LIST=$(git diff --name-only "origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH")
+          DIFF_FILES=$(echo "$DIFF_FILES_LIST" | wc -l)
+          if [ "$DIFF_FILES" -eq 0 ]; then
+            echo "No file differences, skipping merge"
+            exit 0
+          fi
+
+          NON_VERSION_FILES=$(echo "$DIFF_FILES_LIST" | grep -v -E '^(pyproject\.toml|uv\.lock)$' || true)
+          if [ -z "$NON_VERSION_FILES" ]; then
+            echo -e "\033[33m++ Only pyproject.toml/uv.lock changed, skipping downstream merge\033[39m"
+            exit 0
+          fi
+
+          MERGE_BRANCH="auto-merge/${SOURCE_BRANCH}-to-${TARGET_BRANCH}"
+          git checkout -B "$MERGE_BRANCH" "origin/$TARGET_BRANCH"
+          git merge --no-ff --no-commit "origin/$SOURCE_BRANCH" || true
+
+          git checkout "origin/$TARGET_BRANCH" -- pyproject.toml uv.lock 2>/dev/null || true
+          git add pyproject.toml uv.lock 2>/dev/null || true
+
+          REMAINING_CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+
+          if [ -n "$REMAINING_CONFLICTS" ]; then
+            git merge --abort
+            echo -e "\033[33m++ Non-version conflicts detected in: $(echo "$REMAINING_CONFLICTS" | tr '\n' ' ')\033[39m"
+
+            git checkout -B "$MERGE_BRANCH" "origin/$SOURCE_BRANCH"
+            git push -f origin "$MERGE_BRANCH"
+
+            EXISTING_PR=$(gh pr list --head "$MERGE_BRANCH" --base "$TARGET_BRANCH" --state open --json number --jq '.[0].number // empty')
+            if [ -n "$EXISTING_PR" ]; then
+              echo "PR #$EXISTING_PR already exists, skipping creation"
+            else
+              PR_URL=$(gh pr create \
+                --title "Auto-merge-downstream: $TARGET_BRANCH ← $SOURCE_BRANCH" \
+                --body "## Downstream Merge (Conflicts Detected)
+
+              **Source:** \`$SOURCE_BRANCH\`  
+              **Target:** \`$TARGET_BRANCH\`  
+              **Files changed:** $DIFF_FILES  
+              **Conflicting files:** \`$(echo "$REMAINING_CONFLICTS" | tr '\n' ', ' | sed 's/, $//')\`  
+              **Created:** $(TZ=Europe/Paris date)
+
+              > pyproject.toml and uv.lock conflicts are auto-resolved (target version kept).
+
+              ---
+              *Auto-merge pipeline*" \
+                --head "$MERGE_BRANCH" \
+                --base "$TARGET_BRANCH")
+              echo "Conflicts detected, PR left open: $PR_URL"
+            fi
+          else
+            git commit -m "chore(KB-21000): Auto-merge-downstream: $TARGET_BRANCH ← $SOURCE_BRANCH"
+            git push origin "$MERGE_BRANCH:$TARGET_BRANCH"
+            echo -e "\033[32m++ Successfully merged $SOURCE_BRANCH into $TARGET_BRANCH\033[39m"
+          fi
+
+  dev-to-release:
+    name: "Dev → Release: ${{ github.ref_name }}"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && endsWith(github.ref_name, '-dev')
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GHA_CLIENT_ID }}
+          private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config --global user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+      - name: Dev -> Release (manual review)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          SOURCE_BRANCH="${{ github.ref_name }}"
+          TARGET_BRANCH="${GITHUB_REF_NAME%-dev}"
+
+          if ! git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+            echo "Target branch $TARGET_BRANCH does not exist, skipping"
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$TARGET_BRANCH"; then
+            echo "$TARGET_BRANCH is already up to date"
+            exit 0
+          fi
+
+          DIFF_FILES_LIST=$(git diff --name-only "origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH")
+          DIFF_FILES=$(echo "$DIFF_FILES_LIST" | wc -l)
+          if [ "$DIFF_FILES" -eq 0 ]; then
+            echo "No file differences, skipping PR creation"
+            exit 0
+          fi
+
+          NON_VERSION_FILES=$(echo "$DIFF_FILES_LIST" | grep -v -E '^(pyproject\.toml|uv\.lock)$' || true)
+          if [ -z "$NON_VERSION_FILES" ]; then
+            echo -e "\033[33m++ Only pyproject.toml/uv.lock changed, skipping dev-to-release PR\033[39m"
+            exit 0
+          fi
+
+          MERGE_BRANCH="auto-merge/${SOURCE_BRANCH}-to-${TARGET_BRANCH}"
+          git checkout -B "$MERGE_BRANCH" "origin/$TARGET_BRANCH"
+          git merge --no-ff --no-commit "origin/$SOURCE_BRANCH" || true
+
+          git checkout "origin/$TARGET_BRANCH" -- pyproject.toml uv.lock 2>/dev/null || true
+          git add pyproject.toml uv.lock 2>/dev/null || true
+
+          REMAINING_CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+          if [ -n "$REMAINING_CONFLICTS" ]; then
+            git merge --abort
+            echo -e "\033[33m++ Non-version conflicts in: $(echo "$REMAINING_CONFLICTS" | tr '\n' ' ')\033[39m"
+          fi
+
+          git add -A
+          git commit -m "chore(KB-21000): Merge $SOURCE_BRANCH into $TARGET_BRANCH (version files kept from $TARGET_BRANCH)"
+          git push -f origin "$MERGE_BRANCH"
+
+          NON_VERSION_DIFF_FILES=$(echo "$NON_VERSION_FILES" | wc -l)
+          PR_URL=$(gh pr create \
+            --title "Auto-merge-dev-to-release: $TARGET_BRANCH ← $SOURCE_BRANCH" \
+            --body "## Dev to Release Merge (Manual Review Required)
+
+            **Source:** \`$SOURCE_BRANCH\`  
+            **Target:** \`$TARGET_BRANCH\`  
+            **Files changed:** $NON_VERSION_DIFF_FILES (pyproject.toml/uv.lock excluded)  
+            **Created:** $(TZ=Europe/Paris date)  
+            **Status:** Requires manual review and merge
+
+            > pyproject.toml and uv.lock are pre-resolved to keep the release branch version.
+
+            ### Review Process:
+            1. Review the changes in this PR
+            2. Approve if changes look good  
+            3. Merge manually when ready
+
+            ---
+            *Auto-merge pipeline - manual review required*" \
+            --head "$MERGE_BRANCH" \
+            --base "$TARGET_BRANCH")
+
+          echo "Created PR for manual review: $PR_URL"

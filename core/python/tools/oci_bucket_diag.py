@@ -16,6 +16,7 @@ import argparse
 import sys
 
 import oci
+import oci.object_storage
 from oci.exceptions import ServiceError
 
 

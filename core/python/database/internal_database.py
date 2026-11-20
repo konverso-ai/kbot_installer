@@ -1,0 +1,224 @@
+"""Internal PostgreSQL database backend, bootstrapping its own cluster."""
+
+import shutil
+from pathlib import Path
+from typing import ClassVar
+
+import psycopg
+from psycopg import Connection, sql
+
+from database import postgres_cluster
+from database.base import InternalDbSettings
+from database.utils import (
+    apply_missing_upgrades,
+    apply_schema,
+    connect,
+    drop_owned_objects,
+    dump_database,
+    execute_sql_file,
+    is_database_empty,
+)
+
+
+class InternalDatabase:
+    """Database backend that owns and bootstraps a local PostgreSQL cluster."""
+
+    settings_cls: ClassVar[type[InternalDbSettings]] = InternalDbSettings
+
+    def __init__(self, settings: InternalDbSettings) -> None:
+        """Initialize the backend with its internal database settings.
+
+        Args:
+            settings: Internal database settings.
+
+        """
+        self.__settings = settings
+
+    def prepare(self) -> None:
+        """Bootstrap the cluster ahead of use.
+
+        Initializes and starts the local PostgreSQL server if needed, then
+        creates the application role and database if they are missing.
+        """
+        postgres_cluster.ensure_running(self.__settings)
+        self._create_role_if_missing()
+        self._create_database_if_missing()
+
+    def check_connection(self) -> None:
+        """Open and immediately close a connection to the database."""
+        with connect(self.__settings):
+            pass
+
+    def initialize(self) -> None:
+        """Apply the schema if the database is empty."""
+        if is_database_empty(self.__settings):
+            apply_schema(self.__settings)
+
+    def upgrade(self) -> None:
+        """Apply any missing upgrade scripts if the database is not empty."""
+        if not is_database_empty(self.__settings):
+            apply_missing_upgrades(self.__settings)
+
+    def backup(self, path: Path) -> bool:
+        """Dump the database into a SQL file, starting the local server if needed.
+
+        Args:
+            path: SQL file to write.
+
+        Returns:
+            False if there is nothing to back up (the cluster was never
+            initialized, e.g. after an install that failed early), True otherwise.
+
+        """
+        if not postgres_cluster.is_initialized(self.__settings):
+            return False
+        if not postgres_cluster.is_running(self.__settings):
+            postgres_cluster.start(self.__settings)
+        dump_database(self.__settings, path)
+        return True
+
+    def destroy(self) -> None:
+        """Stop the local PostgreSQL server, then delete its data directory.
+
+        Raises:
+            PostgresClusterError: If the server is still running after being stopped.
+
+        """
+        if postgres_cluster.is_initialized(self.__settings) and postgres_cluster.is_running(self.__settings):
+            postgres_cluster.stop(self.__settings)
+            if postgres_cluster.is_running(self.__settings):
+                msg = f"PostgreSQL server for '{self.__settings.pg_data}' is still running after 'pg_ctl stop'."
+                raise postgres_cluster.PostgresClusterError(msg)
+        if self.__settings.pg_data.exists():
+            shutil.rmtree(self.__settings.pg_data)
+
+    def data_major_version(self) -> str | None:
+        """Return the PostgreSQL major version the data directory was initialized by.
+
+        Returns:
+            The major version (e.g. '11'), or None if the cluster is not initialized.
+
+        """
+        return postgres_cluster.data_major_version(self.__settings)
+
+    def rebuild_from_backup(self, backup_path: Path, previous_data: Path) -> None:
+        """Recreate the cluster with the current PostgreSQL binaries, then load a backup into it.
+
+        PostgreSQL does not start on a data directory initialized by another
+        major version. The data directory is moved to ``previous_data`` (kept),
+        a new cluster, role and database are created, the backup is loaded the
+        way 'restore_db.sh' does it, and the server is stopped again.
+
+        Args:
+            backup_path: Plain SQL dump of the database ('dump_db.sh').
+            previous_data: Where the current data directory is moved.
+
+        Raises:
+            PostgresClusterError: If the server of the current data directory is still running.
+            FileExistsError: If ``previous_data`` already exists.
+
+        """
+        settings = self.__settings
+        if postgres_cluster.is_running(settings):
+            msg = f"PostgreSQL server for '{settings.pg_data}' is still running: stop it before rebuilding."
+            raise postgres_cluster.PostgresClusterError(msg)
+        if previous_data.exists():
+            msg = f"'{previous_data}' already exists."
+            raise FileExistsError(msg)
+        settings.pg_data.rename(previous_data)
+        try:
+            self.prepare()
+            # The dump re-creates the 'public' schema, which the application role owns.
+            drop_owned_objects(settings)
+            execute_sql_file(settings, backup_path)
+        finally:
+            postgres_cluster.stop(settings)
+
+    def _admin_connect(self, *, database: str | None = None) -> Connection:
+        """Connect using admin credentials.
+
+        Args:
+            database: Database to connect to. Defaults to the configured
+                admin database.
+
+        Returns:
+            An autocommit-enabled psycopg connection.
+
+        """
+        settings = self.__settings
+
+        conn = psycopg.connect(
+            host=settings.host,
+            port=settings.port,
+            dbname=database or settings.admin_database,
+            user=settings.admin_user,
+            password=settings.admin_password,
+        )
+        conn.autocommit = True
+        return conn
+
+    def _create_role_if_missing(self) -> None:
+        """Create the application login role if it does not already exist."""
+        settings = self.__settings
+
+        with self._admin_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_roles WHERE rolname = %s",
+                (settings.user,),
+            )
+            if cur.fetchone() is not None:
+                return
+
+            # PostgreSQL utility statements (CREATE ROLE, ALTER ROLE, etc.) do
+            # not accept bind parameters (e.g. "$1"), so the password must be
+            # inlined as a SQL literal rather than passed as a query parameter.
+            cur.execute(
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                    sql.Identifier(settings.user),
+                    sql.Literal(settings.password),
+                )
+            )
+
+    def _create_database_if_missing(self) -> None:
+        """Create the application database, owned by its role, if missing."""
+        settings = self.__settings
+
+        with self._admin_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s",
+                (settings.database,),
+            )
+
+            if cur.fetchone() is not None:
+                return
+
+            cur.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE {} OWNER {}").format(
+                    sql.Identifier(settings.database),
+                    sql.Identifier(settings.template),
+                    sql.Identifier(settings.user),
+                )
+            )
+
+        self._configure_new_database()
+
+    def _configure_new_database(self) -> None:
+        """Finish configuring a freshly created database.
+
+        Reassigns ownership of the ``public`` schema to the application role
+        and applies the optional cluster-wide ``max_connections`` tuning.
+        """
+        settings = self.__settings
+
+        with (
+            self._admin_connect(database=settings.database) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(sql.Identifier(settings.user)))
+
+            if settings.max_connections is not None:
+                # ALTER SYSTEM SET is a utility statement and does not accept
+                # bind parameters either; inline the value as a literal.
+                cur.execute(
+                    sql.SQL("ALTER SYSTEM SET max_connections = {}").format(sql.Literal(str(settings.max_connections)))
+                )
