@@ -5,14 +5,35 @@ from collections.abc import Iterator
 from enum import Enum
 from pathlib import Path
 
+from typing_extensions import override
+
+# Historical kbot provider names (``storage_bucket_provider`` setting,
+# ``BUNDLE_PROVIDER``) -> storage backend names.
+_LEGACY_BACKEND_NAMES = {
+    "azure_blob": "azure",
+    "amazon_s3": "s3",
+    "oci_object_storage": "oci",
+}
+
 
 class StorageBackendEnum(Enum):
-    """Object storage backend."""
+    """Object storage backend.
+
+    Also resolves the historical kbot provider names (``azure_blob``,
+    ``amazon_s3``, ``oci_object_storage``), e.g.
+    ``StorageBackendEnum("azure_blob") is StorageBackendEnum.AZURE``.
+    """
 
     NEXUS = "nexus"
     S3 = "s3"
     AZURE = "azure"
     OCI = "oci"
+
+    @classmethod
+    @override
+    def _missing_(cls, value: object) -> "StorageBackendEnum | None":
+        alias = _LEGACY_BACKEND_NAMES.get(value) if isinstance(value, str) else None
+        return cls(alias) if alias else None
 
 
 class StorageBase(ABC):
