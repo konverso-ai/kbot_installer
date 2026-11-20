@@ -58,37 +58,42 @@ format:
 # Run formatter then linter (correct order: format first, then check)
 check: format lint
 
-# Run tests with pytest (using -B to prevent __pycache__)
+# Bytecode (incl. pytest's assertion-rewritten test modules) is cached under /tmp instead of
+# __pycache__ dirs in the tree. Do not use `python -B`: it disables the cache and forces every
+# module (tests + .venv) to be recompiled at each collection.
+export PYTHONPYCACHEPREFIX := /tmp/.pycache
+
+# Run tests with pytest
 # Usage: make test [PKG=package_name]
 test:
 ifdef PKG
 	@echo "Running tests for package: $(PKG)"
 	@if [ -d "$(PKG)" ]; then \
-		uv run python -B -m pytest $(PKG)/ -v; \
+		uv run python -m pytest $(PKG)/ -v; \
 	else \
 		echo "Package $(PKG) not found!"; \
 		exit 1; \
 	fi
 else
 	@echo "Running all tests"
-	uv run python -B -m pytest -v
+	uv run python -m pytest -v
 endif
 
 
-# Run tests with coverage report (using -B to prevent __pycache__)
+# Run tests with coverage report
 # Usage: make test-cov [PKG=package_name]
 test-cov:
 ifdef PKG
 	@echo "Running tests with coverage for package: $(PKG)"
 	@if [ -d "$(PKG)" ]; then \
-		uv run python -B -m pytest $(PKG)/ --cov=$(PKG) --cov-report=html --cov-report=term; \
+		uv run python -m pytest $(PKG)/ --cov=$(PKG) --cov-report=html --cov-report=term; \
 	else \
 		echo "Package $(PKG) not found!"; \
 		exit 1; \
 	fi
 else
 	@echo "Running all tests with coverage"
-	uv run python -B -m pytest --cov=. --cov-report=html --cov-report=term
+	uv run python -m pytest --cov=. --cov-report=html --cov-report=term
 endif
 
 

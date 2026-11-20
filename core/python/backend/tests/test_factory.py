@@ -60,7 +60,7 @@ class TestAddS3StorageBackend:
         """Test add_s3_storage_backend builds S3Credentials and calls add_backend."""
         mock_backend = MagicMock(spec=BackendBase)
         with (
-            patch("backend.factory.S3Credentials") as mock_credentials_cls,
+            patch("credentials.s3_credentials.S3Credentials") as mock_credentials_cls,
             patch("backend.factory.add_backend") as mock_add_backend,
         ):
             mock_credentials = mock_credentials_cls.return_value
@@ -75,6 +75,17 @@ class TestAddS3StorageBackend:
             )
             assert compare("eq", result, mock_backend)
 
+    def test_add_s3_storage_backend_region_overrides_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test an explicit region_name takes precedence over AWS_DEFAULT_REGION."""
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+        with patch("backend.factory.add_backend") as mock_add_backend:
+            add_s3_storage_backend(region_name="eu-west-3")
+
+        credentials = mock_add_backend.call_args.kwargs["credentials"]
+        assert compare("eq", credentials.region_name, "eu-west-3")
+
 
 class TestAddAzureBlobBackend:
     """Test cases for add_azure_blob_backend function."""
@@ -83,7 +94,7 @@ class TestAddAzureBlobBackend:
         """Test add_azure_blob_backend builds AzureCredentials and calls add_backend."""
         mock_backend = MagicMock(spec=BackendBase)
         with (
-            patch("backend.factory.AzureCredentials") as mock_credentials_cls,
+            patch("credentials.azure_credentials.AzureCredentials") as mock_credentials_cls,
             patch("backend.factory.add_backend") as mock_add_backend,
         ):
             mock_credentials = mock_credentials_cls.return_value
@@ -109,7 +120,7 @@ class TestAddOciStorageBackend:
         """Test add_oci_storage_backend builds OciCredentials and calls add_backend."""
         mock_backend = MagicMock(spec=BackendBase)
         with (
-            patch("backend.factory.OciCredentials") as mock_credentials_cls,
+            patch("credentials.oci_credentials.OciCredentials") as mock_credentials_cls,
             patch("backend.factory.add_backend") as mock_add_backend,
         ):
             mock_credentials = mock_credentials_cls.return_value
@@ -123,6 +134,17 @@ class TestAddOciStorageBackend:
                 credentials=mock_credentials,
             )
             assert compare("eq", result, mock_backend)
+
+    def test_add_oci_storage_backend_auth_method_overrides_environment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test an explicit auth_method takes precedence over OCI_AUTH_METHOD."""
+        monkeypatch.setenv("OCI_AUTH_METHOD", "config_file")
+        with patch("backend.factory.add_backend") as mock_add_backend:
+            add_oci_storage_backend(auth_method="resource_principal")
+
+        credentials = mock_add_backend.call_args.kwargs["credentials"]
+        assert compare("eq", credentials.auth_method, "resource_principal")
 
 
 class TestAddBuiltinBackend:

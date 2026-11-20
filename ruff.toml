@@ -84,6 +84,10 @@ ignore = [
     "INP001", # errors is a namespace package shared with the products: no __init__.py
 ]
 
+"core/python/conftest.py" = [
+    "INP001", # core/python is the import root (pythonpath), not a package
+]
+
 "**/*example*.py" = [
     "T201", # print found (acceptable in example files)
 ]
@@ -141,6 +145,7 @@ known-first-party = [
     "installer_support",
     "interactivity",
     "publisher",
+    "security",
     "service",
     "storage",
     "updatable",
