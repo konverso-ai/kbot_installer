@@ -6,7 +6,7 @@ import os
 # FIX LATER:
 # 1) from core import product
 # 2) Move this file in the new "product" package (github / Korantin)
-from product import Product
+from utils.product.product import Product
 
 
 def build_dependency_file_rec(
