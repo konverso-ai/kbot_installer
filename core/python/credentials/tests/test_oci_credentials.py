@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from credentials.oci_credentials import OciCredentials
 from utils.utils_for_unit_tests import compare
@@ -68,3 +69,46 @@ def test_toclientconfig_valid_keeps_file_region_when_unset() -> None:
         config = creds.to_client_config()
 
         assert compare("eq", config["region"], "eu-frankfurt-1")
+
+
+def test_toclientconfig_principal_skips_config_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test principal authentication needs no OCI config file, only the region override."""
+    monkeypatch.setenv("OCI_AUTH_METHOD", "instance_principal")
+    monkeypatch.setenv("OCI_REGION", "eu-paris-1")
+    with patch("credentials.oci_credentials.oci.config.from_file") as mock_from_file:
+        config = OciCredentials().to_client_config()
+
+        mock_from_file.assert_not_called()
+        assert compare("eq", config, {"region": "eu-paris-1"})
+
+
+@pytest.mark.parametrize(
+    ("auth_method", "signer_factory"),
+    [
+        ("instance_principal", "InstancePrincipalsSecurityTokenSigner"),
+        ("resource_principal", "get_resource_principals_signer"),
+    ],
+)
+def test_tosigner_principal_builds_matching_signer(
+    monkeypatch: pytest.MonkeyPatch, auth_method: str, signer_factory: str
+) -> None:
+    """Test to_signer builds the signer of the configured principal."""
+    monkeypatch.setenv("OCI_AUTH_METHOD", auth_method)
+    with patch(f"credentials.oci_credentials.oci.auth.signers.{signer_factory}") as mock_factory:
+        signer = OciCredentials().to_signer()
+
+        assert compare("eq", signer, mock_factory.return_value)
+
+
+def test_tosigner_config_file_returns_none() -> None:
+    """Test to_signer returns None with the default config-file authentication."""
+    assert OciCredentials().to_signer() is None
+
+
+def test_authmethod_invalid_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test an unknown OCI_AUTH_METHOD is rejected."""
+    monkeypatch.setenv("OCI_AUTH_METHOD", "password")
+    with pytest.raises(ValidationError):
+        OciCredentials()

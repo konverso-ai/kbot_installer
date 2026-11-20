@@ -250,6 +250,30 @@ class TestStorageArtifacts:
         assert compare("eq", failed, [])
         assert compare("eq", Product.from_json_file(acme / "description.json").build.commit, "new")
 
+    def test_failed_swap_restores_previous_folder(self, installer: Path) -> None:
+        """When the new folder cannot be moved into place, the previous one is restored."""
+        acme = installer / "acme"
+        self._write_download(acme, "old")
+        (acme / "marker").write_text("kept", encoding="utf-8")
+        real_rename = Path.rename
+
+        def _rename(self: Path, target: Path) -> Path:
+            # Only the move of the downloaded folder fails, not the restore.
+            if self.parent != installer and self.name == "acme":
+                raise OSError("rename failed")
+            return real_rename(self, target)
+
+        with (
+            patch("updatable.installer_updatable.build_storage_provider", return_value=self._provider_writing("new")),
+            patch.object(Path, "rename", _rename),
+        ):
+            failed = _updatable(installer)()
+
+        assert compare("eq", failed, ["acme"])
+        assert compare("eq", (acme / "marker").read_text(encoding="utf-8"), "kept")
+        assert compare("eq", Product.from_json_file(acme / "description.json").build.commit, "old")
+        assert compare("eq", [p.name for p in installer.iterdir()], ["acme"])
+
     def test_local_build_never_needs_storage(self, installer: Path) -> None:
         """A manual build (no description.json) is kept without building a storage provider."""
         local = installer / "local"
