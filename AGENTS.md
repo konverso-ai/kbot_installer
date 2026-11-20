@@ -57,12 +57,12 @@ Run a single test directly with pytest (pythonpath is already configured via `py
 uv run python -m pytest core/python/database/tests/test_factory.py::test_add_db_internal -v
 ```
 
-`tox` runs the full matrix (py312, with `deps`/`lint`/`typecheck`/`test` envs) using
+`tox` runs the full matrix (py312 and py314, each with `deps`/`lint`/`typecheck`/`test` envs) using
 locked `uv` environments:
 
 ```bash
 uvx tox                       # everything
-uvx tox -e py312-test         # just the py312 test env
+uvx tox -e py312-test         # just the py312 test env (py314-* for 3.14)
 uvx tox -e py312-typecheck    # ty check core/python
 uvx tox -e py312-lint         # ruff check + pylint --errors-only core/python
 uvx tox -e py312-deps         # deptry . (unused/missing dependency check)
