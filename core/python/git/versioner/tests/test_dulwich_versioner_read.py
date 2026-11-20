@@ -4,11 +4,14 @@ These tests build real repositories on disk rather than mocking Dulwich, so
 they validate the actual behaviour the kbot code base relies on.
 """
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from dulwich import porcelain
+from dulwich.index import index_entry_from_stat
+from dulwich.objects import Blob
 from dulwich.repo import Repo
 
 from git.versioner.dulwich_versioner import DulwichVersioner
@@ -136,7 +139,7 @@ def test_status_valid_reports_untracked_like_git(
         porcelain.add(repo, paths=[str(repo_path / ".gitignore")])
     # Untracked file next to tracked ones: listed by itself.
     (repo_path / "sub" / "new.txt").write_text("new")
-    # Directory without tracked files: listed once, with a trailing slash.
+    # Directory without tracked files: listed file by file, as git status --untracked-files=all does.
     (repo_path / "newdir" / "deep").mkdir(parents=True)
     (repo_path / "newdir" / "a.txt").write_text("a")
     (repo_path / "newdir" / "deep" / "b.txt").write_text("b")
@@ -149,7 +152,7 @@ def test_status_valid_reports_untracked_like_git(
 
     status = versioner.status(repo_path)
 
-    assert compare("eq", sorted(status.untracked), ["newdir/", "sub/new.txt"])
+    assert compare("eq", sorted(status.untracked), ["newdir/a.txt", "newdir/deep/b.txt", "sub/new.txt"])
 
 
 def test_status_valid_skips_tracked_symlink_to_directory(
@@ -157,12 +160,129 @@ def test_status_valid_skips_tracked_symlink_to_directory(
 ) -> None:
     (repo_path / "target").mkdir()
     (repo_path / "target" / "file.txt").write_text("content")
-    (repo_path / "link").symlink_to("target")
+    link = repo_path / "link"
+    link.symlink_to("target")
     with Repo(str(repo_path)) as repo:
-        porcelain.add(repo, paths=[str(repo_path / "target"), str(repo_path / "link")])
+        porcelain.add(repo, paths=[str(repo_path / "target")])
+        # porcelain.add follows a link to a folder and indexes link/file.txt; git stores the link itself, as a
+        # blob holding its target
+        blob = Blob.from_string(os.fsencode(os.readlink(link)))
+        repo.object_store.add_object(blob)
+        index = repo.open_index()
+        index[b"link"] = index_entry_from_stat(os.lstat(link), blob.id)
+        index.write()
         porcelain.commit(repo, message=b"msg", author=AUTHOR, committer=AUTHOR)
 
     assert compare("eq", versioner.status(repo_path).is_clean, True)
+
+
+def test_status_valid_lists_untracked_links_as_files(
+    versioner: DulwichVersioner, repo_path: Path, tmp_path: Path
+) -> None:
+    (repo_path / "folder").mkdir()
+    (repo_path / "folder" / "a.txt").write_text("a")
+    (repo_path / "new_link").symlink_to("folder", target_is_directory=True)
+    (tmp_path / "empty").mkdir()
+    (repo_path / "empty_link").symlink_to(tmp_path / "empty", target_is_directory=True)
+
+    status = versioner.status(repo_path)
+
+    # As git: a link is a file, never entered, whether its folder is empty or not
+    assert compare("eq", sorted(status.untracked), ["empty_link", "folder/a.txt", "new_link"])
+
+
+@pytest.mark.parametrize(
+    "rules, files, expected",
+    [
+        pytest.param(
+            {".gitignore": "logs/*\n!logs/keep.txt\n"},
+            ["logs/a.log", "logs/keep.txt"],
+            [".gitignore", "logs/keep.txt"],
+            id="contents-rule-lets-a-negation-bring-a-file-back",
+        ),
+        pytest.param(
+            {".gitignore": "logs/**\n!logs/keep.txt\n"},
+            ["logs/a/b.log", "logs/keep.txt"],
+            [".gitignore", "logs/keep.txt"],
+            id="double-star-contents-rule",
+        ),
+        pytest.param(
+            {".gitignore": "logs/\n!logs/keep.txt\n"},
+            ["logs/a.log", "logs/keep.txt"],
+            [".gitignore"],
+            id="excluded-folder-cannot-be-re-included",
+        ),
+        pytest.param(
+            {"logs/.gitignore": "*\n!keep\n"},
+            ["logs/x", "logs/keep"],
+            ["logs/keep"],
+            id="folder-ignoring-its-own-contents",
+        ),
+        pytest.param(
+            {".gitignore": "*.tmp\n", "sub/.gitignore": "!keep.tmp\n"},
+            ["a.tmp", "sub/a.tmp", "sub/keep.tmp"],
+            [".gitignore", "sub/.gitignore", "sub/keep.tmp"],
+            id="deeper-gitignore-overrides",
+        ),
+        pytest.param(
+            {".git/info/exclude": "secret.txt\n"},
+            ["secret.txt", "ok.txt"],
+            ["ok.txt"],
+            id="info-exclude",
+        ),
+    ],
+)
+def test_status_valid_applies_ignore_rules_as_git_does(
+    versioner: DulwichVersioner,
+    repo_path: Path,
+    rules: dict[str, str],
+    files: list[str],
+    expected: list[str],
+) -> None:
+    for name, content in rules.items():
+        (repo_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo_path / name).write_text(content)
+    for name in files:
+        (repo_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo_path / name).write_text(name)
+
+    status = versioner.status(repo_path)
+
+    # Expected lists are what git status --untracked-files=all prints for the same tree
+    assert compare("eq", sorted(status.untracked), expected)
+
+
+def test_status_valid_a_folder_rule_does_not_hide_a_link(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    (repo_path / ".gitignore").write_text("build/\n")
+    (repo_path / "out").mkdir()
+    (repo_path / "build").symlink_to("out", target_is_directory=True)
+
+    status = versioner.status(repo_path)
+
+    # Git reads a link as a file, so a rule naming only folders does not apply to it
+    assert compare("eq", sorted(status.untracked), [".gitignore", "build"])
+
+
+def test_has_working_tree_changes_valid_stops_at_the_first_untracked_file(repo_path: Path) -> None:
+    for index in range(3):
+        (repo_path / f"new_{index}.txt").write_text("new")
+    walks = []
+    walk_untracked = DulwichVersioner._iter_untracked_files
+
+    def recorded_walk(repo: Repo) -> object:
+        walk = walk_untracked(repo)
+        walks.append(walk)
+        return walk
+
+    with (
+        Repo(str(repo_path)) as repo,
+        patch.object(DulwichVersioner, "_iter_untracked_files", side_effect=recorded_walk),
+    ):
+        assert compare("eq", DulwichVersioner._has_working_tree_changes(repo), True)
+        # The walk was left after its first file: the two others are still to come
+        assert compare("eq", len(list(walks[0])), 2)
 
 
 def test_is_bare_valid_reports_working_tree_repository(
