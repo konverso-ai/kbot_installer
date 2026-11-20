@@ -1,6 +1,6 @@
 [project]
 name = "kbot-installer"
-version = "3.0.dev3"
+version = "3.0.dev5"
 requires-python = ">=3.12"
 dependencies = [
     "aiofiles",
@@ -69,6 +69,7 @@ lint = [
 test = [
     "pytest",
     "pytest-asyncio",
+    "pytest-bdd>=9.0.1",
     "pytest-cov",
     "pytest-mock",
 ]
@@ -124,7 +125,7 @@ python-json-logger = "pythonjsonlogger"
 DEP001 = ["tomllib", "Bot"]
 DEP002 = ["colorama", "furl", "gitpython", "tqdm"]
 DEP003 = ["botocore", "pydantic"]
-DEP004 = ["pytest"]
+DEP004 = ["pytest", "pytest_bdd"]
 
 [tool.pytest.ini_options]
 pythonpath = ["core/python"]
@@ -134,6 +135,7 @@ extra-paths = ["core/python"]
 
 [tool.ty.src]
 exclude = [
+    "core/python/conftest.py",
     "core/python/**/tests/**",
     "core/python/installer_tests/**",
     "core/python/git/versioner/examples.py",
