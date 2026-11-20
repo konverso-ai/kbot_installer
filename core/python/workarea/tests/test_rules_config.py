@@ -148,6 +148,47 @@ class TestLoadDefaultRules:
         assert not (work_root / "var" / "kbot.conf").exists()
         assert not (work_root / "var" / "classifiers").exists()
 
+    def test_ui_bundle_and_templates_follow_product_builds(self, tmp_path: Path) -> None:
+        """Regression: a web UI rebuild must reach the workarea without manual copies.
+
+        The UI `make` wipes `ui/web/client`, writes a bundle under new hashed
+        names and regenerates the entry-point templates loading it. If the
+        bundle and locales are copied (instead of linked) and the remaining
+        `ui` copies are not refreshed, re-running the layout only adds the new
+        chunks: `templates/ui.main.html` keeps loading the first bundle forever.
+        """
+        product_root = tmp_path / "product"
+        web = product_root / "ui" / "web"
+        browser = web / "client" / "browser"
+        browser.mkdir(parents=True)
+        (web / "templates").mkdir()
+        (web / "locales").mkdir()
+
+        def build(bundle: str, label: str) -> None:
+            for chunk in browser.iterdir():
+                chunk.unlink()
+            (browser / bundle).write_text(f"// {bundle}\n")
+            (web / "client.tmpl.html").write_text(f'<script src="client/browser/{bundle}"></script>\n')
+            (web / "templates" / "ui.main.html").write_text(f'<script src="client/browser/{bundle}"></script>\n')
+            (web / "locales" / "en.json").write_text(json.dumps({"label": label}))
+
+        work_root = tmp_path / "work"
+        work_web = work_root / "ui" / "web"
+        rules = load_default_rules()
+
+        build("main-OLD.js", "old")
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables={})
+        build("main-NEW.js", "new")
+        apply_rules(product_root=product_root, work_root=work_root, rules=rules, runtime_variables={})
+
+        new_bundle = work_web / "client" / "browser" / "main-NEW.js"
+        assert new_bundle.is_symlink()
+        assert new_bundle.resolve() == (browser / "main-NEW.js").resolve()
+        for template in (work_web / "client.tmpl.html", work_web / "templates" / "ui.main.html"):
+            assert not template.is_symlink()
+            assert "main-NEW.js" in template.read_text()
+        assert json.loads((work_web / "locales" / "en.json").read_text()) == {"label": "new"}
+
 
 class TestResolveDefaultRulesPath:
     def test_finds_dev_layout_rules_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

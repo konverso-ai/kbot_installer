@@ -20,6 +20,7 @@ class TestOciStorageBackend:
             credentials.to_client_config.return_value = {
                 "region": "eu-frankfurt-1",
             }
+            credentials.to_signer.return_value = None
 
             backend = OciStorageBackend(credentials)
 
@@ -28,3 +29,17 @@ class TestOciStorageBackend:
                 {"region": "eu-frankfurt-1"}
             )
             assert compare("eq", backend.get_client(), mock_client)
+
+    def test_init_valid_passes_principal_signer(self) -> None:
+        """Test OciStorageBackend authenticates the client with the credentials' signer."""
+        with patch("backend.oci_storage_backend.oci") as mock_oci:
+            credentials = MagicMock(spec=OciCredentials)
+            credentials.to_client_config.return_value = {}
+            signer = MagicMock()
+            credentials.to_signer.return_value = signer
+
+            OciStorageBackend(credentials)
+
+            mock_oci.object_storage.ObjectStorageClient.assert_called_once_with(
+                {}, signer=signer
+            )
