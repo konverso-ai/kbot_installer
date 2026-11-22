@@ -201,6 +201,53 @@ async def test_delete_valid_returns_json_on_body() -> None:
 
 
 @pytest.mark.asyncio
+async def test_postform_valid_posts_multipart_without_none_fields() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode(errors="replace")
+        assert request.headers["content-type"].startswith("multipart/form-data")
+        assert 'name="ufile"' in body
+        assert 'name="override"' in body
+        assert 'name="folder_uuid"' not in body
+        assert request.extensions["timeout"]["read"] == 99
+        return httpx.Response(201, json={"uuid": "f"})
+
+    with _patched_async_client(handler):
+        async with AsyncAPIClient("https://example.com", prefix="") as client:
+            response = await client.post_form(
+                "files/",
+                data={"folder_uuid": None, "override": True},
+                files={"ufile": io.BytesIO(b"x")},
+                timeout=99,
+            )
+
+    assert compare("eq", response.status_code, 201)
+
+
+@pytest.mark.asyncio
+async def test_postform_valid_returns_204_without_parsing() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.content == b"state=s&url=u"
+        return httpx.Response(204)
+
+    with _patched_async_client(handler):
+        async with AsyncAPIClient("https://example.com", prefix="") as client:
+            response = await client.post_form("oauth2/save", data={"state": "s", "url": "u"})
+
+    assert compare("eq", response.status_code, 204)
+
+
+@pytest.mark.asyncio
+async def test_postform_invalid_raises_httpstatuserror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    with _patched_async_client(handler):
+        async with AsyncAPIClient("https://example.com", prefix="") as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.post_form("scan", files={"ufile": io.BytesIO(b"x")})
+
+
+@pytest.mark.asyncio
 async def test_getmultiple_valid_returns_parallel_results() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
@@ -388,6 +435,7 @@ async def test_downloadanduntarfile_invalid_raises_on_http_error(tmp_path: Path)
         ("put", ("items", {"a": 1})),
         ("patch", ("items", {"a": 1})),
         ("delete", ("items",)),
+        ("post_form", ("items",)),
         ("get_multiple", (iter(["items"]),)),
         ("post_multiple", (iter([("items", {"a": 1})]),)),
         ("post_multiple_semaphore", ([],)),
