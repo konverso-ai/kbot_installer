@@ -88,6 +88,10 @@ ignore = [
     "INP001", # service is a namespace package shared with kbot: no __init__.py
 ]
 
+"core/python/conftest.py" = [
+    "INP001", # core/python is the import root (pythonpath), not a package
+]
+
 "**/*example*.py" = [
     "T201", # print found (acceptable in example files)
 ]

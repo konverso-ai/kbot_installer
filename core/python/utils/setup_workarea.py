@@ -705,8 +705,13 @@ class Installer:
         migrate_script = os.path.join(self.target, 'bin', 'migrate.sh')
         if not os.path.exists(migrate_script):
             return None
-        return os.system(f"DB_HOST='{self.db_host}' DB_PORT='{self.db_port}' DB_NAME='{self.db_name}' "
-                         f"DB_USER='{self.db_user}' DB_PASSWORD='{self.db_password}' {migrate_script}")
+        env = {**os.environ, 'DB_HOST': str(self.db_host), 'DB_PORT': str(self.db_port), 'DB_NAME': str(self.db_name),
+               'DB_USER': str(self.db_user), 'DB_PASSWORD': str(self.db_password)}
+        try:
+            return subprocess.run([migrate_script], env=env, check=False).returncode
+        except OSError as err:
+            print(f"Error: can't launch {migrate_script}: {err}")
+            return 1
 
     def _SetupExternalDatabase(self):
         print("Loading tables to external database...")

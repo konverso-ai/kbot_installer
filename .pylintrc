@@ -5,6 +5,7 @@ ignore=
     migrations,
     tests,
     installer_tests,
+    conftest.py,
     setup_workarea.py,
     kbot.py,
     deps.py,

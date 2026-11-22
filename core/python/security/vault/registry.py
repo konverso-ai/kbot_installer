@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, ClassVar, final
 
 from security.vault import factory
@@ -27,19 +28,25 @@ _BUILDERS: dict[str, Callable[..., VaultBase]] = {
 class VaultRegistry:
     """Registry of the kbot vaults, each registered when it is first requested.
 
-    A singleton: every ``VaultRegistry()`` call returns the same registry.
+    A singleton: every ``VaultRegistry()`` call returns the same registry. Thread-safe:
+    concurrent first requests of a vault build and register it only once.
     """
 
     _instance: ClassVar[VaultRegistry | None] = None
+    _instance_lock: ClassVar[threading.Lock] = threading.Lock()
     _vaults: dict[str, VaultBase]
+    _locks: dict[str, threading.RLock]
 
     def __new__(cls) -> VaultRegistry:
         """Return the registry, creating it with no vault registered on first call."""
-        if cls._instance is None:
-            instance = super().__new__(cls)
-            instance._vaults = {}
-            cls._instance = instance
-        return cls._instance
+        with cls._instance_lock:
+            if cls._instance is None:
+                instance = super().__new__(cls)
+                instance._vaults = {}
+                # One lock per name: a slow cloud vault build doesn't hold up the other vaults.
+                instance._locks = {name: threading.RLock() for name in _BUILDERS}
+                cls._instance = instance
+            return cls._instance
 
     def __contains__(self, name: object) -> bool:
         """Tell whether ``name`` is a kbot vault name, without building the vault."""
@@ -61,6 +68,11 @@ class VaultRegistry:
             KeyError: If ``name`` is not a kbot vault name.
 
         """
-        if name not in self._vaults:
-            self._vaults[name] = _BUILDERS[name](**kwargs)
-        return self._vaults[name]
+        vault = self._vaults.get(name)
+        if vault is not None:
+            return vault
+        builder = _BUILDERS[name]
+        with self._locks[name]:
+            if name not in self._vaults:
+                self._vaults[name] = builder(**kwargs)
+            return self._vaults[name]
