@@ -125,6 +125,55 @@ def test_unstage_valid_empty_list_is_noop(
     assert compare("eq", versioner.status(repo_path).is_clean, True)
 
 
+@pytest.mark.parametrize("absolute", [False, True], ids=["relative", "absolute"])
+def test_unstage_valid_staged_addition_becomes_untracked(
+    versioner: DulwichVersioner,
+    repo_path: Path,
+    absolute: bool,  # noqa: FBT001
+) -> None:
+    (repo_path / "a.txt").write_text("a2")
+    (repo_path / "new.txt").write_text("new")
+    versioner.add(repo_path, ["a.txt", "new.txt"])
+
+    names = ["a.txt", "new.txt"]
+    versioner.unstage(repo_path, [str(repo_path / name) for name in names] if absolute else names)
+
+    status = versioner.status(repo_path)
+    assert compare("eq", status.staged, [])
+    assert compare("eq", status.unstaged, ["a.txt"])
+    assert compare("eq", status.untracked, ["new.txt"])
+    assert compare("eq", (repo_path / "new.txt").read_text(), "new")
+
+
+def test_unstage_valid_addition_without_any_commit(
+    versioner: DulwichVersioner, tmp_path: Path
+) -> None:
+    with porcelain.init(str(tmp_path)):
+        pass
+    (tmp_path / "new.txt").write_text("new")
+    versioner.add(tmp_path, ["new.txt"])
+
+    versioner.unstage(tmp_path, ["new.txt"])
+
+    status = versioner.status(tmp_path)
+    assert compare("eq", status.staged, [])
+    assert compare("eq", status.untracked, ["new.txt"])
+
+
+def test_unstage_invalid_unknown_path_raises(
+    versioner: DulwichVersioner, repo_path: Path
+) -> None:
+    with pytest.raises(VersionerError, match="Failed to unstage files"):
+        versioner.unstage(repo_path, ["does-not-exist.txt"])
+
+
+def test_unstage_invalid_absolute_path_out_of_the_repository_raises(
+    versioner: DulwichVersioner, repo_path: Path, tmp_path: Path
+) -> None:
+    with pytest.raises(VersionerError, match="Failed to unstage files"):
+        versioner.unstage(repo_path, [str(tmp_path / "outside.txt")])
+
+
 #
 # restore_files
 #
