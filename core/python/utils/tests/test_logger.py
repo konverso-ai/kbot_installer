@@ -414,6 +414,49 @@ class TestKbotLoggerBuildHandler:
         assert compare("eq", (tmp_path / "logs" / "kbot2.log").exists(), True)
         assert compare("eq", (tmp_path / "logs" / "kbot2.json").exists(), True)
 
+    @pytest.mark.parametrize("script", ["kbot-run", "uvicorn"])
+    def test_buildhandler_valid_container_entry_points_log_to_files_and_stdout(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path, capsys: pytest.CaptureFixture[str], script: str
+    ) -> None:
+        """Test kbot-run and uvicorn write the RunBot log files and also log to stdout (docker logs)."""
+        (tmp_path / "logs").mkdir()
+        monkeypatch.setattr(sys, "argv", [f"/app/.venv/bin/{script}", "--kpname", "core1"])
+        monkeypatch.setenv("KBOT_HOME", str(tmp_path))
+        monkeypatch.setitem(sys.modules, "kprocess", types.SimpleNamespace(get_instance_name=lambda: script))
+        for name in ("uvicorn", "uvicorn.access"):
+            monkeypatch.setattr(logging.getLogger(name), "handlers", [])
+        instance = KbotLogger(f"test.buildhandler.{script}")
+        instance.propagate = False
+        instance.build_handler(logging.WARNING)
+        instance.setLevel(logging.WARNING)
+
+        instance.warning("kbot line", package="storage")
+
+        assert compare("in", "kbot line", (tmp_path / "logs" / f"{script}.log").read_text())
+        assert compare("in", "kbot line", capsys.readouterr().out)
+
+    def test_buildhandler_valid_uvicorn_loggers_write_to_files_only(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test uvicorn's own records reach the log file, formatted with their logger name, but not stdout again."""
+        (tmp_path / "logs").mkdir()
+        monkeypatch.setattr(sys, "argv", ["/app/.venv/bin/uvicorn"])
+        monkeypatch.setenv("KBOT_HOME", str(tmp_path))
+        monkeypatch.setitem(sys.modules, "kprocess", types.SimpleNamespace(get_instance_name=lambda: "uvicorn"))
+        access = logging.getLogger("uvicorn.access")
+        monkeypatch.setattr(logging.getLogger("uvicorn"), "handlers", [])
+        monkeypatch.setattr(access, "handlers", [])
+        monkeypatch.setattr(access, "propagate", False)
+        monkeypatch.setattr(access, "level", logging.INFO)
+        KbotLogger("test.buildhandler.uvicorn.access").build_handler(logging.WARNING)
+
+        access.info('%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/api/x", "1.1", 200)
+
+        content = (tmp_path / "logs" / "uvicorn.log").read_text()
+        assert compare("in", " - uvicorn.access - INFO - ", content)
+        assert compare("in", '"GET /api/x HTTP/1.1" 200', content)
+        assert compare("not_in", "/api/x", capsys.readouterr().out)
+
     def test_buildhandler_valid_camelcase_alias_delegates(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -591,6 +634,14 @@ class TestKbotFormatter:
         formatted = formatter.format(self._make_record("/repo/service/__init__.py"))
 
         assert compare("in", "service.__init__", formatted)
+
+    def test_format_valid_record_without_package_uses_logger_name(self) -> None:
+        """Test records of non-kbot loggers (uvicorn) are formatted with their logger name as package."""
+        record = logging.LogRecord("uvicorn.error", logging.WARNING, "/x/h11_impl.py", 1, "bad", (), None)
+
+        formatted = KbotFormatter().format(record)
+
+        assert compare("in", " - uvicorn.error - WARNING - ", formatted)
 
 
 class TestDataDogFormatter:
