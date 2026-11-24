@@ -146,7 +146,7 @@ exclude = [
 
 [tool.ty.rules]
 all = "warn"
-invalid-method-override = "ignore"
+incompatible-method-override = "ignore"
 import-not-found = "ignore"
 possibly-missing-import = "ignore"
 missing-argument = "ignore"
