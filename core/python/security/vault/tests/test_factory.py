@@ -11,11 +11,13 @@ from security.vault.environment_vault import EnvironmentVault
 from security.vault.factory import (
     add_azure_vault,
     add_builtin_vault,
+    add_hashicorp_vault,
     add_oci_vault,
     add_s3_vault,
     add_secret_vault,
     add_vault,
 )
+from security.vault.hashicorp_vault import HashicorpVault
 from security.vault.secret_vault import SecretVault
 from security.vault.value_vault import ValueVault
 
@@ -191,6 +193,35 @@ class TestAddOciVault:
             )
             assert compare("eq", result, mock_vault)
 
+
+class TestAddHashicorpVault:
+    """Test cases for add_hashicorp_vault function."""
+
+    def test_add_hashicorp_vault_builds_vault_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test add_hashicorp_vault resolves credentials, backend and vault by naming convention."""
+        monkeypatch.setenv("VAULT_ADDR", "https://vault.example.com:8200")
+        monkeypatch.setenv("VAULT_TOKEN", "s.token")
+        with patch("backend.hashicorp_vault_backend.hvac") as mock_hvac:
+            result = add_hashicorp_vault()
+
+        mock_hvac.Client.assert_called_once_with(
+            url="https://vault.example.com:8200", token="s.token"
+        )
+        assert compare("eq", type(result), HashicorpVault)
+
+    def test_add_hashicorp_vault_raises_without_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test add_hashicorp_vault fails when VAULT_ADDR or VAULT_TOKEN is missing."""
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        monkeypatch.delenv("VAULT_TOKEN", raising=False)
+
+        with pytest.raises(RuntimeError, match="VAULT_ADDR, VAULT_TOKEN"):
+            add_hashicorp_vault()
+
+
 class TestAddSecretVault:
     """Test cases for add_secret_vault function."""
 
@@ -221,6 +252,7 @@ class TestAddBuiltinVault:
             ("s3", {}),
             ("azure", {}),
             ("oci", {}),
+            ("hashicorp", {}),
         ],
     )
     def test_add_builtin_vault_dispatches_to_matching_helper(

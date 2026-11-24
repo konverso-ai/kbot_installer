@@ -28,7 +28,7 @@ directly (`from service.nexus_service import NexusService`). kbot adds `service/
 `security/vault/` holds the secret vaults: implementations (`{name}_vault.py`), `factory.py`, and
 `registry.py`, kbot's `VaultRegistry` (a singleton): `get(name, **kwargs)` builds the vault of a kbot vault name used in
 `<VAULT>::<key>` setting values (`VARIABLE`, `VALUE`, `ALIAS`, `SECRET`, `AZUREKEYVAULT`, `AWSSECRETMANAGER`,
-`OCIVAULT`) with the `factory.py` builder on first request, then returns the registered one. Vaults only look
+`OCIVAULT`, `HASHICORPVAULT`) with the `factory.py` builder on first request, then returns the registered one. Vaults only look
 a key up: the settings reader (kbot's `Settings`) expands `%(name)v` references before passing the key.
 
 ## Common commands

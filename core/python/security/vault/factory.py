@@ -84,6 +84,23 @@ def add_oci_vault(
     return add_vault(name="oci", backend=backend, resolve_secret_id=resolve_secret_id)
 
 
+def add_hashicorp_vault() -> VaultBase:
+    """Create a HashiCorp vault instance using the ``VAULT_ADDR`` and ``VAULT_TOKEN`` environment variables.
+
+    Returns:
+        A ready-to-use HashiCorp Vault vault instance.
+
+    Raises:
+        RuntimeError: If ``VAULT_ADDR`` or ``VAULT_TOKEN`` is not set.
+
+    """
+    from backend.factory import add_backend  # noqa: PLC0415
+    from credentials.hashicorp_credentials import HashicorpCredentials  # noqa: PLC0415
+
+    backend = add_backend(name="hashicorp_vault", credentials=HashicorpCredentials())
+    return add_vault(name="hashicorp", backend=backend)
+
+
 def add_secret_vault(cloud_provider: str, **kwargs: object) -> VaultBase:
     """Create a provider-agnostic secret vault backed by a built-in cloud vault.
 
