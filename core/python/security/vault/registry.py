@@ -21,6 +21,7 @@ _BUILDERS: dict[str, Callable[..., VaultBase]] = {
     "AZUREKEYVAULT": factory.add_azure_vault,
     "AWSSECRETMANAGER": factory.add_s3_vault,
     "OCIVAULT": factory.add_oci_vault,
+    "HASHICORPVAULT": factory.add_hashicorp_vault,
 }
 
 
