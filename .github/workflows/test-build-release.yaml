@@ -88,10 +88,10 @@ jobs:
           echo -e "\033[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[39m"
           orca-cli --project-key ${{ env.ORCA_PROJECT_KEY }} sca scan --path . -k ${{ secrets.ORCA_SECURITY_API_TOKEN }}
 
-      - name: Set up Python 3.12.13
+      - name: Set up Python from pyproject.toml
         uses: actions/setup-python@v7
         with:
-          python-version: '3.12.13'
+          python-version-file: pyproject.toml
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -257,11 +257,6 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Set up Python 3.12.13
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12.13'
-
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -336,11 +331,6 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
-
-      - name: Set up Python 3.12.13
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12.13'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
