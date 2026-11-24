@@ -498,18 +498,18 @@ class DataDogFormatter(JsonFormatter):
     @override
     def add_fields(
         self,
-        log_record: dict[str, Any],
+        log_data: dict[str, Any],
         record: logging.LogRecord,
         message_dict: dict[str, Any],
     ) -> None:
-        super().add_fields(log_record, record, message_dict)
-        if not log_record.get("timestamp"):
+        super().add_fields(log_data, record, message_dict)
+        if not log_data.get("timestamp"):
             # this doesn't use record.created, so it is slightly off
             now = dt.datetime.now(dt.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             )
-            log_record["timestamp"] = now
-        log_record["level"] = (log_record.get("level") or record.levelname).upper()
+            log_data["timestamp"] = now
+        log_data["level"] = (log_data.get("level") or record.levelname).upper()
 
 
 logging.addLevelName(FINE, "FINE")
