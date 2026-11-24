@@ -4,6 +4,8 @@ run-name: "Auto-merge from ${{ github.ref_name }}"
 on:
   push:
     branches:
+      - release-2027.01
+      - release-2027.01-dev
       - release-2026.02
       - release-2026.02-dev
       - release-2026.01
@@ -46,6 +48,7 @@ jobs:
               "release-2025.03-dev", "release-2025.03",
               "release-2026.01-dev", "release-2026.01",
               "release-2026.02-dev", "release-2026.02",
+              "release-2027.01-dev", "release-2027.01",
               "master"
             ]
           }
