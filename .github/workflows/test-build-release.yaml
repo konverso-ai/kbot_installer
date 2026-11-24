@@ -38,7 +38,7 @@ jobs:
   pre-test:
     name: Pre Test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.user.login != 'konverso-github-actions[bot]' && startsWith(github.event.pull_request.base.ref, 'release-2026')
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.user.login != 'konverso-github-actions[bot]' && startsWith(github.event.pull_request.base.ref, 'release-')
     steps:
       - name: Checkout
         uses: actions/checkout@v7

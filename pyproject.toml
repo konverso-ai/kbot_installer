@@ -1,7 +1,7 @@
 [project]
 name = "kbot-installer"
-version = "3.0.dev9"
-requires-python = ">=3.12"
+version = "4.0.dev1"
+requires-python = "~=3.14.0"
 dependencies = [
     "aiofiles",
     "azure-identity>=1.25.3",
@@ -50,6 +50,11 @@ only-include = ["core/python"]
 "conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[tool.uv]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 
 [[tool.uv.index]]
 name = "konverso-aws-pypi-proxy"
@@ -146,7 +151,7 @@ exclude = [
 
 [tool.ty.rules]
 all = "warn"
-invalid-method-override = "ignore"
+incompatible-method-override = "ignore"
 import-not-found = "ignore"
 possibly-missing-import = "ignore"
 missing-argument = "ignore"
