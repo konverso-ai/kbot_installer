@@ -13,6 +13,7 @@ dependencies = [
     "dulwich>=1.2.9",
     "furl",
     "httpx",
+    "hvac>=2.3.0",
     "more-itertools>=11.1.0",
     "oci>=2.181.1",
     "packaging",
@@ -50,6 +51,9 @@ only-include = ["core/python"]
 "conf" = "installer/kbot_installer/conf"
 "description.xml" = "installer/kbot_installer/description.xml"
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
+
+[tool.uv]
+prerelease = "if-necessary"
 
 [[tool.uv.index]]
 name = "konverso-aws-pypi-proxy"
