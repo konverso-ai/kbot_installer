@@ -736,7 +736,7 @@ wheels = [
 
 [[package]]
 name = "kbot-installer"
-version = "4.0.dev1"
+version = "4.0.dev2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
