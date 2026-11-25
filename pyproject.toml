@@ -52,10 +52,7 @@ only-include = ["core/python"]
 "pyproject.toml" = "installer/kbot_installer/pyproject.toml"
 
 [tool.uv]
-environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-]
-
+prerelease = "if-necessary"
 [[tool.uv.index]]
 name = "konverso-aws-pypi-proxy"
 url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/"
