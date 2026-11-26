@@ -114,7 +114,7 @@ def cli(ctx: click.Context) -> None:
 @click.option(
     "--storage",
     type=_STORAGE_CHOICES,
-    default=StorageBackendEnum.NEXUS.value,
+    default=StorageBackendEnum.AZURE.value,
     show_default=True,
     help="Storage backend to use when the storage provider is selected.",
 )
@@ -133,7 +133,7 @@ def download(
     *,
     no_rec: bool = False,
     provider: tuple[str, ...] = (),
-    storage: str = StorageBackendEnum.NEXUS.value,
+    storage: str = StorageBackendEnum.AZURE.value,
     verbose: bool = False,
 ) -> None:
     """Download kbot products from a product version or a bundle descriptor.
@@ -424,7 +424,7 @@ def _build_schema_paths(installer_path: Path) -> list[Path]:
 @click.option(
     "--storage",
     type=_STORAGE_CHOICES,
-    default=StorageBackendEnum.NEXUS.value,
+    default=StorageBackendEnum.AZURE.value,
     show_default=True,
     help="Storage backend to use when the storage provider is selected.",
 )
@@ -521,7 +521,7 @@ def install(
     bundle: str | None,
     *,
     provider: tuple[str, ...] = (),
-    storage: str = StorageBackendEnum.NEXUS.value,
+    storage: str = StorageBackendEnum.AZURE.value,
     db_host: str | None = None,
     db_port: int = 5432,
     db_user: str = "kbot_db_user",
@@ -693,7 +693,7 @@ def install(
 @click.option(
     "--storage",
     type=_STORAGE_CHOICES,
-    default=StorageBackendEnum.NEXUS.value,
+    default=StorageBackendEnum.AZURE.value,
     show_default=True,
     help="Storage backend holding bundles/artifacts for '--installer'.",
 )
@@ -720,7 +720,7 @@ def update(
     installer: bool = False,
     workarea: bool = False,
     how: str = UpdatableName.INTERACTIVE.value,
-    storage: str = StorageBackendEnum.NEXUS.value,
+    storage: str = StorageBackendEnum.AZURE.value,
     skip_python_requirements: bool = False,
     verbose: bool = False,
 ) -> None:
@@ -845,7 +845,7 @@ def update(
 @click.option(
     "--storage",
     type=_STORAGE_CHOICES,
-    default=StorageBackendEnum.NEXUS.value,
+    default=StorageBackendEnum.AZURE.value,
     show_default=True,
     help="Storage backend holding bundles/artifacts.",
 )
@@ -941,7 +941,7 @@ def upgrade(
     *,
     branch: str | None = None,
     provider: tuple[str, ...] = (),
-    storage: str = StorageBackendEnum.NEXUS.value,
+    storage: str = StorageBackendEnum.AZURE.value,
     backup_file: str | None = None,
     no_backup: bool = False,
     db_port: int = 5432,

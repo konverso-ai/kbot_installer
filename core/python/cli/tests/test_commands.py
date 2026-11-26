@@ -1830,7 +1830,7 @@ class TestUpgradeCommand:
         assert result.exit_code == 0, result.output
         mocks.InstallerUpgradable.assert_called_once_with(
             installer_path=installer_dir,
-            storage_backend=StorageBackendEnum.NEXUS,
+            storage_backend=StorageBackendEnum.AZURE,
             product="site",
             version="2026.01",
             bundle=None,

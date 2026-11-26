@@ -79,9 +79,9 @@ Feature: KBOT-INST-03 Update
 
     Examples:
       | options                  | backend | rule  |
-      | --installer              | nexus   | BR-04 |
+      | --installer              | azure   | BR-04 |
       | --installer --storage s3 | s3      | BR-04 |
-      | --installer --how strict | nexus   | BR-05 |
+      | --installer --how strict | azure   | BR-05 |
 
   @since-2026.01 @AC-KBOT-INST-03-05 @BR-06 @BR-08 @BR-09 @BR-10
   Scenario: Move a bundle install to the latest bundle of the same major.minor (BR-06, BR-08, BR-09, BR-10)
@@ -105,8 +105,8 @@ Feature: KBOT-INST-03 Update
       | ithd    | f4a5b6c7d8 | release-2026.01-dev |
     And the storage holds the product "ithd" version "2025.03" at commit "d4e5f6a7b8" of branch "release-2025.03-dev" with parents "kbot"
     When the operator runs "kbot-installer update --installer"
-    Then the bundle "ev-basic-2025.3.0018" is read from the "bundles" area of the "nexus" storage
-    And the products downloaded from the "artifacts" area of the "nexus" storage are "ithd"
+    Then the bundle "ev-basic-2025.3.0018" is read from the "bundles" area of the "azure" storage
+    And the products downloaded from the "artifacts" area of the "azure" storage are "ithd"
     And the download table shows "kbot" from "storage (cached)" with status "✔ Up to date"
     And the file "/home/kbot/dev/installer/kbot/description.json" contains "b7c1d2e3f4"
     And the product "ithd" is downloaded from storage at commit "d4e5f6a7b8" of branch "release-2025.03-dev"
