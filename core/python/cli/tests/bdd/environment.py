@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import dulwich.filters  # noqa: F401  # load before subprocess.Popen is faked: its class body evaluates Popen[bytes]
 import psycopg
 import pytest
 from click.testing import CliRunner
