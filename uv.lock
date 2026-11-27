@@ -209,30 +209,30 @@ wheels = [
 
 [[package]]
 name = "boto3"
-version = "1.44.10"
+version = "1.44.12"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
     { name = "botocore" },
     { name = "jmespath" },
     { name = "s3transfer" },
 ]
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/boto3/1.44.10/boto3-1.44.10.tar.gz", hash = "sha256:4d5761c368ea199c2488401b86cfd966c132cbdb3c43b0390b25db69041f7989", size = 112760, upload-time = "2026-11-23T21:28:46.543Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/boto3/1.44.12/boto3-1.44.12.tar.gz", hash = "sha256:7459cd7a476eef9a5a8044f5cd6b2dfa47cef0fcb74aefa951e154c5102b1199", size = 112746, upload-time = "2026-11-25T20:18:18.198Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/boto3/1.44.10/boto3-1.44.10-py3-none-any.whl", hash = "sha256:2ec7370e9f387bf5ba3ae93024d18b3a9fd07eb697062d81165e3672f16a9335", size = 140171, upload-time = "2026-11-23T21:28:44.368Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/boto3/1.44.12/boto3-1.44.12-py3-none-any.whl", hash = "sha256:9f1cf241303edb523af912ebdc001e0563301d9ba8eef076d25fe9a8bfb6efaf", size = 140171, upload-time = "2026-11-25T20:18:15.769Z" },
 ]
 
 [[package]]
 name = "botocore"
-version = "1.44.10"
+version = "1.44.12"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
     { name = "jmespath" },
     { name = "python-dateutil" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/botocore/1.44.10/botocore-1.44.10.tar.gz", hash = "sha256:6fc109eefd1b02899196499d798141be6df70ca257b399741adc9975569d41b6", size = 17218430, upload-time = "2026-11-23T21:28:41.412Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/botocore/1.44.12/botocore-1.44.12.tar.gz", hash = "sha256:5806bb66bf167fa3172f4ddf78b088db9b22653702537b19969d02d2c3301ee5", size = 17227950, upload-time = "2026-11-25T20:18:12.626Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/botocore/1.44.10/botocore-1.44.10-py3-none-any.whl", hash = "sha256:d9c8602d24df40e366bbe80157c6f94155c91c367eaaabeceb26d47532f6baba", size = 16919968, upload-time = "2026-11-23T21:28:36.977Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/botocore/1.44.12/botocore-1.44.12-py3-none-any.whl", hash = "sha256:d5df4cf868f2c4050999a0e6bc94e0a039017e719f4e27b2a8e87053856787b9", size = 16930223, upload-time = "2026-11-25T20:18:09.433Z" },
 ]
 
 [[package]]
@@ -548,30 +548,30 @@ wheels = [
 
 [[package]]
 name = "dulwich"
-version = "1.2.21"
+version = "1.2.22"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
     { name = "urllib3" },
 ]
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21.tar.gz", hash = "sha256:5d3939f64883e6799614cab708ef4ee9ef415dd6dcad47527cdbb0eea43bf3a2", size = 1451069, upload-time = "2026-11-05T02:26:59.899Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22.tar.gz", hash = "sha256:be6ec253943069b5393f7f8c21dcb3f2aea784329829c74fbcc39d98a99f3bb0", size = 1454346, upload-time = "2026-11-25T00:04:59.665Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-android_24_arm64_v8a.whl", hash = "sha256:a5fafde91c4529c39599a900526cae6bdf9ccaf6435c2f8b5243c83362f3d47f", size = 1602814, upload-time = "2026-11-05T02:25:58.369Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-android_24_x86_64.whl", hash = "sha256:f6e343cee37fa7e58c82dcc022353fcba1e38e812d4d925cf72b180fa152d8b9", size = 1656944, upload-time = "2026-11-05T02:25:59.91Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:c3aa44524ecab49baad8130af65386de7fa4e325cbae0592b918e46e3dc15305", size = 1451444, upload-time = "2026-11-05T02:26:01.553Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:ab651ef2aee6f6f713e905eec68f67b5711def27a80ca45d5a9270310e77d4a2", size = 1433389, upload-time = "2026-11-05T02:26:03.49Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:001da0691a2fe5d6def8d239062021c5042ace4d4b37fd5d0e4092d0f87a4a5a", size = 1510338, upload-time = "2026-11-05T02:26:05.035Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:657e45d73c65f6440eb27a26d3e6661b07b69bf205c508deb9959c6355d71272", size = 1610491, upload-time = "2026-11-05T02:26:06.673Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-win32.whl", hash = "sha256:f8686c722d1612e75e1fdcfda0be0264cf8c390eebd0df03237dc8a45f996881", size = 1186030, upload-time = "2026-11-05T02:26:08.322Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-win_amd64.whl", hash = "sha256:d5caa0b8dcd956f5d8adfbc3c9ab82d69dedd340011928ada3d0a94e09afdb18", size = 1198943, upload-time = "2026-11-05T02:26:09.946Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314-win_arm64.whl", hash = "sha256:0d4a23851d272f82a07dec2be136e590beff9c00e05c95c4f7d3bb54c084c885", size = 1135516, upload-time = "2026-11-05T02:26:11.751Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:1dc827348e2929f8e9620ca6b762e8e553a997eee788933d348ef451b6f9a261", size = 1450471, upload-time = "2026-11-05T02:26:13.4Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:02dcd28b5d1a3a8abc2f0e5ff42deed1431c81d02b89c41b5cfdda352cba7fe3", size = 1431004, upload-time = "2026-11-05T02:26:15.29Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:179bb5942e0ee808eedab6d3bef4935c95869bfcc921e6d4585506386fa68bf4", size = 1567979, upload-time = "2026-11-05T02:26:17.367Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:a03bd34006172c764642f1dbf179b1c3eba7bb1e25ccf5787be48ee28f922d18", size = 1611144, upload-time = "2026-11-05T02:26:19.173Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-win32.whl", hash = "sha256:f7708c8318ab9ea6b0fb2cd77e40b06ff64aae6ba6c269cd3d3a18c619b83eea", size = 1185353, upload-time = "2026-11-05T02:26:21.024Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-win_amd64.whl", hash = "sha256:cd7070dabeba6e5cef6ab70b4968b42bf342a5585914b517c86ae429b92a7c20", size = 1139138, upload-time = "2026-11-05T02:26:22.518Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-cp314-cp314t-win_arm64.whl", hash = "sha256:adf4318d7da19f1b63f3f7ed7290a9f7bfdbf9219d98d7ed8b172c1df917a6c0", size = 1193385, upload-time = "2026-11-05T02:26:25.555Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.21/dulwich-1.2.21-py3-none-any.whl", hash = "sha256:31a522b9611e8032a43b8fb6941469c24e65ff4f14e0427986c58e90c22e154f", size = 762744, upload-time = "2026-11-05T02:26:58.412Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-android_24_arm64_v8a.whl", hash = "sha256:b86bc033cdf783dee230eb56e1b4c15213671c12d34ce3739cc75e58b27c811a", size = 1662410, upload-time = "2026-11-25T00:04:04.929Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-android_24_x86_64.whl", hash = "sha256:26cbb416156a6f520c820c48122a633b83f655a5d379a45e739dd41222c9bb96", size = 1596156, upload-time = "2026-11-25T00:04:07.013Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:c648616d6d2b12c7776f25979648539cda13d017da6343d72b5b6d83ca1ff57b", size = 1459619, upload-time = "2026-11-25T00:04:08.538Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:8bc32f9022a9200d0066366f5097d3604308ebd62ba13da7778a0ac825b32be3", size = 1496516, upload-time = "2026-11-25T00:04:09.921Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:d344f89def0b590744badde352021285b8d6f0cfa90f197427d879b68eb938ce", size = 1574710, upload-time = "2026-11-25T00:04:11.587Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:71a6dcbaf1221ead1b40fb383d19967b5ccfc38b3882d9c2eee18ae56acb66b8", size = 1616830, upload-time = "2026-11-25T00:04:13.163Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-win32.whl", hash = "sha256:7252f21836479d0bb92cae9cf34034680fb899b3b1864994de333a5565764006", size = 1128498, upload-time = "2026-11-25T00:04:15.369Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-win_amd64.whl", hash = "sha256:17b90bae5cc66a96b58dda8b0d4791c5b482e6ef6e5f543cde3402bff22ad954", size = 1206238, upload-time = "2026-11-25T00:04:17.019Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314-win_arm64.whl", hash = "sha256:d854db51ba6566a3331831c0f2eabff183c21478267e4cb6dc8eddec153ade75", size = 1198186, upload-time = "2026-11-25T00:04:18.604Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:cb4a8335c1d121b53f66add5f96a5a7b0731b76adb80486d434a1237897d92c5", size = 1521441, upload-time = "2026-11-25T00:04:20.4Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:84fdd4c00b09d93848abb20d43205e420f8b663dd7e06b17139986a50baf6109", size = 1494595, upload-time = "2026-11-25T00:04:21.987Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:4c85f5df4b42122a225988a7ddbac9a2da36653d336467b20293ddcd74ef93c9", size = 1571632, upload-time = "2026-11-25T00:04:23.657Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:e06809321b1681f7260694b181a3b886b896b64d4aa6dcab55ad5300747cadd6", size = 1618680, upload-time = "2026-11-25T00:04:25.43Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-win32.whl", hash = "sha256:f24cd3af5d1173336c16e55e92889ccbe8196fe5fad616e69255afb73df848d0", size = 1193310, upload-time = "2026-11-25T00:04:27.377Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-win_amd64.whl", hash = "sha256:6e4a3d9884454363fa50909cbf985f53849360e3ed9c50d989fc83db4a0e158c", size = 1207467, upload-time = "2026-11-25T00:04:28.796Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-cp314-cp314t-win_arm64.whl", hash = "sha256:4c3baca4a08a730b601ae5c66205ea209e5b90b609ffa8e144514615449c4633", size = 1140439, upload-time = "2026-11-25T00:04:30.347Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/dulwich/1.2.22/dulwich-1.2.22-py3-none-any.whl", hash = "sha256:3e5b37a2af11e92a8ae17d32ea232175b26bcfd99569dadc17342ef100d2a99a", size = 763583, upload-time = "2026-11-25T00:04:58.172Z" },
 ]
 
 [[package]]
@@ -664,7 +664,7 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.28.1"
+version = "0.29.0"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
 dependencies = [
     { name = "anyio" },
@@ -672,9 +672,9 @@ dependencies = [
     { name = "httpcore" },
     { name = "idna" },
 ]
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/httpx/0.28.1/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/httpx/0.29.0/httpx-0.29.0.tar.gz", hash = "sha256:700928ee6c1f4213795e67c47eba8f8553639069fea89199f71d654e38edc593", size = 141642, upload-time = "2026-11-26T15:58:37.028Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/httpx/0.28.1/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/httpx/0.29.0/httpx-0.29.0-py3-none-any.whl", hash = "sha256:6734dcf742ced6e8018e45d3f9f7728975b6b3e1085a24f3e2c056069d858bd1", size = 73532, upload-time = "2026-11-26T15:58:35.703Z" },
 ]
 
 [[package]]
@@ -1702,27 +1702,27 @@ wheels = [
 
 [[package]]
 name = "ty"
-version = "0.0.109"
+version = "0.0.112"
 source = { registry = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/" }
-sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109.tar.gz", hash = "sha256:8de0ee28bca7b7e25164a52e2b3e914d0f4380cb440c24a0cf5a9fc9c4d0085b", size = 8412632, upload-time = "2026-11-23T21:56:40.058Z" }
+sdist = { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112.tar.gz", hash = "sha256:8e7eb8c95fa08b35f7e86eccacaf2be5e1fe34a7c7da164280d292e1180d5907", size = 8459506, upload-time = "2026-11-26T16:23:25.704Z" }
 wheels = [
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-linux_armv6l.whl", hash = "sha256:cee52815e6114aa5981483ff2eddc17f756275e19a61de45c8d0031ec6b52cd6", size = 15377034, upload-time = "2026-11-23T21:55:52.139Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:c95ccb6fd99830e314165ed909f0160a54cd6365265ec7a89ad971a4ef83e123", size = 14913834, upload-time = "2026-11-23T21:55:55.365Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-macosx_11_0_arm64.whl", hash = "sha256:e8cfb207bba2335aecc42ece4ec17eecb644935475e80e4d3907e0b57aa9dee1", size = 14183650, upload-time = "2026-11-23T21:55:57.84Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9268e9c21dc056d4320a5f5eadfe8175e23082b2b213dad89a27e492999f31d7", size = 15147519, upload-time = "2026-11-23T21:56:00.361Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:f5948f669f8a9ed429c087f2a496fff87594ce0c31a8b2401f47483496446d06", size = 15098455, upload-time = "2026-11-23T21:56:03.03Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:d404b7cafbb3af0d1c4754f61fe6cedc6c67bd839b5821e05998468f2e0a9a53", size = 16080888, upload-time = "2026-11-23T21:56:06.606Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:267fa530665c437f5f490c55a3d60aea8be00795462f614009913418737b3a99", size = 16567295, upload-time = "2026-11-23T21:56:09.888Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:f22795bea2a7ff99ddbf9b38c8fa54f0b2e85047f21cab34d8492cbfad07cba7", size = 16407749, upload-time = "2026-11-23T21:56:12.671Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7e9dc77a3a1e1124c08fb094dcadc7068081a8579859017b5d5de37b257969c8", size = 17728861, upload-time = "2026-11-23T21:56:15.361Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:b706b0f4cff9ceed46c813e7132dbbacce9f7fb9524cb5b7a6f8ad63677e8436", size = 15962907, upload-time = "2026-11-23T21:56:17.973Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:b856cb4ae2a51a81b2bc2f4de108091d0000845fb262a095f14a2430397d4321", size = 14746495, upload-time = "2026-11-23T21:56:21.335Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:5bb6fc5faca2f2a584a5fe1cd5c57e2a11d0c65dd6b55ba78610d96548c837f9", size = 15110227, upload-time = "2026-11-23T21:56:24.114Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-musllinux_1_2_i686.whl", hash = "sha256:202919a6429e504cfe1b88d34ca231b4b4625816c688fb368dbcfda9d324bb5a", size = 15461978, upload-time = "2026-11-23T21:56:27.293Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:3425dd066d43e6125dd2ddc42c348d1e0801b7ae35b886d63916a37a9ec80830", size = 15804246, upload-time = "2026-11-23T21:56:29.857Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-win32.whl", hash = "sha256:66d382a0022de5c9ce0d082bca23a696e24c890cd8316f3461d485cf0c8b6aa7", size = 14286019, upload-time = "2026-11-23T21:56:32.395Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-win_amd64.whl", hash = "sha256:ec3330a2ed852eecedb663d7db67b100b21971c74f4c95e4f9a1e9d706b0677e", size = 15117350, upload-time = "2026-11-23T21:56:34.976Z" },
-    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.109/ty-0.0.109-py3-none-win_arm64.whl", hash = "sha256:897796fe1d8a5ac1122900e19d31eeb8272b542f9934cb40cf1377050f477200", size = 14377902, upload-time = "2026-11-23T21:56:37.483Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-linux_armv6l.whl", hash = "sha256:5957ccc40bc439f275d36a2fad16dab288d2a8a59bad49505d57fdae4ebd1be9", size = 15472467, upload-time = "2026-11-26T16:22:46.434Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:d8536e8b5e3dda22f6d8c124edf34009fc219f11976fe154dac10476fefea9c8", size = 14970128, upload-time = "2026-11-26T16:22:49.283Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-macosx_11_0_arm64.whl", hash = "sha256:235f676a71134225ed80f598414ad9f07240ce5c6c919b6fcb62b19168167559", size = 14369627, upload-time = "2026-11-26T16:22:51.386Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0f86ee4e66e232114821f1782edab57047cb4dbc6d04a8aa6517b167bc604fa0", size = 15277898, upload-time = "2026-11-26T16:22:53.753Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:48b37c1a4ee05d1b15acae818727bfe8cb4fa78698c18a694be9d586379168c8", size = 15202039, upload-time = "2026-11-26T16:22:55.798Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:ed02c9503fffc4cd20d1b2f6fa45df88c9792d841c1e4ec6c97c6381d704b2de", size = 16185393, upload-time = "2026-11-26T16:22:58.107Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:dad0794a2831787db9e8bf100de692d3cbe1cd531793c8298989af933bbdc101", size = 16600242, upload-time = "2026-11-26T16:23:00.365Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:cb8582035881a64da63934e61d6fceee16b0996d5dabbaec8037cdcc117e4537", size = 16372340, upload-time = "2026-11-26T16:23:02.506Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:209b4b311aebca8b3f02bd9d3b0b412eadd32eaea96bec123c86b80102f04524", size = 17906885, upload-time = "2026-11-26T16:23:04.952Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:0e8db878efc52b6906f07d9dce6b2a4510fc9107cad8e9ecee94587d8f20fa62", size = 15999108, upload-time = "2026-11-26T16:23:07.493Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:13c22ac69db491129495539ec7786fe51ebc65040a5c237ffee057a55d654c00", size = 14844483, upload-time = "2026-11-26T16:23:09.921Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:248d4b6a55e6b1b9cb53ab128112e4257b2e8fdfc9e5af01a714b9844297d750", size = 15208021, upload-time = "2026-11-26T16:23:12.33Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-musllinux_1_2_i686.whl", hash = "sha256:66a9294f13d43b648aab6c16880cfafc05e3730853ef831cfb65ebfdae98b4d3", size = 15545401, upload-time = "2026-11-26T16:23:14.63Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:f3e2bd0b33f6e4da2116a00d9b2b5641ab3d17f19d15741d25d20875e4d07942", size = 15876251, upload-time = "2026-11-26T16:23:16.963Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-win32.whl", hash = "sha256:b7b1b9ca3c5acc158f49b1c4d840f7ffa45fcc9e3be7868afd23b2311b630e53", size = 14361337, upload-time = "2026-11-26T16:23:19.083Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-win_amd64.whl", hash = "sha256:2db7835130bc4b43259c1ae95b627f89fb79ec653ef2935d1aa27e31d84f15ed", size = 15234850, upload-time = "2026-11-26T16:23:21.126Z" },
+    { url = "https://konverso-872515286329.d.codeartifact.eu-west-3.amazonaws.com/pypi/pypi-proxy/simple/ty/0.0.112/ty-0.0.112-py3-none-win_arm64.whl", hash = "sha256:61272e3547cb98f027e749bf1feee8da5e1a687ffc55f5c33157ebabf6915f23", size = 14435868, upload-time = "2026-11-26T16:23:23.494Z" },
 ]
 
 [[package]]
