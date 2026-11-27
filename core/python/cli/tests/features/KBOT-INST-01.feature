@@ -147,7 +147,7 @@ Feature: KBOT-INST-01 Product download and listing
   Scenario: Providers without credentials are skipped (BR-13, BR-15, error)
     Given the environment variable NEXUS_USERNAME is not set
     And the environment variable NEXUS_PASSWORD is not set
-    When the operator runs "kbot-installer download -p jira -v dev --provider storage"
+    When the operator runs "kbot-installer download -p jira -v dev --provider storage --storage nexus"
     Then the error output contains "Error installing product: No provider could be built from: ['storage']"
     And the exit code is 1
 
@@ -265,7 +265,7 @@ Feature: KBOT-INST-01 Product download and listing
     And the product "kbot" is downloaded from storage at commit "b7c1d2e3f4" of branch "release-2025.03-dev"
     And the product "ithd" is downloaded from storage at commit "c8d9e0f1a2" of branch "release-2025.03-dev"
     And the product "jira" is downloaded from storage at commit "d3e4f5a6b7" of branch "release-2025.03-dev"
-    And the products downloaded from the "artifacts" area of the "nexus" storage are "kbot, ithd, jira"
+    And the products downloaded from the "artifacts" area of the "azure" storage are "kbot, ithd, jira"
     And the exit code is 0
 
   @since-2026.01 @AC-KBOT-INST-01-21 @BR-30 @BR-34
